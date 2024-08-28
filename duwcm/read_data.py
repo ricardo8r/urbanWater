@@ -1,0 +1,244 @@
+from typing import Dict, Tuple, List
+import pandas as pd
+import numpy as np
+from simpledbf import Dbf5
+from dynaconf import Dynaconf
+from duwcm.functions.selector import soil_selector
+from duwcm.functions.gwlcalculator import gw_levels
+from duwcm.functions.nearest import find_nearest_downstream
+
+# Constants
+HYDRAULIC_CONDUCTIVITY = 10.0
+AQUIFER_THICKNESS = 29
+
+def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.DataFrame,
+                             altwater_data: pd.DataFrame, groundwater_data: pd.DataFrame,
+                             soil_data: pd.DataFrame, et_data: pd.DataFrame,
+                             grid_size: float, direction: int) -> Dict[int, Dict[str, Dict[str, float]]]:
+    """
+    Prepare model parameters for each grid cell.
+
+    Args:
+        urban_data (pd.DataFrame): UrbanBEATS output data
+        calibration_params (pd.DataFrame): Calibration parameters
+        altwater_data (pd.DataFrame): Alternative water data
+        groundwater_data (pd.DataFrame): Groundwater data
+        soil_data (pd.DataFrame): Soil data
+        et_data (pd.DataFrame): Evapotranspiration data
+        grid_size (float): Size of each grid cell
+        direction (int): Number of neighbors considered (4, 6, or 8)
+
+    Returns:
+        Dict[int, Dict[str, Dict[str, float]]]: Model parameters for each cell
+    """
+    _, downstream_distances = find_nearest_downstream(urban_data, direction, grid_size)
+    params: Dict[int, Dict[str, Dict]] = {}
+
+    for i, cell_id in enumerate(urban_data.index):
+        param_index = 1 if calibration_params.shape[1] == 1 else cell_id
+
+        if direction == 6:
+            total_area = urban_data.Active[cell_id] * (1.5 * np.sqrt(3) * (grid_size**2))
+        else:
+            total_area = urban_data.Active[cell_id] * (grid_size**2)
+
+        roof_area = urban_data.Blk_RoofsA[cell_id]
+        pavement_area = urban_data.Blk_TIA[cell_id] - roof_area
+        pervious_area = total_area - roof_area - pavement_area
+        num_houses = urban_data.ResHouses[cell_id] + urban_data.HDRFlats[cell_id]
+        indoor_water_use = urban_data.WD_In[cell_id] * 1000.0  # kL/d/block --> L/day/block
+
+        if np.isnan(num_houses):
+            num_houses = 0
+        average_occupancy = ((urban_data.HouseOccup[cell_id] * urban_data.ResHouses[cell_id] +
+                              urban_data.HDROccup[cell_id] * urban_data.HDRFlats[cell_id]) / max(num_houses, 1.0))
+        if np.isnan(average_occupancy):
+            average_occupancy = 0
+
+        if groundwater_data.loc[cell_id, 'gw0mSL'] > 20:
+            downward_seepage = 0
+            initial_level = max(groundwater_data.loc[cell_id, 'gw0mSL'], 0)
+            hydraulic_head = max(groundwater_data.loc[cell_id, 'gwmmSL'], 0)
+        else:
+            downward_seepage = calibration_params.loc['down_seep', param_index]
+            initial_level = max(groundwater_data.loc[cell_id, 'gw0mSL'], 0)
+            hydraulic_head = max(groundwater_data.loc[cell_id, 'gwmmSL'], 0)
+
+        if urban_data.pLU_WAT[cell_id] > 0.0001:
+            drainage_resistance = calibration_params.loc['w', param_index]
+        else:
+            drainage_resistance = downstream_distances[i]**2 / (8 * HYDRAULIC_CONDUCTIVITY * AQUIFER_THICKNESS)
+
+        soil_type = calibration_params.loc['soiltype', param_index]
+        crop_type = calibration_params.loc['croptype', param_index]
+        soil_params = soil_selector(soil_matrix=soil_data, et_matrix=et_data, soil_type=soil_type, crop_type=crop_type)
+        initial_moisture = soil_params[gw_levels(groundwater_data.loc[cell_id, 'gw0mSL'])[2]]['moist_cont_eq_rz[mm]']
+
+        if cell_id in altwater_data.index:
+            altwater_params = altwater_data.loc[cell_id, :]
+        else:
+            altwater_params = altwater_data.iloc[-1, :]
+
+        if urban_data.Blk_TIF[cell_id] < 0.05 * 0.01:
+            runoff_to_wastewater = 5
+        else:
+            runoff_to_wastewater = calibration_params.loc['perI', param_index]
+
+        # Create parameter dictionary for each cell
+        params[cell_id] = {
+            'general': {
+                'cell_id': cell_id,
+                'time_step': calibration_params.loc['dt', param_index],
+                'number_houses': num_houses,
+                'average_occupancy': average_occupancy,
+                'indoor_water_use': indoor_water_use,
+                'elevation': urban_data.AvgElev[cell_id],
+                'population': urban_data.Population[cell_id],
+                'direction': direction
+            },
+            'irrigation': {
+                'roof': 0,
+                'pavement': 0,
+                'pervious': 0,
+                'block_water_demand': urban_data.WD_Out[cell_id] * 365.0
+            },
+            'soil': {
+                'soil_type': soil_type,
+                'crop_type': crop_type,
+            },
+            'roof': {
+                'area': roof_area,
+                'effective_area': calibration_params.loc['ERA', param_index],
+                'max_storage': calibration_params.loc['RIL', param_index],
+            },
+            'raintank': {
+                'is_open': altwater_params.RTop,
+                'area': altwater_params.ART,
+                'capacity': altwater_params.RTc,
+                'first_flush': altwater_params.RTff,
+                'initial_storage': altwater_params.RT0,
+                'effective_system_outflow': calibration_params.loc['ERA_out', param_index],
+                'install_ratio': altwater_params.pRT
+            },
+            'pavement': {
+                'area': pavement_area,
+                'effective_area': calibration_params.loc['EPA', param_index],
+                'max_storage': calibration_params.loc['PIL', param_index],
+                'infiltration_capacity': calibration_params.loc['Infilc_p', param_index]
+            },
+            'pervious': {
+                'area': pervious_area,
+                'max_storage': calibration_params.loc['PerIL', param_index],
+                'infiltration_capacity': calibration_params.loc['Infilc_per', param_index]
+            },
+            'vadose': {
+                'area': pervious_area,
+                'initial_moisture': initial_moisture
+            },
+            'groundwater': {
+                'area': total_area,
+                'leakage_rate': calibration_params.loc['LR', param_index],
+                'infiltration_recession': calibration_params.loc['IRC', param_index],
+                'initial_level': initial_level,
+                'seepage_model': calibration_params.loc['seep_def', param_index],
+                'drainage_resistance': drainage_resistance,
+                'seepage_resistance': calibration_params.loc['vc', param_index],
+                'hydraulic_head': hydraulic_head,
+                'downward_seepage': downward_seepage
+            },
+            'stormwater': {
+                'is_open': altwater_params.SWSop,
+                'area': altwater_params.ASWS,
+                'capacity': altwater_params.SWSc,
+                'initial_storage': altwater_params.SWS0,
+                'first_flush': altwater_params.SWSff,
+                'wastewater_runoff_per': runoff_to_wastewater,
+            },
+            'reuse': {
+                'area': altwater_params.AWWS,
+                'capacity': altwater_params.WWSc,
+                'initial_storage': altwater_params.WWS0
+            },
+            'wastewater': {
+                'area': altwater_params.AcWWS,
+                'capacity': altwater_params.cWWSc,
+                'initial_storage': altwater_params.cWWS0,
+            }
+        }
+
+    return params
+
+def create_flow_paths(urban_data: pd.DataFrame, direction: int) -> pd.DataFrame:
+    """
+    Create flow paths for each cell based on UrbanBEATS output.
+
+    Args:
+        urban_data (pd.DataFrame): UrbanBEATS output data
+        direction (int): Direction that is considered for neighborhoods (4, 6, or 8)
+
+    Returns:
+        pd.DataFrame: Flow paths for each cell
+    """
+    flow_paths = []
+    for cell_id in urban_data.index:
+        neighbors = urban_data.Neighbours[cell_id].split(',')
+        downstream_id = urban_data.downID[cell_id] if urban_data.downID[cell_id] > 0.0 else 0.0
+        cell_path = [cell_id, downstream_id]
+        upstream_cells = [int(neighbor) * (urban_data.downID[int(neighbor)] == cell_id) for neighbor in neighbors]
+        upstream_cells.sort(reverse=True)
+        cell_path.extend(upstream_cells)
+        flow_paths.append(cell_path)
+
+    flow_paths_df = pd.DataFrame(flow_paths)
+    flow_paths_df = flow_paths_df.fillna(0)
+    flow_paths_df.set_index(0, inplace=True)
+
+    if direction == 8:
+        flow_paths_df.columns = ['down', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8']
+    elif direction == 6:
+        flow_paths_df.columns = ['down', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6']
+    else:
+        flow_paths_df.columns = ['down', 'u1', 'u2', 'u3', 'u4']
+
+    return flow_paths_df
+
+
+def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
+                                         pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    """
+    Read and process all required data files.
+
+    Args:
+        config (Dynaconf): Configuration object containing file paths and settings
+
+    Returns:
+        Tuple[Dict[int, Dict[str, Dict[str, float]]], pd.DataFrame, pd.DataFrame, pd.DataFrame]: 
+            - Model parameters for each cell
+            - Reuse settings
+            - Demand data
+            - Flow paths
+    """
+    # Read data files
+    dbf = Dbf5(config.file_paths.urban_beats_file, codec='utf-8')
+    urban_data = dbf.to_dataframe()
+    urban_data.set_index('BlockID', inplace=True)
+    calibration_params = pd.read_csv(config.file_paths.calibration_file, header=None, index_col=0)
+    altwater_data = pd.read_csv(config.file_paths.altwater_file)
+    altwater_data.loc[len(altwater_data)] = np.zeros(len(altwater_data.columns))
+    altwater_data.set_index('id', inplace=True)
+    groundwater_data = pd.read_csv(config.file_paths.groundwater_file).set_index('BlockID')
+    soil_data = pd.read_csv(config.file_paths.soil_file, header=0)
+    et_data = pd.read_csv(config.file_paths.et_file, header=0)
+
+    reuse_settings = pd.read_csv(config.file_paths.reuse_setting_file, header=None, index_col=0)
+    demand_data = pd.read_csv(config.file_paths.demand_file, header=0, index_col=0)
+
+    # Process data and prepare model parameters
+    model_params = prepare_model_parameters(urban_data, calibration_params, altwater_data,
+                                            groundwater_data, soil_data, et_data,
+                                            config.grid.grid_size, config.grid.direction)
+
+    # Create flow paths
+    flow_paths = create_flow_paths(urban_data, config.grid.direction)
+
+    return model_params, reuse_settings, demand_data, soil_data, et_data, flow_paths

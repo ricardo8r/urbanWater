@@ -1,0 +1,30 @@
+[default]
+input_directory = "data"
+
+# Grid settings
+[default.grid]
+grid_size = 300  # meters
+direction = 8  # number of neighbors (4, 6, or 8)
+
+# File paths
+[default.file_paths]
+urban_beats_file = "${default.input_directory}/Fehraltorf_Squares_300m_Blocks.dbf"
+calibration_file = "${default.input_directory}/s0param.csv"
+altwater_file = "${default.input_directory}/alternative0.csv"
+groundwater_file = "${default.input_directory}/gw0m_IDW2Sqr300fromswbi.csv"
+soil_file = "${default.input_directory}/in_soilparameter_new.csv"
+et_file = "${default.input_directory}/in_etparameter.csv"
+climate_file = "${default.input_directory}/forcing.csv"
+open_water_file = "${default.input_directory}/forcingOW.csv"
+reuse_setting_file = "${default.input_directory}/settingreuse.csv"
+demand_file = "${default.input_directory}/profile_percentage.csv"
+
+# Simulation settings
+[default.simulation]
+year = 2018
+time_step = 1  # days
+
+# Output settings
+[default.output]
+output_directory = "results"
+gis_export_filename = "gis_export"
