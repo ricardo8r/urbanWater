@@ -1,6 +1,6 @@
 dynaconf==3.2.6
 numpy==2.1.0
 pandas==2.2.2
-setuptools==69.5.1
+setuptools==70.0.0
 simpledbf==0.2.6
 tqdm==4.66.5
