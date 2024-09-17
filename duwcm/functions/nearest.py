@@ -46,7 +46,8 @@ def find_nearest_downstream(df: pd.DataFrame, direction: int, cell_size: float) 
                 distance_counts[1 if is_diagonal else 0] += 1
 
         downstream_ow.append(downstream_id)
-        total_distance = (distance_counts[0] + np.sqrt(2) * distance_counts[1] + np.sqrt(3) * distance_counts[2]) * cell_size
+        total_distance = (distance_counts[0] + np.sqrt(2) * distance_counts[1] +
+                          np.sqrt(3) * distance_counts[2]) * cell_size
         downstream_ow_distance.append(total_distance)
 
     return downstream_ow, downstream_ow_distance

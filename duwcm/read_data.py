@@ -1,15 +1,17 @@
-from typing import Dict, Tuple, List
+import os
+from typing import Dict, Tuple
 import pandas as pd
 import numpy as np
 from simpledbf import Dbf5
 from dynaconf import Dynaconf
-from duwcm.functions.selector import soil_selector
-from duwcm.functions.gwlcalculator import gw_levels
-from duwcm.functions.nearest import find_nearest_downstream
+
+from duwcm.functions import (
+    soil_selector, gw_levels, find_nearest_downstream
+)
 
 # Constants
-HYDRAULIC_CONDUCTIVITY = 10.0
-AQUIFER_THICKNESS = 29
+HYDRAULIC_CONDUCTIVITY = 1.5
+AQUIFER_THICKNESS = 0.2
 
 def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.DataFrame,
                              altwater_data: pd.DataFrame, groundwater_data: pd.DataFrame,
@@ -28,7 +30,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
         grid_size (float): Size of each grid cell
         direction (int): Number of neighbors considered (4, 6, or 8)
 
-    Returns:
+    Returns:sww-wiki.eawag.ch
         Dict[int, Dict[str, Dict[str, float]]]: Model parameters for each cell
     """
     _, downstream_distances = find_nearest_downstream(urban_data, direction, grid_size)
@@ -69,6 +71,9 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
         else:
             drainage_resistance = downstream_distances[i]**2 / (8 * HYDRAULIC_CONDUCTIVITY * AQUIFER_THICKNESS)
 
+        if drainage_resistance == 0:
+            drainage_resistance = 1
+
         soil_type = calibration_params.loc['soiltype', param_index]
         crop_type = calibration_params.loc['croptype', param_index]
         soil_params = soil_selector(soil_matrix=soil_data, et_matrix=et_data, soil_type=soil_type, crop_type=crop_type)
@@ -88,6 +93,8 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
         params[cell_id] = {
             'general': {
                 'cell_id': cell_id,
+                'x': urban_data.CentreX[cell_id],
+                'y': urban_data.CentreY[cell_id],
                 'time_step': calibration_params.loc['dt', param_index],
                 'number_houses': num_houses,
                 'average_occupancy': average_occupancy,
@@ -218,25 +225,28 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
             - Demand data
             - Flow paths
     """
+    input_dir = config.input_directory
+    files = config.files
+
     # Read data files
-    dbf = Dbf5(config.file_paths.urban_beats_file, codec='utf-8')
+    dbf = Dbf5(os.path.join(input_dir, files.urban_beats_file), codec='utf-8')
     urban_data = dbf.to_dataframe()
     urban_data.set_index('BlockID', inplace=True)
-    calibration_params = pd.read_csv(config.file_paths.calibration_file, header=None, index_col=0)
-    altwater_data = pd.read_csv(config.file_paths.altwater_file)
+    calibration_params = pd.read_csv(os.path.join(input_dir, files.calibration_file), header=None, index_col=0)
+    altwater_data = pd.read_csv(os.path.join(input_dir, files.alternative_water_file))
     altwater_data.loc[len(altwater_data)] = np.zeros(len(altwater_data.columns))
     altwater_data.set_index('id', inplace=True)
-    groundwater_data = pd.read_csv(config.file_paths.groundwater_file).set_index('BlockID')
-    soil_data = pd.read_csv(config.file_paths.soil_file, header=0)
-    et_data = pd.read_csv(config.file_paths.et_file, header=0)
+    groundwater_data = pd.read_csv(os.path.join(input_dir, files.groundwater_file)).set_index('BlockID')
+    soil_data = pd.read_csv(os.path.join(input_dir, files.soil_file), header=0)
+    et_data = pd.read_csv(os.path.join(input_dir, files.et_file), header=0)
 
-    reuse_settings = pd.read_csv(config.file_paths.reuse_setting_file, header=None, index_col=0)
-    demand_data = pd.read_csv(config.file_paths.demand_file, header=0, index_col=0)
+    reuse_settings = pd.read_csv(os.path.join(input_dir, files.reuse_settings_file), header=None, index_col=0)
+    demand_data = pd.read_csv(os.path.join(input_dir, files.demand_file), header=0, index_col=0)
 
     # Process data and prepare model parameters
     model_params = prepare_model_parameters(urban_data, calibration_params, altwater_data,
                                             groundwater_data, soil_data, et_data,
-                                            config.grid.grid_size, config.grid.direction)
+                                            config.grid.cell_size, config.grid.direction)
 
     # Create flow paths
     flow_paths = create_flow_paths(urban_data, config.grid.direction)

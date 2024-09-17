@@ -1,13 +1,23 @@
 # duwcm/components/__init__.py
 
-from . import (
-    roof,
-    raintank,
-    pavement,
-    pervious,
-    vadose,
-    groundwater,
-    stormwater,
-    reuse,
-    wastewater
-)
+from .roof import RoofClass
+from .raintank import RainTankClass
+from .pavement import PavementClass
+from .pervious import PerviousClass
+from .vadose import VadoseClass
+from .groundwater import GroundwaterClass
+from .stormwater import StormwaterClass
+from .wastewater import WastewaterClass
+from .reuse import ReuseClass
+
+__all__ = [
+    "RoofClass",
+    "RainTankClass",
+    "PavementClass",
+    "PerviousClass",
+    "VadoseClass",
+    "GroundwaterClass",
+    "StormwaterClass",
+    "WastewaterClass",
+    "ReuseClass"
+]

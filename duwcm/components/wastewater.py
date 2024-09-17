@@ -44,8 +44,8 @@ class WastewaterClass:
                 water_balance: Water balance [L]
         """
         previous_storage = previous_state.wastewater.storage
-        upstream_inflow = previous_state.stormwater.upstream_inflow
 
+        upstream_inflow = current_state.wastewater.upstream_inflow
         stormwater_inflow = current_state.stormwater.wastewater_inflow
         infiltration = current_state.groundwater.pipe_infiltration
         reuse_outflow = current_state.reuse.wws_spillover
@@ -72,8 +72,8 @@ class WastewaterClass:
     @staticmethod
     def _zero_balance(upstream_inflow: float, total_inflow: float) -> WastewaterData:
         return WastewaterData(
-            total_inflow = total_inflow,
-            sewer_inflow = 0.0,
+            total_inflow = 0.0,
+            sewer_inflow = total_inflow,
             upstream_inflow = upstream_inflow,
             storage = 0.0,
             water_balance = 0.0

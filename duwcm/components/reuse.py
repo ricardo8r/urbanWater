@@ -71,7 +71,8 @@ class ReuseClass:
         self.wastewater_capacity = params['reuse']['capacity'] * params['general']['number_houses']
         self.indoor_water_use = params['general']['indoor_water_use']
 
-        self.demand = demand
+        self.irrigation_factor = params['irrigation']['pervious']
+        self.demand = demand * self.indoor_water_use / 100
         self.setreuse = setreuse
         self._initialize_demands()
 
@@ -121,7 +122,7 @@ class ReuseClass:
         """
         roof_irrigation = forcing.get('roof_irrigation', 0.0)
         pavement_irrigation = forcing.get('pavement_irrigation', 0.0)
-        pervious_irrigation = forcing.get('pervious_irrigation', 0.0)
+        pervious_irrigation = forcing.get('pervious_irrigation', 0.0) * self.irrigation_factor
 
         previous_storage = previous_state.reuse.wws_storage
 

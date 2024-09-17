@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RoofData:
+    irrigation: float = 0
     evaporation: float = 0
     effective_runoff: float = 0
     non_effective_runoff: float = 0
@@ -62,6 +63,7 @@ class GroundwaterData:
     baseflow: float = 0
     pipe_infiltration: float = 0
     water_level: float = 0
+    surface_water_level: float = 0
     water_balance: float = 0
 
 @dataclass
@@ -69,7 +71,7 @@ class StormwaterData:
     total_runoff: float = 0
     wastewater_inflow: float = 0
     upstream_inflow: float = 0
-    stormwater_runoff: float = 0
+    runoff: float = 0
     first_flush: float = 0
     inflow: float = 0
     evaporation: float = 0
@@ -77,8 +79,6 @@ class StormwaterData:
     sewer_inflow: float = 0
     storage: float = 0
     water_balance: float = 0
-    use: float = 0
-    supply: float = 0
 
 @dataclass
 class WastewaterData:
@@ -87,8 +87,6 @@ class WastewaterData:
     upstream_inflow: float = 0
     storage: float = 0
     water_balance: float = 0
-    use: float = 0
-    supply: float = 0
 
 @dataclass
 class ReuseData:
@@ -129,5 +127,5 @@ class UrbanWaterData:
     vadose: VadoseData = field(default_factory=VadoseData)
     groundwater: GroundwaterData = field(default_factory=GroundwaterData)
     stormwater: StormwaterData = field(default_factory=StormwaterData)
-    wastewater: WastewaterData = field(default_factory=WastewaterData)
     reuse: ReuseData = field(default_factory=ReuseData)
+    wastewater: WastewaterData = field(default_factory=WastewaterData)

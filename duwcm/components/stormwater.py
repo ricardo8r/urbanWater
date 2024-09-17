@@ -52,7 +52,7 @@ class StormwaterClass:
             Dict[str, float]: Computed states and fluxes of storm water storage during current time step
                 total_runoff: Total runoff [L]
                 wastewater_inflow: Inflow of storm water to wastewater sewer system [L]
-                stormwater_runoff: Runoff to storm water system [L]
+                runoff: Runoff to storm water system [L]
                 first_flush: Actual first flush [L]
                 inflow: Inflow to SWS, RUN - first flush + Precipitation if SWSop=1 [L]
                 initial_storage: Storage volume in the beginning of the time step [L]
@@ -66,7 +66,7 @@ class StormwaterClass:
         potential_evaporation = forcing.get('potential_evaporation', 0.0)
 
         initial_storage = previous_state.stormwater.storage
-        upstream_inflow = previous_state.stormwater.upstream_inflow
+        upstream_inflow = current_state.stormwater.upstream_inflow
         raintank_runoff = current_state.raintank.runoff_sewer
         pavement_runoff = current_state.pavement.effective_runoff
         pervious_overflow = current_state.pervious.overflow
@@ -74,18 +74,18 @@ class StormwaterClass:
         total_runoff = (raintank_runoff + pavement_runoff * self.pavement_area +
                         pervious_overflow * self.pervious_area + upstream_inflow)
         wastewater_inflow = self.wastewater_runoff_ratio * total_runoff
-        stormwater_runoff = total_runoff - wastewater_inflow
+        runoff = total_runoff - wastewater_inflow
 
         if self.capacity == 0:
-            return self._zero_balance(total_runoff, wastewater_inflow, upstream_inflow, stormwater_runoff)
+            return self._zero_balance(total_runoff, wastewater_inflow, upstream_inflow, runoff)
 
-        first_flush = min(stormwater_runoff, self.first_flush)
-        inflow = stormwater_runoff - first_flush + self.is_open * precipitation * self.area
+        first_flush = min(runoff, self.first_flush)
+        inflow = runoff - first_flush + self.is_open * precipitation * self.area
 
         current_storage = min(self.capacity, max(0.0, initial_storage + inflow))
         evaporation = self.is_open * min(potential_evaporation * self.area, current_storage)
         final_storage = current_storage - evaporation
-        overflow = min(0.0, max(0.0, initial_storage + inflow) - final_storage)
+        overflow = max(0.0, initial_storage + inflow - final_storage)
         sewer_inflow = first_flush + overflow
 
         water_balance = inflow - (evaporation + overflow) - (final_storage - initial_storage)
@@ -94,7 +94,7 @@ class StormwaterClass:
             total_runoff=total_runoff,
             wastewater_inflow=wastewater_inflow,
             upstream_inflow=upstream_inflow,
-            stormwater_runoff=stormwater_runoff,
+            runoff=runoff,
             first_flush=first_flush,
             inflow=inflow,
             evaporation=evaporation,
@@ -106,17 +106,17 @@ class StormwaterClass:
 
     @staticmethod
     def _zero_balance(total_runoff: float, wastewater_inflow: float,
-                      upstream_inflow: float, stormwater_runoff: float) -> StormwaterData:
+                      upstream_inflow: float, runoff: float) -> StormwaterData:
         return StormwaterData(
             total_runoff=total_runoff,
             wastewater_inflow=wastewater_inflow,
             upstream_inflow=upstream_inflow,
-            stormwater_runoff=stormwater_runoff,
+            runoff=runoff,
             first_flush=0.0,
             inflow=0.0,
             evaporation=0.0,
             overflow=0.0,
-            sewer_inflow=stormwater_runoff,
+            sewer_inflow=runoff,
             storage=0.0,
             water_balance=0.0
         )

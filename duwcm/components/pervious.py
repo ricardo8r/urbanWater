@@ -1,7 +1,7 @@
 from typing import Dict, Any
 import pandas as pd
 from duwcm.data_structures import UrbanWaterData, PerviousData
-from duwcm.functions.selector import soil_selector
+from duwcm.functions import soil_selector
 
 # Constants
 SATURATED_PERMEABILITY_FACTOR = 10
@@ -39,6 +39,7 @@ class PerviousClass:
         self.time_step = params['general']['time_step']
         self.max_storage = params['pervious']['max_storage']
         self.infiltration_capacity = params['pervious']['infiltration_capacity']
+        self.irrigation_factor = params['irrigation']['pervious']
         self.soil_type = params['soil']['soil_type']
         self.crop_type = params['soil']['crop_type']
 
@@ -78,7 +79,7 @@ class PerviousClass:
         """
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
-        irrigation = forcing.get('irrigation', 0)
+        irrigation = forcing.get('pervious_irrigation', 0.0) * self.irrigation_factor
 
         previous_storage = previous_state.pervious.storage
         vadose_moisture = previous_state.vadose.moisture
@@ -118,7 +119,7 @@ class PerviousClass:
             infiltration = infiltration,
             overflow = overflow,
             storage = final_storage,
-            water_balance = water_balance
+            water_balance = water_balance,
         )
 
     @staticmethod

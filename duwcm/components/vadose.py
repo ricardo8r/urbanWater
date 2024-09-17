@@ -1,8 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import UrbanWaterData, VadoseData
-from duwcm.functions.selector import soil_selector, et_selector
-from duwcm.functions.gwlcalculator import gw_levels
+from duwcm.functions import soil_selector, et_selector, gw_levels
 
 # Constants
 SATURATED_CONDUCTIVITY_FACTOR = 10
@@ -138,7 +137,7 @@ class VadoseClass:
     def _soil_properties(self, groundwater_level: float) -> Tuple[float, float]:
         gw_up, gw_low, id_up, id_low = gw_levels(groundwater_level)
 
-        if groundwater_level < 10.0:    #REVIEW: Why 10?
+        if groundwater_level < 10:    #REVIEW: Why 10?
             interpolation_factor = (groundwater_level - gw_up) / (gw_low - gw_up)
             equilibrium_moisture = self.soil_params[id_up]['moist_cont_eq_rz[mm]'] + interpolation_factor * (
                 self.soil_params[id_low]['moist_cont_eq_rz[mm]'] - self.soil_params[id_up]['moist_cont_eq_rz[mm]'])

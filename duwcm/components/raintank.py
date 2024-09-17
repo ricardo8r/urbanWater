@@ -68,7 +68,8 @@ class RainTankClass:
         if self.capacity == 0:
             system_outflow = roof_runoff * self.roof_area
             runoff_sewer = self.effective_system_outflow * system_outflow
-            return self._zero_balance(system_outflow, runoff_sewer)
+            runoff_pavement = system_outflow - runoff_sewer
+            return self._zero_balance(system_outflow, runoff_sewer, runoff_pavement)
 
         first_flush = min(roof_runoff * self.roof_area * self.install_ratio,
                                            self.first_flush)
@@ -103,8 +104,7 @@ class RainTankClass:
         )
 
     @staticmethod
-    def _zero_balance(system_outflow: float, runoff_sewer: float) -> RainTankData:
-        runoff_pavement = system_outflow - runoff_sewer
+    def _zero_balance(system_outflow: float, runoff_sewer: float, runoff_pavement: float) -> RainTankData:
         return RainTankData(
             first_flush=0.0,
             inflow=0.0,

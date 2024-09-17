@@ -69,6 +69,7 @@ dependencies:
   - openssl=3.3.1=hfb2fe0b_2
   - packaging=24.1=pyhd8ed1ab_0
   - pandas=2.2.2=py312hd77ebd4_0
+  - patsy=0.5.6=py312hca03da5_0
   - pillow=10.4.0=py312h39b1d8d_0
   - pip=24.0=py312hca03da5_0
   - platformdirs=4.2.2=pyhd8ed1ab_0
@@ -85,11 +86,14 @@ dependencies:
   - qhull=2020.2=h420ef59_5
   - readline=8.2=h1a28f6b_0
   - scipy=1.14.0=py312h14ffa8f_1
+  - seaborn=0.13.2=hd8ed1ab_2
+  - seaborn-base=0.13.2=pyhd8ed1ab_2
   - setuptools=69.5.1=py312hca03da5_0
   - six=1.16.0=pyhd3eb1b0_1
   - snappy=1.2.1=h313beb8_0
   - sqlalchemy=2.0.32=py312h7e5086c_0
   - sqlite=3.45.2=hf2abe2d_0
+  - statsmodels=0.14.2=py312ha86b861_0
   - tk=8.6.13=h5083fa2_1
   - tomli=2.0.1=pyhd8ed1ab_0
   - tomlkit=0.13.0=pyha770c72_0

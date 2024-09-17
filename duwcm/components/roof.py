@@ -53,7 +53,7 @@ class RoofClass:
         previous_storage = previous_state.roof.storage
 
         if self.area == 0:
-            return self._zero_balance()
+            return self._zero_balance(irrigation)
 
         total_inflow = precipitation + irrigation
         current_storage = min(self.max_storage, max(0.0, previous_storage + total_inflow))
@@ -75,8 +75,9 @@ class RoofClass:
         )
 
     @staticmethod
-    def _zero_balance() -> RoofData:
+    def _zero_balance(irrigation: float) -> RoofData:
         return RoofData(
+            irrigation = irrigation,
             evaporation = 0.0,
             effective_runoff = 0.0,
             non_effective_runoff = 0.0,

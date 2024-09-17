@@ -18,8 +18,8 @@ The module supports the simulation of:
     - Vadose zone
     - Groundwater dynamics
     - Stormwater
-    - Wastewater
     - Water reuse
+    - Wastewater
 
 The UrbanWaterModel class provides methods for initializing the model, updating states,
 and managing the overall simulation process. It serves as the central component in the
@@ -29,13 +29,13 @@ urban water balance simulation.
 from typing import Dict, Any
 import pandas as pd
 
-from duwcm.functions.findorder import find_order
+from duwcm.functions import find_order
 from duwcm.data_structures import UrbanWaterData
 
 # Import subcomponents and data classes
 from duwcm.components import (
     roof, raintank, pavement, pervious, vadose,
-    groundwater, stormwater, wastewater, reuse
+    groundwater, stormwater, reuse, wastewater
 )
 
 class UrbanWaterModel:
@@ -48,8 +48,8 @@ class UrbanWaterModel:
         - Vadose
         - Groundwater
         - Stormawater
-        - Wastewater
         - Reuse
+        - Wastewater
     """
 
     SubmodelClasses = {
@@ -60,8 +60,8 @@ class UrbanWaterModel:
         'vadose': vadose.VadoseClass,
         'groundwater': groundwater.GroundwaterClass,
         'stormwater': stormwater.StormwaterClass,
-        'wastewater': wastewater.WastewaterClass,
-        'reuse': reuse.ReuseClass
+        'reuse': reuse.ReuseClass,
+        'wastewater': wastewater.WastewaterClass
     }
     def __init__(self, params: Dict[str, Dict[str, float]], path: pd.DataFrame, soil_data: pd.DataFrame,
                  et_data: pd.DataFrame, demand_data: pd.DataFrame, reuse_settings: pd.DataFrame, direction: int):
@@ -113,8 +113,8 @@ class UrbanWaterModel:
                 'vadose': self.SubmodelClasses['vadose'](cell_params, self.soil_data, self.et_data),
                 'groundwater': self.SubmodelClasses['groundwater'](cell_params, self.soil_data, self.et_data),
                 'stormwater': self.SubmodelClasses['stormwater'](cell_params),
-                'wastewater': self.SubmodelClasses['wastewater'](cell_params),
-                'reuse': self.SubmodelClasses['reuse'](cell_params, self.demand_data, self.reuse_settings[reuse_index])
+                'reuse': self.SubmodelClasses['reuse'](cell_params, self.demand_data, self.reuse_settings[reuse_index]),
+                'wastewater': self.SubmodelClasses['wastewater'](cell_params)
             }
 
             submodels[cell_id] = cell_submodels

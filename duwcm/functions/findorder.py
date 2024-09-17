@@ -13,10 +13,10 @@ def find_order(path_index: pd.DataFrame, direction: int) -> np.ndarray:
     Returns:
         np.ndarray: Calculation order for grid cells
     """
-    d1 = np.where(path_index.u1 == 0)  # u1=0: most upstream cell
+    d1 = np.where(path_index.u1 == 0)
     order = path_index.index[d1].values
     order = np.insert(order, 0, 0)
-    more: List[Union[int, float]] = []
+    more = np.zeros(1)
 
     for i in path_index.iloc[d1]['down']:
         if i == 0:
@@ -26,25 +26,27 @@ def find_order(path_index: pd.DataFrame, direction: int) -> np.ndarray:
             down = path_index.loc[i, 'down']
             if down != 0:
                 if path_index.loc[down, 'u2'] != 0:
-                    more.append(down)
+                    more = np.append(more, down)
                 while path_index.loc[down, 'u2'] == 0:
                     order = np.append(order, down)
                     down = path_index.loc[down, 'down']
                     if down == 0:
                         break
                     if path_index.loc[down, 'u2'] != 0:
-                        more.append(down)
+                        more = np.append(more, down)
         else:
-            more.append(i)
+            more = np.append(more, i)
 
-    more = list(set(more))
+    more = np.delete(more, 0)
+    more = np.unique(more)
 
-    new: List[Union[int, float]] = []
+    new = np.zeros(1)
     for mul in more:
         if _is_available(path_index, mul, order, direction):
-            new.append(mul)
+            new = np.append(new, mul)
             order = np.append(order, mul)
-            more.remove(mul)
+            more = np.delete(more, np.where(more == mul))
+    new = np.delete(new, 0)
 
     while len(order) < len(path_index) + 1:
         for i in path_index.loc[new, 'down']:
@@ -56,24 +58,25 @@ def find_order(path_index: pd.DataFrame, direction: int) -> np.ndarray:
                 if down == 0:
                     break
                 if path_index.loc[down, 'u2'] != 0:
-                    more.append(down)
+                    more = np.append(more, down)
                 while path_index.loc[down, 'u2'] == 0:
                     order = np.append(order, down)
                     down = path_index.loc[down, 'down']
                     if down == 0:
                         break
                     if path_index.loc[down, 'u2'] != 0:
-                        more.append(down)
+                        more = np.append(more, down)
             else:
-                more.append(i)
+                more = np.append(more, i)
 
-        more = list(set(more))
-        new = []
+        more = np.unique(more)
+        new = np.zeros(1)
         for mul in more:
             if _is_available(path_index, mul, order, direction):
                 order = np.append(order, mul)
-                new.append(mul)
-                more.remove(mul)
+                new = np.append(new, mul)
+                more = np.delete(more, np.where(more == mul))
+        new = np.delete(new, 0)
 
     return np.delete(order, 0)
 
@@ -92,6 +95,7 @@ def _is_available(path_index: pd.DataFrame, mul: Union[int, float], order: np.nd
     """
     if direction == 8:
         return all(path_index.loc[mul, f"u{i}"] in order for i in range(1, 9))
-    if direction == 6:
+    elif direction == 6:
         return all(path_index.loc[mul, f"u{i}"] in order for i in range(1, 7))
-    return all(path_index.loc[mul, f"u{i}"] in order for i in range(1, 5))
+    else:
+        return all(path_index.loc[mul, f"u{i}"] in order for i in range(1, 5))

@@ -54,13 +54,13 @@ class PavementClass:
         """
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
-        irrigation = forcing.get('irrigation', 0)
+        irrigation = forcing.get('pavement_irrigation', 0)
 
         previous_storage = previous_state.pavement.storage
         raintank_runoff = current_state.raintank.runoff_pavement
 
         if self.area == 0:
-            return self._zero_balance(raintank_runoff)
+            return self._zero_balance()
 
         inflow = raintank_runoff / self.area
         total_inflow = precipitation + irrigation + inflow
@@ -90,9 +90,9 @@ class PavementClass:
         )
 
     @staticmethod
-    def _zero_balance(raintank_runoff: float) -> PavementData:
+    def _zero_balance() -> PavementData:
         return PavementData(
-            inflow = raintank_runoff,
+            inflow = 0.0,
             evaporation = 0.0,
             infiltration = 0.0,
             effective_runoff = 0.0,
