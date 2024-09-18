@@ -27,10 +27,13 @@ pip install -e .
 DUWCM requires the following Python packages:
 
 - pandas
+- geopandas
+- pytables
 - numpy
 - simpledbf
 - matplotlib
 - dynaconf
+- tqdm
 
 You can install these dependencies using the `requirements.txt` file:
 
@@ -38,9 +41,9 @@ You can install these dependencies using the `requirements.txt` file:
 pip install -r requirements.txt
 ```
 
-Or you can create an enviroment in conda using the `enviroment.yml` file:
+Or you can create an envinroment in conda using the `environment.yml` file:
 ```bash
-conda env create -f enviroment.yml
+conda env create -f environment.yml
 ```
 
 ## Usage
@@ -54,6 +57,12 @@ To run a simulation using DUWM:
 ```bash
 duwm --config path/to/your/config.toml --env default
 ```
+other bash options are:
+`--plot` for plotting aggregated values and maps
+`--gis` to export a geopackage
+
+You can also use the commands:
+`duwcm-point --config path/to/your/config_file --results path/to/your/results_file --cell_id cell` to print the results for a specific cell in a .csv file
 
 ## Configuration
 
