@@ -99,37 +99,22 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     plt.close()
 
 def map_plot(background_shapefile: Path, feature_shapefiles: List[Path],
-             geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
+             geometry_geopackage: Path, local_results: pd.DataFrame,
              params: Dict[int, Dict[str, Any]], output_dir: Path, flow_paths: pd.DataFrame) -> None:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    # Calculate evapotranspiration
-    et_data = {}
-    for cell_id, cell_params in params.items():
-        et = (results['roof'].xs(cell_id, level='cell')['evaporation'] * cell_params['roof']['area'] +
-              results['pavement'].xs(cell_id, level='cell')['evaporation'] * cell_params['pavement']['area'] +
-              results['pervious'].xs(cell_id, level='cell')['evaporation'] * cell_params['pervious']['area'] +
-              results['raintank'].xs(cell_id, level='cell')['evaporation'] +
-              results['stormwater'].xs(cell_id, level='cell')['evaporation'] +
-              results['vadose'].xs(cell_id, level='cell')['transpiration'] * cell_params['vadose']['area'])
-        et_data[cell_id] = et.sum()
-
     variables_to_plot = {
-        'evapotranspiration': (pd.Series(et_data), 'Greens'),
-        'imported_water': (results['reuse']['imported_water'].groupby(level='cell').sum(), 'YlOrRd'),
-        'stormwater_runoff': (results['stormwater']['sewer_inflow'].groupby(level='cell').sum(), 'YlOrBr'),
-        'wastewater_runoff': (results['wastewater']['sewer_inflow'].groupby(level='cell').sum(), 'RdPu'),
-        'baseflow': (results['groundwater']['baseflow'].groupby(level='cell').sum(), 'Purples'),
-        'deep_seepage': (results['groundwater']['seepage'].groupby(level='cell').sum(), 'Oranges')
+        'evapotranspiration': ('Greens', None),
+        'imported_water': ('YlOrRd', None),
+        'stormwater_runoff': ('YlOrBr', flow_paths),
+        'wastewater_runoff': ('RdPu', flow_paths),
+        'baseflow': ('Purples', None),
+        'deep_seepage': ('Oranges', None)
     }
 
-    for variable_name, (data, cmap) in variables_to_plot.items():
+    for variable_name, (cmap, paths) in variables_to_plot.items():
+        data = local_results[variable_name].groupby(level='cell').sum() / 1000000  # Convert to ML/yr
         output_path = output_dir / f'{variable_name}_map.png'
         plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
-                      data / 1000000, variable_name, output_path, cmap,
-                      flow_paths=(flow_paths if variable_name in ['stormwater_runoff', 'wastewater_runoff'] else None))
+                      data, variable_name, output_path, cmap, flow_paths=paths)

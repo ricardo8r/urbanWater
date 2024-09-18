@@ -60,11 +60,12 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataF
         model.update_states()
 
     df_results = results_to_dataframes(results)
+    df_results['local'] = selected_results(results, model)
 
-    # Add total area as metadata to the aggregated DataFrame
     total_area = sum(params['groundwater']['area'] for params in model.params.values())
     df_results['aggregated'].attrs['total_area'] = total_area
     df_results['aggregated'].attrs['units'] = 'L'
+
     return df_results
 
 def _solve_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]],
@@ -186,6 +187,7 @@ def _distribute_stormwater(model: UrbanWaterModel, results: Dict[str, List[Dict]
 
     results['aggregated'][-1]['imported_water'] -= sum(model.current[s].stormwater.use for s in model.stormwater_cells)
 
+
 def results_to_dataframes(results: Dict[str, List[Dict]]) -> Dict[str, pd.DataFrame]:
     dataframe_results = {}
     for module, data in results.items():
@@ -194,3 +196,46 @@ def results_to_dataframes(results: Dict[str, List[Dict]]) -> Dict[str, pd.DataFr
         else:
             dataframe_results[module] = pd.DataFrame(data).set_index('timestep')
     return dataframe_results
+
+def selected_results(results: Dict[str, List[Dict]], model: UrbanWaterModel) -> pd.DataFrame:
+    modules_to_keep = ['reuse', 'stormwater', 'wastewater', 'groundwater']
+    variables_to_keep = {
+        'reuse': {'imported_water': 'imported_water'},
+        'stormwater': {'sewer_inflow': 'stormwater_runoff'},
+        'wastewater': {'sewer_inflow': 'wastewater_runoff'},
+        'groundwater': {'baseflow': 'baseflow', 'seepage': 'deep_seepage'}
+    }
+
+    dataframe_results = {}
+    for module in modules_to_keep:
+        df = pd.DataFrame(results[module]).set_index(['cell', 'timestep'])
+        kept_columns = variables_to_keep[module]
+        df = df[list(kept_columns.keys())].rename(columns=kept_columns)
+        dataframe_results[module] = df
+
+    # Compute non-aggregated evapotranspiration
+    et_components = {
+        'roof': ('roof', 'evaporation'),
+        'pavement': ('pavement', 'evaporation'),
+        'pervious': ('pervious', 'evaporation'),
+        'raintank': ('raintank', 'evaporation'),
+        'stormwater': ('stormwater', 'evaporation'),
+        'vadose': ('vadose', 'transpiration')
+    }
+
+    areas = {component: pd.Series({cell: model.params[cell][module]['area'] 
+                                   for cell in model.params})
+             for component, (module, _) in et_components.items()
+             if module != 'raintank' and module != 'stormwater'}
+
+    et_data = {
+        component: pd.DataFrame(results[module])
+                     .set_index(['cell', 'timestep'])[variable]
+                     .mul(areas.get(component, 1), level='cell')
+        for component, (module, variable) in et_components.items()
+    }
+    dataframe_results['evapotranspiration'] = pd.DataFrame(et_data).sum(axis=1).to_frame(name='evapotranspiration')
+
+    combined_results = pd.concat(list(dataframe_results.values()), axis=1)
+
+    return combined_results

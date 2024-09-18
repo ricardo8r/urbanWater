@@ -12,7 +12,8 @@ from duwcm.water_balance import run_water_balance
 from duwcm.functions import (load_config, check_all, check_cell,
                              plot_results, export_gpkg, map_plot)
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
+                    datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
 
 def run(config: Dynaconf) -> Tuple[Dict[str, pd.DataFrame], List[Dict[str, Any]], pd.DataFrame]:
@@ -37,7 +38,9 @@ def run(config: Dynaconf) -> Tuple[Dict[str, pd.DataFrame], List[Dict[str, Any]]
     logger.info("Reading forcing data")
     forcing_data = read_forcing(config)
     logger.info("Number of grid cells: %d", len(model_params))
-    logger.info("Simulation period: %s to %s", forcing_data.index[0], forcing_data.index[-1])
+    logger.info("Simulation period: %s to %s",
+            forcing_data.index[0].strftime('%Y-%m-%d'),
+            forcing_data.index[-1].strftime('%Y-%m-%d'))
 
     logger.info("Distributing irrigation")
     distribute_irrigation(forcing_data, model_params)
@@ -63,9 +66,9 @@ def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
     output_file = output_dir / 'simulation_results.h5'
 
     with pd.HDFStore(output_file, mode='w') as store:
-        # Save results
         for module, df in results.items():
-            store.put(module, df, format='table', data_columns=True)
+            if module != 'local':
+                store.put(module, df, format='table', data_columns=True)
 
         # Save forcing data
         store.put('forcing', forcing_data, format='table', data_columns=True)
@@ -113,7 +116,6 @@ def main() -> None:
 
         # Generate plots if requested
         if args.plot:
-            logger.info("Generating plots of aggregated results")
             output_dir = Path(config.output.output_directory) / 'figures'
             plot_results(results['aggregated'],
                                     forcing_data,
@@ -131,7 +133,7 @@ def main() -> None:
                 background_shapefile=background_shapefile,
                 feature_shapefiles=feature_shapefiles,
                 geometry_geopackage=geo_file,
-                results=results,
+                local_results=results['local'],
                 params=model_params,
                 output_dir=output_dir,
                 flow_paths=flow_paths
@@ -143,7 +145,7 @@ def main() -> None:
             output_dir.mkdir(parents=True, exist_ok=True)
             export_gpkg(
                 geometry_geopackage=geo_file,
-                results=results,
+                local_results=results['local'],
                 params=model_params,
                 forcing=forcing_data,
                 output_dir=output_dir,
