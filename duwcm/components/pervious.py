@@ -115,7 +115,7 @@ class PerviousClass:
             inflow = inflow,
             infiltration_capacity = infiltration_capacity,
             time_factor = time_factor,
-            evaporation = evaporation,
+            evaporation = evaporation * self.area,
             infiltration = infiltration,
             overflow = overflow,
             storage = final_storage,

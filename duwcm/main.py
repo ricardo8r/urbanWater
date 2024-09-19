@@ -10,7 +10,7 @@ from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
 from duwcm.functions import (load_config, check_all, check_cell,
-                             plot_results, export_gpkg, map_plot)
+                             plot_results, export_geodata, generate_maps)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -100,7 +100,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Urban Water Model")
     parser.add_argument("--config", required=True, help="Path to the configuration file (YAML, TOML, or JSON)")
     parser.add_argument("--env", default="default", help="Environment to use within the config file")
-    parser.add_argument("--plot", action="store_true", help="Generate plots of global variables")
+    parser.add_argument("--plot", action="store_true", help="Generate plots and map plots")
     parser.add_argument("--gis", action="store_true", help="Generate map plots")
     parser.add_argument("--check", action="store_true", help="Check water balance")
 
@@ -114,7 +114,7 @@ def main() -> None:
         # Save results
         save_results(results, forcing_data, config)
 
-        # Generate plots if requested
+        # Generate plots
         if args.plot:
             output_dir = Path(config.output.output_directory) / 'figures'
             plot_results(results['aggregated'],
@@ -122,19 +122,18 @@ def main() -> None:
                                     output_dir)
             logger.info("Plots saved to %s", output_dir)
 
-            output_dir = Path(config.output.output_directory) / 'maps'
-            output_dir.mkdir(parents=True, exist_ok=True)
             geo_dir = Path(config.geodata_directory)
             geo_file = Path(config.input_directory) / Path(config.files.geo_file)
             background_shapefile = geo_dir / config.files.background_shapefile
             feature_shapefiles = [geo_dir / shapefile for shapefile in config.files.feature_shapefiles]
 
-            map_plot(
+            output_dir = Path(config.output.output_directory) / 'maps'
+            output_dir.mkdir(parents=True, exist_ok=True)
+            generate_maps(
                 background_shapefile=background_shapefile,
                 feature_shapefiles=feature_shapefiles,
                 geometry_geopackage=geo_file,
                 local_results=results['local'],
-                params=model_params,
                 output_dir=output_dir,
                 flow_paths=flow_paths
             )
@@ -143,15 +142,15 @@ def main() -> None:
         if args.gis:
             output_dir = Path(config.output.output_directory) / 'gis'
             output_dir.mkdir(parents=True, exist_ok=True)
-            export_gpkg(
+            export_geodata(
                 geometry_geopackage=geo_file,
                 local_results=results['local'],
-                params=model_params,
                 forcing=forcing_data,
                 output_dir=output_dir,
-                crs=config.output.crs
+                crs=config.output.crs,
+                file_format='gpkg'
             )
-            logger.info("Geopackage saved to %s", output_dir)
+            logger.info("Geodata saved to %s", output_dir)
 
 
         # Check results and save water balance

@@ -81,7 +81,7 @@ class PavementClass:
 
         return PavementData(
             inflow = inflow,
-            evaporation = evaporation,
+            evaporation = evaporation * self.area,
             infiltration = infiltration,
             effective_runoff = effective_runoff,
             non_effective_runoff = non_effective_runoff,

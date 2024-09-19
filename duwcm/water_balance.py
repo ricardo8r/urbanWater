@@ -15,6 +15,7 @@ The simulation process includes:
 
 from typing import Dict, List
 from dataclasses import fields
+
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
@@ -31,17 +32,18 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataF
     results['aggregated'] = []
 
     # Add initial conditions to results at t=0
+    initial_date = forcing.index[0] - pd.Timedelta(days=1)
     for cell_id, initial_state in model.previous.items():
         for module_name, module_data in initial_state.__dict__.items():
             results[module_name].append({
                 'cell': cell_id,
-                'timestep': 0,
+                'date': initial_date,
                 **module_data.__dict__
             })
 
     # Initialize aggregated results for t=0
     results['aggregated'].append({
-        'timestep': 0,
+        'date': initial_date,
         'stormwater': 0,
         'wastewater': 0,
         'baseflow': 0,
@@ -52,15 +54,16 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataF
     })
 
     for t in tqdm(range(1, num_timesteps), desc="Water balance"):
+        current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
-        _solve_timestep(model, results, timestep_forcing, t)
-        _aggregate_timestep(model, results, t)
+        _solve_timestep(model, results, timestep_forcing, current_date)
+        _aggregate_timestep(model, results, current_date)
         _distribute_wastewater(model, results)
         _distribute_stormwater(model, results)
         model.update_states()
 
-    df_results = results_to_dataframes(results)
-    df_results['local'] = selected_results(results, model)
+    df_results = results_to_dataframes(results, model)
+    df_results['local'] = selected_results(df_results)
 
     total_area = sum(params['groundwater']['area'] for params in model.params.values())
     df_results['aggregated'].attrs['total_area'] = total_area
@@ -69,7 +72,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataF
     return df_results
 
 def _solve_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]],
-                    forcing: pd.Series, timestep: int) -> None:
+                    forcing: pd.Series, current_date: pd.Timestamp) -> None:
     """Solve the water balance for a single timestep for all cells in the specified order."""
     for cell_id in model.cell_order:
         upstream_cells = [int(up) for up in model.path.loc[cell_id][1:] if up != 0]
@@ -90,14 +93,14 @@ def _solve_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]],
         for module_name, module_data in model.current[cell_id].__dict__.items():
             results[module_name].append({
                 'cell': cell_id,
-                'timestep': timestep,
+                'date': current_date,
                 **module_data.__dict__
             })
 
-def _aggregate_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]], timestep: int) -> None:
+def _aggregate_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
     aggregated = {
-        'timestep': timestep,
+        'date': current_date,
         'stormwater': 0,
         'wastewater': 0,
         'baseflow': 0,
@@ -120,9 +123,9 @@ def _aggregate_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]], 
         aggregated['imported_water'] += current.reuse.imported_water
         aggregated['transpiration'] += current.vadose.transpiration * params['vadose']['area']
         aggregated['evaporation'] += (
-            current.roof.evaporation * params['roof']['area'] +
-            current.pavement.evaporation * params['pavement']['area'] +
-            current.pervious.evaporation * params['pervious']['area'] +
+            current.roof.evaporation +
+            current.pavement.evaporation +
+            current.pervious.evaporation +
             current.raintank.evaporation +
             current.stormwater.evaporation
         )
@@ -187,17 +190,22 @@ def _distribute_stormwater(model: UrbanWaterModel, results: Dict[str, List[Dict]
 
     results['aggregated'][-1]['imported_water'] -= sum(model.current[s].stormwater.use for s in model.stormwater_cells)
 
-
-def results_to_dataframes(results: Dict[str, List[Dict]]) -> Dict[str, pd.DataFrame]:
+def results_to_dataframes(results: Dict[str, List[Dict]], model: UrbanWaterModel) -> Dict[str, pd.DataFrame]:
     dataframe_results = {}
     for module, data in results.items():
         if module != 'aggregated':
-            dataframe_results[module] = pd.DataFrame(data).set_index(['cell', 'timestep'])
+            df = pd.DataFrame(data).set_index(['cell', 'date'])
+            module_data = getattr(model.current[next(iter(model.current))], module)
+            module_fields = fields(type(module_data))
+            for column in df.columns:
+                field = next(f for f in module_fields if f.name == column)
+                df[column].attrs['unit'] = field.metadata['unit']
+            dataframe_results[module] = df
         else:
-            dataframe_results[module] = pd.DataFrame(data).set_index('timestep')
+            dataframe_results[module] = pd.DataFrame(data).set_index('date')
     return dataframe_results
 
-def selected_results(results: Dict[str, List[Dict]], model: UrbanWaterModel) -> pd.DataFrame:
+def selected_results(dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     modules_to_keep = ['reuse', 'stormwater', 'wastewater', 'groundwater']
     variables_to_keep = {
         'reuse': {'imported_water': 'imported_water'},
@@ -208,10 +216,9 @@ def selected_results(results: Dict[str, List[Dict]], model: UrbanWaterModel) -> 
 
     dataframe_results = {}
     for module in modules_to_keep:
-        df = pd.DataFrame(results[module]).set_index(['cell', 'timestep'])
+        df = dataframes[module]
         kept_columns = variables_to_keep[module]
-        df = df[list(kept_columns.keys())].rename(columns=kept_columns)
-        dataframe_results[module] = df
+        dataframe_results[module] = df[list(kept_columns.keys())].rename(columns=kept_columns)
 
     # Compute non-aggregated evapotranspiration
     et_components = {
@@ -223,18 +230,14 @@ def selected_results(results: Dict[str, List[Dict]], model: UrbanWaterModel) -> 
         'vadose': ('vadose', 'transpiration')
     }
 
-    areas = {component: pd.Series({cell: model.params[cell][module]['area'] 
-                                   for cell in model.params})
-             for component, (module, _) in et_components.items()
-             if module != 'raintank' and module != 'stormwater'}
-
     et_data = {
-        component: pd.DataFrame(results[module])
-                     .set_index(['cell', 'timestep'])[variable]
-                     .mul(areas.get(component, 1), level='cell')
+        component: dataframes[module][variable]
         for component, (module, variable) in et_components.items()
     }
-    dataframe_results['evapotranspiration'] = pd.DataFrame(et_data).sum(axis=1).to_frame(name='evapotranspiration')
+
+    et_df = pd.DataFrame(et_data).sum(axis=1).to_frame(name='evapotranspiration')
+    et_df['evapotranspiration'].attrs['unit'] = 'L'
+    dataframe_results['evapotranspiration'] = et_df
 
     combined_results = pd.concat(list(dataframe_results.values()), axis=1)
 

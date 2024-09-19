@@ -67,7 +67,7 @@ class RoofClass:
         water_balance = (excess_water - effective_runoff - non_effective_runoff) * self.area
 
         return RoofData(
-            evaporation = evaporation,
+            evaporation = evaporation * self.area,
             effective_runoff = effective_runoff,
             non_effective_runoff = non_effective_runoff,
             storage = final_storage,

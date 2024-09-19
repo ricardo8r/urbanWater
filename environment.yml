@@ -8,6 +8,7 @@ dependencies:
   - geopandas-base=0.14.2
   - geopy=2.4.1
   - hdf5=1.14.3
+  - imageio=2.35.1
   - matplotlib=3.9.1
   - ncurses=6.4
   - numpy=1.26.4

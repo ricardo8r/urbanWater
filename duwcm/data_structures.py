@@ -2,118 +2,118 @@ from dataclasses import dataclass, field
 
 @dataclass
 class RoofData:
-    irrigation: float = 0
-    evaporation: float = 0
-    effective_runoff: float = 0
-    non_effective_runoff: float = 0
-    storage: float = 0
-    water_balance: float = 0
+    irrigation: float = field(default=0, metadata={'unit': 'mm'})
+    evaporation: float = field(default=0, metadata={'unit': 'L'})
+    effective_runoff: float = field(default=0, metadata={'unit': 'mm'})
+    non_effective_runoff: float = field(default=0, metadata={'unit': 'mm'})
+    storage: float = field(default=0, metadata={'unit': 'mm'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class RainTankData:
-    first_flush: float = 0
-    inflow: float = 0
-    overflow: float = 0
-    evaporation: float = 0
-    runoff_sewer: float = 0
-    runoff_pavement: float = 0
-    system_outflow: float = 0
-    storage: float = 0
-    water_balance: float = 0
+    first_flush: float = field(default=0, metadata={'unit': 'L'})
+    inflow: float = field(default=0, metadata={'unit': 'L'})
+    overflow: float = field(default=0, metadata={'unit': 'L'})
+    evaporation: float = field(default=0, metadata={'unit': 'L'})
+    runoff_sewer: float = field(default=0, metadata={'unit': 'L'})
+    runoff_pavement: float = field(default=0, metadata={'unit': 'L'})
+    system_outflow: float = field(default=0, metadata={'unit': 'L'})
+    storage: float = field(default=0, metadata={'unit': 'L'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class PavementData:
-    inflow: float = 0
-    evaporation: float = 0
-    infiltration: float = 0
-    effective_runoff: float = 0
-    non_effective_runoff: float = 0
-    storage: float = 0
-    water_balance: float = 0
+    inflow: float = field(default=0, metadata={'unit': 'mm'})
+    evaporation: float = field(default=0, metadata={'unit': 'L'})
+    infiltration: float = field(default=0, metadata={'unit': 'mm'})
+    effective_runoff: float = field(default=0, metadata={'unit': 'mm'})
+    non_effective_runoff: float = field(default=0, metadata={'unit': 'mm'})
+    storage: float = field(default=0, metadata={'unit': 'mm'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class PerviousData:
-    inflow: float = 0
-    infiltration_capacity: float = 0
-    time_factor: float = 0
-    evaporation: float = 0
-    infiltration: float = 0
-    overflow: float = 0
-    storage: float = 0
-    water_balance: float = 0
+    inflow: float = field(default=0, metadata={'unit': 'mm'})
+    infiltration_capacity: float = field(default=0, metadata={'unit': 'mm'})
+    time_factor: float = field(default=0, metadata={'unit': '-'})
+    evaporation: float = field(default=0, metadata={'unit': 'L'})
+    infiltration: float = field(default=0, metadata={'unit': 'mm'})
+    overflow: float = field(default=0, metadata={'unit': 'mm'})
+    storage: float = field(default=0, metadata={'unit': 'mm'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class VadoseData:
-    transpiration_threshold: float = 0
-    transpiration_factor: float = 0
-    transpiration: float = 0
-    equilibrium_moisture: float = 0
-    max_capillary: float = 0
-    percolation: float = 0
-    moisture: float = 0
-    water_balance: float = 0
+    transpiration_threshold: float = field(default=0, metadata={'unit': 'mm'})
+    transpiration_factor: float = field(default=0, metadata={'unit': '-'})
+    transpiration: float = field(default=0, metadata={'unit': 'mm'})
+    equilibrium_moisture: float = field(default=0, metadata={'unit': 'mm'})
+    max_capillary: float = field(default=0, metadata={'unit': 'mm/d'})
+    percolation: float = field(default=0, metadata={'unit': 'mm'})
+    moisture: float = field(default=0, metadata={'unit': 'mm'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class GroundwaterData:
-    total_irrigation: float = 0
-    leakage_depth: float = 0
-    inflow: float = 0
-    storage_coefficient: float = 0
-    seepage: float = 0
-    baseflow: float = 0
-    pipe_infiltration: float = 0
-    water_level: float = 0
-    surface_water_level: float = 0
-    water_balance: float = 0
+    total_irrigation: float = field(default=0, metadata={'unit': 'L'})
+    leakage_depth: float = field(default=0, metadata={'unit': 'mm'})
+    inflow: float = field(default=0, metadata={'unit': 'mm'})
+    storage_coefficient: float = field(default=0, metadata={'unit': '-'})
+    seepage: float = field(default=0, metadata={'unit': 'L'})
+    baseflow: float = field(default=0, metadata={'unit': 'L'})
+    pipe_infiltration: float = field(default=0, metadata={'unit': 'L'})
+    water_level: float = field(default=0, metadata={'unit': 'm'})
+    surface_water_level: float = field(default=0, metadata={'unit': 'm'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class StormwaterData:
-    total_runoff: float = 0
-    wastewater_inflow: float = 0
-    upstream_inflow: float = 0
-    runoff: float = 0
-    first_flush: float = 0
-    inflow: float = 0
-    evaporation: float = 0
-    overflow: float = 0
-    sewer_inflow: float = 0
-    storage: float = 0
-    water_balance: float = 0
+    total_runoff: float = field(default=0, metadata={'unit': 'L'})
+    wastewater_inflow: float = field(default=0, metadata={'unit': 'L'})
+    upstream_inflow: float = field(default=0, metadata={'unit': 'L'})
+    runoff: float = field(default=0, metadata={'unit': 'L'})
+    first_flush: float = field(default=0, metadata={'unit': 'L'})
+    inflow: float = field(default=0, metadata={'unit': 'L'})
+    evaporation: float = field(default=0, metadata={'unit': 'L'})
+    overflow: float = field(default=0, metadata={'unit': 'L'})
+    sewer_inflow: float = field(default=0, metadata={'unit': 'L'})
+    storage: float = field(default=0, metadata={'unit': 'L'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class WastewaterData:
-    total_inflow: float = 0
-    sewer_inflow: float = 0
-    upstream_inflow: float = 0
-    storage: float = 0
-    water_balance: float = 0
+    total_inflow: float = field(default=0, metadata={'unit': 'L'})
+    sewer_inflow: float = field(default=0, metadata={'unit': 'L'})
+    upstream_inflow: float = field(default=0, metadata={'unit': 'L'})
+    storage: float = field(default=0, metadata={'unit': 'L'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class ReuseData:
-    ssg_demand: float = 0
-    ssg_use: float = 0
-    ssg_deficit: float = 0
-    ssg_spillover: float = 0
-    wws_demand: float = 0
-    wws_supply: float = 0
-    wws_use: float = 0
-    wws_deficit: float = 0
-    wws_spillover: float = 0
-    wws_storage: float = 0
-    wws_water_balance: float = 0
-    rt_demand: float = 0
-    rt_domestic_demand: float = 0
-    rt_toilet_demand: float = 0
-    rt_irrigation_demand: float = 0
-    rt_use: float = 0
-    rt_deficit: float = 0
-    rt_storage: float = 0
-    rt_water_balance: float = 0
-    rt_first_flush: float = 0
-    rt_inflow: float = 0
-    rt_overflow: float = 0
-    rt_evaporation: float = 0
-    imported_water: float = 0
+    ssg_demand: float = field(default=0, metadata={'unit': 'L'})
+    ssg_use: float = field(default=0, metadata={'unit': 'L'})
+    ssg_deficit: float = field(default=0, metadata={'unit': 'L'})
+    ssg_spillover: float = field(default=0, metadata={'unit': 'L'})
+    wws_demand: float = field(default=0, metadata={'unit': 'L'})
+    wws_supply: float = field(default=0, metadata={'unit': 'L'})
+    wws_use: float = field(default=0, metadata={'unit': 'L'})
+    wws_deficit: float = field(default=0, metadata={'unit': 'L'})
+    wws_spillover: float = field(default=0, metadata={'unit': 'L'})
+    wws_storage: float = field(default=0, metadata={'unit': 'L'})
+    wws_water_balance: float = field(default=0, metadata={'unit': 'L'})
+    rt_demand: float = field(default=0, metadata={'unit': 'L'})
+    rt_domestic_demand: float = field(default=0, metadata={'unit': 'L'})
+    rt_toilet_demand: float = field(default=0, metadata={'unit': 'L'})
+    rt_irrigation_demand: float = field(default=0, metadata={'unit': 'L'})
+    rt_use: float = field(default=0, metadata={'unit': 'L'})
+    rt_deficit: float = field(default=0, metadata={'unit': 'L'})
+    rt_storage: float = field(default=0, metadata={'unit': 'L'})
+    rt_water_balance: float = field(default=0, metadata={'unit': 'L'})
+    rt_first_flush: float = field(default=0, metadata={'unit': 'L'})
+    rt_inflow: float = field(default=0, metadata={'unit': 'L'})
+    rt_overflow: float = field(default=0, metadata={'unit': 'L'})
+    rt_evaporation: float = field(default=0, metadata={'unit': 'L'})
+    imported_water: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class UrbanWaterData:
