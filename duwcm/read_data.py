@@ -45,7 +45,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
             total_area = urban_data.Active[cell_id] * (grid_size**2)
 
         roof_area = urban_data.Blk_RoofsA[cell_id]
-        pavement_area = urban_data.Blk_TIA[cell_id] - roof_area
+        pavement_area = urban_data.Blk_TIA[cell_id] - roof_area #Block Total Impervious Area
         pervious_area = total_area - roof_area - pavement_area
         num_houses = urban_data.ResHouses[cell_id] + urban_data.HDRFlats[cell_id]
         indoor_water_use = urban_data.WD_In[cell_id] * 1000.0  # kL/d/block --> L/day/block
@@ -66,7 +66,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
             initial_level = max(groundwater_data.loc[cell_id, 'gw0mSL'], 0)
             hydraulic_head = max(groundwater_data.loc[cell_id, 'gwmmSL'], 0)
 
-        if urban_data.pLU_WAT[cell_id] > 0.0001:
+        if urban_data.pLU_WAT[cell_id] > 0.0001: #Fraction water land
             drainage_resistance = calibration_params.loc['w', param_index]
         else:
             drainage_resistance = downstream_distances[i]**2 / (8 * HYDRAULIC_CONDUCTIVITY * AQUIFER_THICKNESS)
@@ -84,7 +84,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
         else:
             altwater_params = altwater_data.iloc[-1, :]
 
-        if urban_data.Blk_TIF[cell_id] < 0.05 * 0.01:
+        if urban_data.Blk_TIF[cell_id] < 0.05 * 0.01: #Total impervious fraction
             runoff_to_wastewater = 5
         else:
             runoff_to_wastewater = calibration_params.loc['perI', param_index]

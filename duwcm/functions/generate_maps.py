@@ -14,10 +14,6 @@ def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.Dat
     norm = plt.Normalize(vmin=vmin, vmax=vmax)
     cmap_obj = plt.get_cmap(cmap)
 
-    vmin, vmax = runoff_data.min(), runoff_data.max()
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
-    cmap_obj = plt.get_cmap(cmap)
-
     def get_line_width(value):
         return np.interp(value, [vmin, vmax], [0.5, 3])
 

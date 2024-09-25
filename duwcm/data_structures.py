@@ -22,6 +22,26 @@ class RainTankData:
     water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
+class StormwaterTankData:
+    first_flush: float = field(default=0, metadata={'unit': 'L'})
+    inflow: float = field(default=0, metadata={'unit': 'L'})
+    overflow: float = field(default=0, metadata={'unit': 'L'})
+    runoff_sewer: float = field(default=0, metadata={'unit': 'L'})
+    runoff_pavement: float = field(default=0, metadata={'unit': 'L'})
+    system_outflow: float = field(default=0, metadata={'unit': 'L'})
+    storage: float = field(default=0, metadata={'unit': 'L'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
+
+@dataclass
+class PondData:
+    #inflow: float = field(default=0, metadata={'unit': 'mm'})
+    evaporation: float = field(default=0, metadata={'unit': 'L'})
+    infiltration: float = field(default=0, metadata={'unit': 'mm'})
+    overflow: float = field(default=0, metadata={'unit': 'mm'})
+    storage: float = field(default=0, metadata={'unit': 'mm'})
+    water_balance: float = field(default=0, metadata={'unit': 'L'})
+
+@dataclass
 class PavementData:
     inflow: float = field(default=0, metadata={'unit': 'mm'})
     evaporation: float = field(default=0, metadata={'unit': 'L'})
@@ -122,6 +142,8 @@ class UrbanWaterData:
     """
     roof: RoofData = field(default_factory=RoofData)
     raintank: RainTankData = field(default_factory=RainTankData)
+    stormwatertank: StormwaterTankData = field(default_factory=StormwaterTankData)
+    pond: PondData = field(default_factory=PondData)
     pavement: PavementData = field(default_factory=PavementData)
     pervious: PerviousData = field(default_factory=PerviousData)
     vadose: VadoseData = field(default_factory=VadoseData)

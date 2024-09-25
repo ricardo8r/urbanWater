@@ -7,7 +7,7 @@ from duwcm.functions import soil_selector, gw_levels
 # Constants
 MAX_SOIL_DEPTH = 10.0
 MAX_SOIL_INDEX = 29
-PIPE_HEIGHT = 3.0
+PIPE_DEPTH = 3.0
 INFILTRATION_FACTOR = 0.5
 
 class GroundwaterClass:
@@ -175,7 +175,7 @@ class GroundwaterClass:
 
             avg_water_level = 0.5 * (water_level + initial_level + above_level)
             seepage = (self.hydraulic_head - avg_water_level) * 1000 * self.time_step / self.seepage_resistance
-            infiltration = (PIPE_HEIGHT - avg_water_level) * 1000 * self.infiltration_recession * self.time_step
+            infiltration = (PIPE_DEPTH - avg_water_level) * 1000 * self.infiltration_recession * self.time_step
         else:
             water_level = - (((inflow - self.downward_seepage) /1000 * self.drainage_resistance -
                               3.0 * self.infiltration_recession * self.drainage_resistance - open_water_level) /
@@ -189,6 +189,6 @@ class GroundwaterClass:
 
             avg_water_level = 0.5 * (water_level + initial_level + above_level)
             seepage = self.downward_seepage * self.time_step
-            infiltration = (PIPE_HEIGHT - avg_water_level) * 1000 * self.infiltration_recession * self.time_step
+            infiltration = (PIPE_DEPTH - avg_water_level) * 1000 * self.infiltration_recession * self.time_step
 
         return water_level, seepage, infiltration
