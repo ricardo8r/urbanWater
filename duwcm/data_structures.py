@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import List
 
 @dataclass
 class RoofData:
@@ -15,18 +16,7 @@ class RainTankData:
     inflow: float = field(default=0, metadata={'unit': 'L'})
     overflow: float = field(default=0, metadata={'unit': 'L'})
     evaporation: float = field(default=0, metadata={'unit': 'L'})
-    runoff_sewer: float = field(default=0, metadata={'unit': 'L'})
-    runoff_pavement: float = field(default=0, metadata={'unit': 'L'})
-    system_outflow: float = field(default=0, metadata={'unit': 'L'})
-    storage: float = field(default=0, metadata={'unit': 'L'})
-    water_balance: float = field(default=0, metadata={'unit': 'L'})
-
-@dataclass
-class StormwaterTankData:
-    first_flush: float = field(default=0, metadata={'unit': 'L'})
-    inflow: float = field(default=0, metadata={'unit': 'L'})
-    overflow: float = field(default=0, metadata={'unit': 'L'})
-    runoff_sewer: float = field(default=0, metadata={'unit': 'L'})
+    runoff_stormwater: float = field(default=0, metadata={'unit': 'L'})
     runoff_pavement: float = field(default=0, metadata={'unit': 'L'})
     system_outflow: float = field(default=0, metadata={'unit': 'L'})
     storage: float = field(default=0, metadata={'unit': 'L'})
@@ -76,7 +66,7 @@ class VadoseData:
 @dataclass
 class GroundwaterData:
     total_irrigation: float = field(default=0, metadata={'unit': 'L'})
-    leakage_depth: float = field(default=0, metadata={'unit': 'mm'})
+    leakage: float = field(default=0, metadata={'unit': 'mm'})
     inflow: float = field(default=0, metadata={'unit': 'mm'})
     storage_coefficient: float = field(default=0, metadata={'unit': '-'})
     seepage: float = field(default=0, metadata={'unit': 'L'})
@@ -89,21 +79,21 @@ class GroundwaterData:
 @dataclass
 class StormwaterData:
     total_runoff: float = field(default=0, metadata={'unit': 'L'})
-    wastewater_inflow: float = field(default=0, metadata={'unit': 'L'})
+    combined_sewer_inflow: float = field(default=0, metadata={'unit': 'L'})
     upstream_inflow: float = field(default=0, metadata={'unit': 'L'})
     runoff: float = field(default=0, metadata={'unit': 'L'})
     first_flush: float = field(default=0, metadata={'unit': 'L'})
     inflow: float = field(default=0, metadata={'unit': 'L'})
     evaporation: float = field(default=0, metadata={'unit': 'L'})
     overflow: float = field(default=0, metadata={'unit': 'L'})
-    sewer_inflow: float = field(default=0, metadata={'unit': 'L'})
+    runoff_sewer: float = field(default=0, metadata={'unit': 'L'})
     storage: float = field(default=0, metadata={'unit': 'L'})
     water_balance: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class WastewaterData:
     total_inflow: float = field(default=0, metadata={'unit': 'L'})
-    sewer_inflow: float = field(default=0, metadata={'unit': 'L'})
+    discharge: float = field(default=0, metadata={'unit': 'L'})
     upstream_inflow: float = field(default=0, metadata={'unit': 'L'})
     storage: float = field(default=0, metadata={'unit': 'L'})
     water_balance: float = field(default=0, metadata={'unit': 'L'})
@@ -138,16 +128,78 @@ class ReuseData:
 @dataclass
 class UrbanWaterData:
     """
-    Urban water model data. Default initialize to respective data classes
+    Urban water model data for state variables. Default initialize to respective data classes
     """
     roof: RoofData = field(default_factory=RoofData)
     raintank: RainTankData = field(default_factory=RainTankData)
-    stormwatertank: StormwaterTankData = field(default_factory=StormwaterTankData)
-    pond: PondData = field(default_factory=PondData)
     pavement: PavementData = field(default_factory=PavementData)
     pervious: PerviousData = field(default_factory=PerviousData)
     vadose: VadoseData = field(default_factory=VadoseData)
     groundwater: GroundwaterData = field(default_factory=GroundwaterData)
     stormwater: StormwaterData = field(default_factory=StormwaterData)
-    reuse: ReuseData = field(default_factory=ReuseData)
     wastewater: WastewaterData = field(default_factory=WastewaterData)
+    reuse: ReuseData = field(default_factory=ReuseData)
+
+
+@dataclass
+class Flow:
+    source: str
+    destination: str
+    variable: str
+    amount: float = 0
+    unit: str = 'L'
+
+@dataclass
+class ComponentFlows:
+    flows: List[Flow] = field(default_factory=list)
+
+@dataclass
+class RoofFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class RainTankFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class PavementFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class PerviousFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class VadoseFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class GroundwaterFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class StormwaterFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class WastewaterFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class ReuseFlowsData(ComponentFlows):
+    pass
+
+@dataclass
+class UrbanWaterFlowsData:
+    """
+    Urban water model data for flow tracking
+    """
+    roof: ComponentFlows = field(default_factory=ComponentFlows)
+    raintank: ComponentFlows = field(default_factory=ComponentFlows)
+    pavement: ComponentFlows = field(default_factory=ComponentFlows)
+    pervious: ComponentFlows = field(default_factory=ComponentFlows)
+    vadose: ComponentFlows = field(default_factory=ComponentFlows)
+    groundwater: ComponentFlows = field(default_factory=ComponentFlows)
+    stormwater: ComponentFlows = field(default_factory=ComponentFlows)
+    wastewater: ComponentFlows = field(default_factory=ComponentFlows)
+    reuse: ComponentFlows = field(default_factory=ComponentFlows)

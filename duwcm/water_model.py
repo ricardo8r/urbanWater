@@ -27,10 +27,11 @@ urban water balance simulation.
 """
 
 from typing import Dict, Any
+import numpy as np
 import pandas as pd
 
 from duwcm.functions import find_order
-from duwcm.data_structures import UrbanWaterData
+from duwcm.data_structures import UrbanWaterData, UrbanWaterFlowsData, ComponentFlows
 
 # Import subcomponents and data classes
 from duwcm.components import (
@@ -86,7 +87,7 @@ class UrbanWaterModel:
         self.reuse_settings = reuse_settings
 
         # Initialize submodels, current and previous states
-        self.submodels, self.current, self.previous = self._init_submodels()
+        self.submodels, self.current, self.previous, self.flows = self._init_submodels()
 
         self.wastewater_cells = [i for i, p in self.params.items() if p['wastewater']['capacity'] > 0]
         self.stormwater_cells = [i for i, p in self.params.items() if p['stormwater']['capacity'] > 0]
@@ -102,6 +103,7 @@ class UrbanWaterModel:
         submodels = {}
         current_states = {}
         previous_states = {}
+        flows = {}
 
         for cell_id, cell_params in self.params.items():
             reuse_index = 1 if self.reuse_settings.shape[1] == 1 else cell_id
@@ -120,8 +122,9 @@ class UrbanWaterModel:
             submodels[cell_id] = cell_submodels
             current_states[cell_id] = UrbanWaterData()
             previous_states[cell_id] = UrbanWaterData()
+            flows[cell_id] = UrbanWaterFlowsData()
 
-        return submodels, current_states, previous_states
+        return submodels, current_states, previous_states, flows
 
     def _set_initial_conditions(self):
         for cell_id, params in self.params.items():
@@ -137,9 +140,69 @@ class UrbanWaterModel:
     def update_states(self):
         """Update previous state with current state and reset current state."""
         for cell_id, current_state in self.current.items():
-            #Update previous
-            self.previous[cell_id] = UrbanWaterData(**current_state.__dict__)
+            # Update previous state
+            for attr, value in current_state.__dict__.items():
+                setattr(self.previous[cell_id], attr, value)
+
             # Cross model transfer
             self.previous[cell_id].raintank.storage = current_state.reuse.rt_storage
 
-            self.current[cell_id] = UrbanWaterData()
+            # Reset current state
+            for attr in current_state.__dict__:
+                setattr(current_state, attr, type(getattr(current_state, attr))())
+
+            # Reset flows
+            for attr in self.flows[cell_id].__dict__:
+                setattr(self.flows[cell_id], attr, ComponentFlows())
+
+    def distribute_wastewater(self):
+        for w in self.wastewater_cells:
+            available_cells = list(self.cell_order)
+            while self.current[w].wastewater.storage > 0 and available_cells:
+                select = np.random.choice(available_cells)
+                reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
+                setreuse = self.reuse_settings[reuse_index]
+
+                # Toilet use
+                wws_toilet_use = min(self.current[w].wastewater.storage,
+                                     self.current[select].reuse.toilet_demand * setreuse.cWWSforT)
+                self.current[select].reuse.toilet_demand -= wws_toilet_use
+
+                # Irrigation use
+                wws_irrigation_use = min(self.current[w].wastewater.storage - wws_toilet_use,
+                                         self.current[select].reuse.irrigation_demand * setreuse.cWWSforIR)
+                self.current[select].reuse.irrigation_demand -= wws_irrigation_use
+
+                # Update storages and uses
+                self.current[w].wastewater.storage -= (wws_toilet_use + wws_irrigation_use)
+                self.current[w].wastewater.use += (wws_toilet_use + wws_irrigation_use)
+                self.current[select].wastewater.supply += (wws_toilet_use + wws_irrigation_use)
+                self.current[select].reuse.imported_water -= (wws_toilet_use + wws_irrigation_use)
+
+                available_cells.remove(select)
+
+    def distribute_stormwater(self):
+        for s in self.stormwater_cells:
+            available_cells = list(self.cell_order)
+            while self.current[s].stormwater.storage > 0 and available_cells:
+                select = np.random.choice(available_cells)
+                reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
+                setreuse = self.reuse_settings[reuse_index]
+
+                # Toilet use
+                sws_toilet_use = min(self.current[s].stormwater.storage,
+                                     self.current[select].reuse.toilet_demand * setreuse.SWSforT)
+                self.current[select].reuse.toilet_demand -= sws_toilet_use
+
+                # Irrigation use
+                sws_irrigation_use = min(self.current[s].stormwater.storage - sws_toilet_use,
+                                         self.current[select].reuse.irrigation_demand * setreuse.SWSforIR)
+                self.current[select].reuse.irrigation_demand -= sws_irrigation_use
+
+                # Update storages and uses
+                self.current[s].stormwater.storage -= (sws_toilet_use + sws_irrigation_use)
+                self.current[s].stormwater.use += (sws_toilet_use + sws_irrigation_use)
+                self.current[select].stormwater.supply += (sws_toilet_use + sws_irrigation_use)
+                self.current[select].reuse.imported_water -= (sws_toilet_use + sws_irrigation_use)
+
+                available_cells.remove(select)

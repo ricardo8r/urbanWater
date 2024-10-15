@@ -1,6 +1,6 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, RainTankData
+from duwcm.data_structures import UrbanWaterData, RainTankData, RainTankFlowsData, Flow
 
 class RainTankClass:
     """
@@ -34,7 +34,7 @@ class RainTankClass:
         self.roof_area = params['roof']['area']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> RainTankData:
+              current_state: UrbanWaterData) -> Tuple[RainTankData, RainTankFlowsData]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -67,9 +67,9 @@ class RainTankClass:
 
         if self.capacity == 0:
             system_outflow = roof_runoff * self.roof_area
-            runoff_sewer = self.effective_system_outflow * system_outflow
-            runoff_pavement = system_outflow - runoff_sewer
-            return self._zero_balance(system_outflow, runoff_sewer, runoff_pavement)
+            runoff_stormwater = self.effective_system_outflow * system_outflow
+            runoff_pavement = system_outflow - runoff_stormwater
+            return self._zero_balance(system_outflow, runoff_stormwater, runoff_pavement)
 
         first_flush = min(roof_runoff * self.roof_area * self.install_ratio,
                                            self.first_flush)
@@ -87,32 +87,94 @@ class RainTankClass:
 
         water_balance = inflow - (evaporation + overflow) - (final_storage - previous_storage)
 
-        runoff_sewer = self.effective_system_outflow * system_outflow
-        runoff_pavement = system_outflow - runoff_sewer
+        runoff_stormwater = self.effective_system_outflow * system_outflow
+        runoff_pavement = system_outflow - runoff_stormwater
 
-
-        return RainTankData(
+        raintank_data = RainTankData(
             first_flush=first_flush,
             inflow=inflow,
             overflow=overflow,
             evaporation=evaporation,
-            runoff_sewer=runoff_sewer,
+            runoff_stormwater=runoff_stormwater,
             runoff_pavement=runoff_pavement,
             system_outflow=system_outflow,
             storage=final_storage,
             water_balance=water_balance
         )
 
+        raintank_flows = RainTankFlowsData(flows=[
+            Flow(
+                source="roof",
+                destination="raintank",
+                variable="runoff",
+                amount=roof_runoff * self.roof_area * self.install_ratio,
+                unit="L"
+            ),
+            Flow(
+                source="atmosphere",
+                destination="raintank",
+                variable="precipitation",
+                amount=self.is_open * precipitation * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="raintank",
+                destination="atmosphere",
+                variable="evaporation",
+                amount=evaporation,
+                unit="L"
+            ),
+            Flow(
+                source="raintank",
+                destination="stormwater",
+                variable="runoff",
+                amount=runoff_stormwater,
+                unit="L"
+            ),
+            Flow(
+                source="raintank",
+                destination="pavement",
+                variable="runoff",
+                amount=runoff_pavement,
+                unit="L"
+            ),
+        ])
+
+        return raintank_data, raintank_flows
+
     @staticmethod
-    def _zero_balance(system_outflow: float, runoff_sewer: float, runoff_pavement: float) -> RainTankData:
+    def _zero_balance(system_outflow: float, runoff_stormwater: float,
+                      runoff_pavement: float) -> Tuple[RainTankData, RainTankFlowsData]:
         return RainTankData(
             first_flush=0.0,
             inflow=0.0,
             overflow=0.0,
             evaporation=0.0,
-            runoff_sewer=runoff_sewer,
+            runoff_stormwater=runoff_stormwater,
             runoff_pavement=runoff_pavement,
             system_outflow=system_outflow,
             storage=0.0,
             water_balance=0.0
-        )
+        ), RainTankFlowsData(flows=[
+            Flow(
+                source="raintank",
+                destination="atmosphere",
+                variable="evaporation",
+                amount=0.0,
+                unit="L"
+            ),
+            Flow(
+                source="raintank",
+                destination="stormwater",
+                variable="runoff",
+                amount=runoff_stormwater,
+                unit="L"
+            ),
+            Flow(
+                source="raintank",
+                destination="pavement",
+                variable="runoff",
+                amount=runoff_pavement,
+                unit="L"
+            )
+        ])

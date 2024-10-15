@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
-import pandas as pd
 import numpy as np
-from duwcm.data_structures import UrbanWaterData, GroundwaterData
+import pandas as pd
+from duwcm.data_structures import UrbanWaterData, GroundwaterData, GroundwaterFlowsData, Flow
 from duwcm.functions import soil_selector, gw_levels
 
 # Constants
@@ -60,7 +60,7 @@ class GroundwaterClass:
         self.soil_params = soil_selector(soil_data, et_data, soil_type, crop_type)
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> GroundwaterData:
+              current_state: UrbanWaterData) -> Tuple[GroundwaterData, GroundwaterFlowsData]:
         """
         Calculates the groundwater dynamics for the current time step.
 
@@ -106,10 +106,15 @@ class GroundwaterClass:
                             pavement_irrigation * self.pavement_area +
                             pervious_irrigation * self.pervious_area)
 
-        leakage_depth = ((total_irrigation + self.indoor_water_use) * self.leakage_rate /
-                         (1 - self.leakage_rate)) / self.area
+        irrigation_leakage = (total_irrigation * self.leakage_rate /
+                              (1 - self.leakage_rate))
 
-        inflow = (leakage_depth + (vadose_percolation * self.vadose_area +
+        indoor_use_leakage = (self.indoor_water_use * self.leakage_rate /
+                              (1 - self.leakage_rate))
+
+        leakage = (irrigation_leakage + indoor_use_leakage) / self.area
+
+        inflow = (leakage + (vadose_percolation * self.vadose_area +
                                    pavement_infiltration * self.pavement_area) / self.area)
 
         storage_coefficient = self._storage_coefficient(initial_level)
@@ -129,9 +134,9 @@ class GroundwaterClass:
                          * (initial_level + initial_surface_level / storage_coefficient -
                             (water_level + surface_level / storage_coefficient)) * 1000) * self.area
 
-        return GroundwaterData(
+        groundwater_data = GroundwaterData(
             total_irrigation = total_irrigation,
-            leakage_depth = leakage_depth,
+            leakage = leakage,
             inflow = inflow,
             storage_coefficient = storage_coefficient,
             seepage = seepage * self.area,
@@ -141,6 +146,68 @@ class GroundwaterClass:
             surface_water_level = surface_level,
             water_balance = water_balance,
         )
+
+        groundwater_flows = GroundwaterFlowsData(flows=[
+            Flow(
+                source="vadose",
+                destination="groundwater",
+                variable="percolation",
+                amount=max(0, vadose_percolation * self.vadose_area),
+                unit="L"
+            ),
+            Flow(
+                source="groundwater",
+                destination="vadose",
+                variable="capillary_rise",
+                amount=max(0, -vadose_percolation * self.vadose_area),
+                unit="L"
+            ),
+            Flow(
+                source="pavement",
+                destination="groundwater",
+                variable="infiltration",
+                amount=pavement_infiltration * self.pavement_area,
+                unit="L"
+            ),
+            Flow(
+                source="groundwater",
+                destination="deep_groundwater",
+                variable="seepage",
+                amount=seepage * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="external",
+                destination="groundwater",
+                variable="irrigation_leakage",
+                amount=irrigation_leakage,
+                unit="L"
+            ),
+            Flow(
+                source="external",
+                destination="groundwater",
+                variable="indoor_leakage",
+                amount=indoor_use_leakage,
+                unit="L"
+            ),
+            Flow(
+                source="groundwater",
+                destination="surface_water",
+                variable="baseflow",
+                amount=baseflow * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="groundwater",
+                destination="wastewater",
+                variable="pipe_infiltration",
+                amount=infiltration,
+                unit="L"
+            )
+        ])
+
+        return groundwater_data, groundwater_flows
+
 
     def _storage_coefficient(self, initial_level: float) -> float:
         gw_up, gw_low, id_up, id_low = gw_levels(initial_level)

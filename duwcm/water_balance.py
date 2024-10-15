@@ -17,32 +17,32 @@ from typing import Dict, List
 from dataclasses import fields
 
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
 
 from duwcm.water_model import UrbanWaterModel
-from duwcm.data_structures import UrbanWaterData
+from duwcm.data_structures import UrbanWaterData, UrbanWaterFlowsData
 
-def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataFrame:
+def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """Run the full simulation for all timesteps."""
     num_timesteps = len(forcing)
 
     # Initialize results as dictionaries of lists
-    results = {field.name: [] for field in fields(UrbanWaterData)}
-    results['aggregated'] = []
+    results_var = {field.name: [] for field in fields(UrbanWaterData)}
+    results_flow = {field.name: [] for field in fields(UrbanWaterFlowsData)}
+    results_agg = []
 
     # Add initial conditions to results at t=0
     initial_date = forcing.index[0] - pd.Timedelta(days=1)
     for cell_id, initial_state in model.previous.items():
         for module_name, module_data in initial_state.__dict__.items():
-            results[module_name].append({
+            results_var[module_name].append({
                 'cell': cell_id,
                 'date': initial_date,
                 **module_data.__dict__
             })
 
     # Initialize aggregated results for t=0
-    results['aggregated'].append({
+    results_agg.append({
         'date': initial_date,
         'stormwater': 0,
         'wastewater': 0,
@@ -56,14 +56,13 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataF
     for t in tqdm(range(1, num_timesteps), desc="Water balance"):
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
-        _solve_timestep(model, results, timestep_forcing, current_date)
-        _aggregate_timestep(model, results, current_date)
-        _distribute_wastewater(model, results)
-        _distribute_stormwater(model, results)
+        _solve_timestep(model, results_var, results_flow, timestep_forcing, current_date)
+        model.distribute_wastewater()
+        model.distribute_stormwater()
+        _aggregate_timestep(model, results_agg, current_date)
         model.update_states()
 
-    df_results = results_to_dataframes(results, model)
-    df_results['local'] = selected_results(df_results)
+    df_results = results_to_dataframes(results_var, results_flow, results_agg, model)
 
     total_area = sum(params['groundwater']['area'] for params in model.params.values())
     df_results['aggregated'].attrs['total_area'] = total_area
@@ -71,8 +70,9 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> pd.DataF
 
     return df_results
 
-def _solve_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]],
-                    forcing: pd.Series, current_date: pd.Timestamp) -> None:
+def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]],
+                    results_flow: Dict[str, List[Dict]], forcing: pd.Series,
+                    current_date: pd.Timestamp) -> None:
     """Solve the water balance for a single timestep for all cells in the specified order."""
     for cell_id in model.cell_order:
         upstream_cells = [int(up) for up in model.path.loc[cell_id][1:] if up != 0]
@@ -81,23 +81,37 @@ def _solve_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]],
         model.current[cell_id].stormwater.upstream_inflow = 0
         model.current[cell_id].wastewater.upstream_inflow = 0
         for up in upstream_cells:
-            model.current[cell_id].stormwater.upstream_inflow += model.current[up].stormwater.sewer_inflow
-            model.current[cell_id].wastewater.upstream_inflow += model.current[up].wastewater.sewer_inflow
+            model.current[cell_id].stormwater.upstream_inflow += model.current[up].stormwater.runoff_sewer
+            model.current[cell_id].wastewater.upstream_inflow += model.current[up].wastewater.discharge
 
         # Solve for each submodel
         for submodel_name, submodel in model.submodels[cell_id].items():
-            setattr(model.current[cell_id], submodel_name,
-                    submodel.solve(forcing, model.previous[cell_id], model.current[cell_id]))
+            state_data, flow_data = submodel.solve(forcing, model.previous[cell_id], model.current[cell_id])
+            setattr(model.current[cell_id], submodel_name, state_data)
+            setattr(model.flows[cell_id], submodel_name, flow_data)
 
         # Append results for this cell and timestep
         for module_name, module_data in model.current[cell_id].__dict__.items():
-            results[module_name].append({
+            results_var[module_name].append({
                 'cell': cell_id,
                 'date': current_date,
                 **module_data.__dict__
             })
 
-def _aggregate_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]], current_date: pd.Timestamp) -> None:
+        # Append flows for this cell and timestep
+        for module_name, module_flows in model.flows[cell_id].__dict__.items():
+            for flow in module_flows.flows:
+                results_flow[module_name].append({
+                    'cell': cell_id,
+                    'date': current_date,
+                    'source': flow.source,
+                    'destination': flow.destination,
+                    'variable': flow.variable,
+                    'amount': flow.amount,
+                    'unit': flow.unit
+                })
+
+def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
     aggregated = {
         'date': current_date,
@@ -115,8 +129,8 @@ def _aggregate_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]], 
         params = model.params[cell_id]
 
         if model.path.loc[cell_id, 'down'] == 0:
-            aggregated['stormwater'] += current.stormwater.sewer_inflow
-            aggregated['wastewater'] += current.wastewater.sewer_inflow
+            aggregated['stormwater'] += current.stormwater.runoff_sewer
+            aggregated['wastewater'] += current.wastewater.discharge
 
         aggregated['baseflow'] += current.groundwater.baseflow
         aggregated['total_seepage'] += current.groundwater.seepage
@@ -129,116 +143,82 @@ def _aggregate_timestep(model: UrbanWaterModel, results: Dict[str, List[Dict]], 
             current.raintank.evaporation +
             current.stormwater.evaporation
         )
+    aggregated['imported_water'] -= sum(model.current[w].wastewater.use for w in model.wastewater_cells)
+    aggregated['imported_water'] -= sum(model.current[s].stormwater.use for s in model.stormwater_cells)
 
-    results['aggregated'].append(aggregated)
+    results_agg.append(aggregated)
 
-def _distribute_wastewater(model: UrbanWaterModel, results: Dict[str, List[Dict]]) -> None:
-    """Distribute water from cluster wastewater storage to other cells."""
-    for w in model.wastewater_cells:
-        available_cells = list(model.cell_order)
-        while model.current[w].wastewater.storage > 0 and available_cells:
-            select = np.random.choice(available_cells)
-            reuse_index = 1 if model.reuse_settings.shape[1] == 1 else select
-            setreuse = model.reuse_settings[reuse_index]
-
-            # Toilet use
-            wws_toilet_use = min(model.current[w].wastewater.storage,
-                                 model.current[select].reuse.toilet_demand * setreuse.cWWSforT)
-            model.current[select].reuse.toilet_demand -= wws_toilet_use
-
-            # Irrigation use
-            wws_irrigation_use = min(model.current[w].wastewater.storage - wws_toilet_use,
-                                     model.current[select].reuse.irrigation_demand * setreuse.cWWSforIR)
-            model.current[select].reuse.irrigation_demand -= wws_irrigation_use
-
-            # Update storages and uses
-            model.current[w].wastewater.storage -= (wws_toilet_use + wws_irrigation_use)
-            model.current[w].wastewater.use += (wws_toilet_use + wws_irrigation_use)
-            model.current[select].wastewater.supply += (wws_toilet_use + wws_irrigation_use)
-            model.current[select].reuse.imported_water -= (wws_toilet_use + wws_irrigation_use)
-
-            available_cells.remove(select)
-
-    results['aggregated'][-1]['imported_water'] -= sum(model.current[w].wastewater.use for w in model.wastewater_cells)
-
-def _distribute_stormwater(model: UrbanWaterModel, results: Dict[str, List[Dict]]) -> None:
-    """Distribute water from stormwater storage to other cells."""
-    for s in model.stormwater_cells:
-        available_cells = list(model.cell_order)
-        while model.current[s].stormwater.storage > 0 and available_cells:
-            select = np.random.choice(available_cells)
-            reuse_index = 1 if model.reuse_settings.shape[1] == 1 else select
-            setreuse = model.reuse_settings[reuse_index]
-
-            # Toilet use
-            sws_toilet_use = min(model.current[s].stormwater.storage,
-                                 model.current[select].reuse.toilet_demand * setreuse.SWSforT)
-            model.current[select].reuse.toilet_demand -= sws_toilet_use
-
-            # Irrigation use
-            sws_irrigation_use = min(model.current[s].stormwater.storage - sws_toilet_use,
-                                     model.current[select].reuse.irrigation_demand * setreuse.SWSforIR)
-            model.current[select].reuse.irrigation_demand -= sws_irrigation_use
-
-            # Update storages and uses
-            model.current[s].stormwater.storage -= (sws_toilet_use + sws_irrigation_use)
-            model.current[s].stormwater.use += (sws_toilet_use + sws_irrigation_use)
-            model.current[select].stormwater.supply += (sws_toilet_use + sws_irrigation_use)
-            model.current[select].reuse.imported_water -= (sws_toilet_use + sws_irrigation_use)
-
-            available_cells.remove(select)
-
-    results['aggregated'][-1]['imported_water'] -= sum(model.current[s].stormwater.use for s in model.stormwater_cells)
-
-def results_to_dataframes(results: Dict[str, List[Dict]], model: UrbanWaterModel) -> Dict[str, pd.DataFrame]:
-    dataframe_results = {}
-    for module, data in results.items():
-        if module != 'aggregated':
-            df = pd.DataFrame(data).set_index(['cell', 'date'])
-            module_data = getattr(model.current[next(iter(model.current))], module)
-            module_fields = fields(type(module_data))
-            for column in df.columns:
-                field = next(f for f in module_fields if f.name == column)
-                df[column].attrs['unit'] = field.metadata['unit']
-            dataframe_results[module] = df
-        else:
-            dataframe_results[module] = pd.DataFrame(data).set_index('date')
-    return dataframe_results
-
-def selected_results(dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-    modules_to_keep = ['reuse', 'stormwater', 'wastewater', 'groundwater']
-    variables_to_keep = {
-        'reuse': {'imported_water': 'imported_water'},
-        'stormwater': {'sewer_inflow': 'stormwater_runoff'},
-        'wastewater': {'sewer_inflow': 'wastewater_runoff'},
-        'groundwater': {'baseflow': 'baseflow', 'seepage': 'deep_seepage'}
+def selected_results(flow_dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    selected_flows = {
+        'reuse': {'imported_water': ('external', 'reuse', 'imported_water')},
+        'stormwater': {'stormwater_runoff': ('stormwater', 'sewer', 'runoff')},
+        'wastewater': {'wastewater_runoff': ('wastewater', 'sewer', 'discharge')},
+        'groundwater': {
+            'baseflow': ('groundwater', 'surface_water', 'baseflow'),
+            'deep_seepage': ('groundwater', 'deep_groundwater', 'seepage')
+        }
     }
 
     dataframe_results = {}
-    for module in modules_to_keep:
-        df = dataframes[module]
-        kept_columns = variables_to_keep[module]
-        dataframe_results[module] = df[list(kept_columns.keys())].rename(columns=kept_columns)
+    for module, flows in selected_flows.items():
+        df = flow_dataframes[f"{module}_flows"]
+        for new_name, (source, destination, variable) in flows.items():
+            dataframe_results[new_name] = df.xs((source, destination, variable),
+                                                level=['source', 'destination', 'variable'])['amount']
 
-    # Compute non-aggregated evapotranspiration
-    et_components = {
-        'roof': ('roof', 'evaporation'),
-        'pavement': ('pavement', 'evaporation'),
-        'pervious': ('pervious', 'evaporation'),
-        'raintank': ('raintank', 'evaporation'),
-        'stormwater': ('stormwater', 'evaporation'),
-        'vadose': ('vadose', 'transpiration')
-    }
+    # Compute evapotranspiration
+    et_components = [
+        ('roof', 'atmosphere', 'evaporation'),
+        ('pavement', 'atmosphere', 'evaporation'),
+        ('pervious', 'atmosphere', 'evaporation'),
+        ('raintank', 'atmosphere', 'evaporation'),
+        ('stormwater', 'atmosphere', 'evaporation'),
+        ('vadose', 'atmosphere', 'transpiration')
+    ]
+    et_data = []
+    for module, destination, variable in et_components:
+        df = flow_dataframes[f"{module}_flows"]
+        component_data = df.xs((module, destination, variable),
+                               level=['source', 'destination', 'variable'])['amount']
+        et_data.append(component_data)
 
-    et_data = {
-        component: dataframes[module][variable]
-        for component, (module, variable) in et_components.items()
-    }
+    dataframe_results['evapotranspiration'] = pd.concat(et_data, axis=1).sum(axis=1)
 
-    et_df = pd.DataFrame(et_data).sum(axis=1).to_frame(name='evapotranspiration')
-    et_df['evapotranspiration'].attrs['unit'] = 'L'
-    dataframe_results['evapotranspiration'] = et_df
-
-    combined_results = pd.concat(list(dataframe_results.values()), axis=1)
+    combined_results = pd.DataFrame(dataframe_results)
 
     return combined_results
+
+def results_to_dataframes(results_var: Dict[str, List[Dict]],
+                          results_flow: Dict[str, List[Dict]],
+                          results_agg: List[Dict],
+                          model: UrbanWaterModel) -> Dict[str, pd.DataFrame]:
+    dataframe_results = {}
+
+    # Process variables
+    for module, data in results_var.items():
+        df = pd.DataFrame(data).set_index(['cell', 'date'])
+        module_data = getattr(model.current[next(iter(model.current))], module)
+        module_fields = fields(type(module_data))
+        for column in df.columns:
+            field = next(f for f in module_fields if f.name == column)
+            df[column].attrs['unit'] = field.metadata['unit']
+        dataframe_results[module] = df
+
+    # Process flows
+    flow_dataframes = {}
+    for module, data in results_flow.items():
+        df = pd.DataFrame(data)
+        df['date'] = pd.to_datetime(df['date'])
+        df = df.set_index(['cell', 'date', 'source', 'destination', 'variable'])
+        flow_dataframes[f"{module}_flows"] = df
+
+    # Process aggregated results
+    dataframe_results['aggregated'] = pd.DataFrame(results_agg).set_index('date')
+
+    # Create local results using the modified selected_results function
+    dataframe_results['local'] = selected_results(flow_dataframes)
+
+    # Add flow dataframes to the results
+    dataframe_results.update(flow_dataframes)
+
+    return dataframe_results

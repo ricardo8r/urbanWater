@@ -1,6 +1,6 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, RoofData
+from duwcm.data_structures import UrbanWaterData, RoofData, RoofFlowsData, Flow
 
 class RoofClass:
     """
@@ -27,7 +27,7 @@ class RoofClass:
         self.time_step = params['general']['time_step']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> RoofData:
+              current_state: UrbanWaterData) -> Tuple[RoofData, RoofFlowsData]:
         """
         Args: 
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -53,7 +53,7 @@ class RoofClass:
         previous_storage = previous_state.roof.storage
 
         if self.area == 0:
-            return self._zero_balance(irrigation)
+            return self._zero_balance()
 
         total_inflow = precipitation + irrigation
         current_storage = min(self.max_storage, max(0.0, previous_storage + total_inflow))
@@ -66,7 +66,7 @@ class RoofClass:
 
         water_balance = (excess_water - effective_runoff - non_effective_runoff) * self.area
 
-        return RoofData(
+        roof_data = RoofData(
             evaporation = evaporation * self.area,
             effective_runoff = effective_runoff,
             non_effective_runoff = non_effective_runoff,
@@ -74,13 +74,53 @@ class RoofClass:
             water_balance = water_balance
         )
 
+        roof_flows = RoofFlowsData(flows=[
+            Flow(
+                source="atmosphere",
+                destination="roof",
+                variable="precipitation",
+                amount=precipitation * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="external",
+                destination="roof",
+                variable="irrigation",
+                amount=irrigation * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="roof",
+                destination="raintank",
+                variable="effective_runoff",
+                amount=effective_runoff * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="roof",
+                destination="pervious",
+                variable="non_effective_runoff",
+                amount=non_effective_runoff * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="roof",
+                destination="atmosphere",
+                variable="evaporation",
+                amount=evaporation * self.area,
+                unit="L"
+            )
+        ])
+
+        return roof_data, roof_flows
+
     @staticmethod
-    def _zero_balance(irrigation: float) -> RoofData:
+    def _zero_balance() -> Tuple[RoofData, RoofFlowsData]:
         return RoofData(
-            irrigation = irrigation,
+            irrigation = 0.0,
             evaporation = 0.0,
             effective_runoff = 0.0,
             non_effective_runoff = 0.0,
             storage = 0.0,
             water_balance = 0.0
-        )
+        ), RoofFlowsData(flows=[])

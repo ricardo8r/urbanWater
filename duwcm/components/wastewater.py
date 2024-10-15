@@ -1,6 +1,6 @@
-from typing import Dict, Any
+from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, WastewaterData
+from duwcm.data_structures import UrbanWaterData, WastewaterData, WastewaterFlowsData, Flow
 
 class WastewaterClass:
     """
@@ -21,7 +21,7 @@ class WastewaterClass:
         self.cluster_storage_capacity = params['wastewater']['capacity']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> WastewaterData:
+              current_state: UrbanWaterData) -> Tuple[WastewaterData, WastewaterFlowsData]:
         """
         Calculate the states and fluxes on wastewater storage during current time step.
 
@@ -39,14 +39,14 @@ class WastewaterClass:
             Dict[str, float]: Computed states and fluxes of wastewater storage during current time step
                 inflow: Inflow to wastewater system [L]
                 upstream_inflow: Wastewater sewer system flow from upstream grid [L]
-                sewer_inflow: Wastewater sewer system inflow [L]
+                discharge: Wastewater sewer discharge [L]
                 storage: Wastewater storage at the end of the time step [L]
                 water_balance: Water balance [L]
         """
         previous_storage = previous_state.wastewater.storage
 
         upstream_inflow = current_state.wastewater.upstream_inflow
-        stormwater_inflow = current_state.stormwater.wastewater_inflow
+        stormwater_inflow = current_state.stormwater.combined_sewer_inflow
         infiltration = current_state.groundwater.pipe_infiltration
         reuse_outflow = current_state.reuse.wws_spillover
 
@@ -58,23 +58,78 @@ class WastewaterClass:
             return self._zero_balance(upstream_inflow, total_inflow)
 
         final_storage = min(self.cluster_storage_capacity, previous_storage + total_inflow)
-        sewer_inflow = max(0.0, total_inflow - (final_storage - previous_storage))
-        water_balance = total_inflow - sewer_inflow - (final_storage - previous_storage)
+        discharge = max(0.0, total_inflow - (final_storage - previous_storage))
+        water_balance = total_inflow - discharge - (final_storage - previous_storage)
 
-        return WastewaterData(
+        wastewater_data = WastewaterData(
             total_inflow = total_inflow,
-            sewer_inflow = sewer_inflow,
+            discharge = discharge,
             upstream_inflow = upstream_inflow,
             storage = final_storage,
             water_balance = water_balance
         )
 
+        wastewater_flows = WastewaterFlowsData(flows=[
+            Flow(
+                source="reuse",
+                destination="wastewater",
+                variable="spillover",
+                amount=reuse_outflow,
+                unit="L"
+            ),
+            Flow(
+                source="groundwater",
+                destination="wastewater",
+                variable="pipe_infiltration",
+                amount=infiltration * self.groundwater_area,
+                unit="L"
+            ),
+            Flow(
+                source="stormwater",
+                destination="wastewater",
+                variable="inflow",
+                amount=stormwater_inflow,
+                unit="L"
+            ),
+            Flow(
+                source="wastewater",
+                destination="wastewater",
+                variable="upstream_inflow",
+                amount=upstream_inflow,
+                unit="L"
+            ),
+            Flow(
+                source="wastewater",
+                destination="sewer",
+                variable="discharge",
+                amount=discharge,
+                unit="L"
+            )
+        ])
+
+        return wastewater_data, wastewater_flows
+
     @staticmethod
-    def _zero_balance(upstream_inflow: float, total_inflow: float) -> WastewaterData:
+    def _zero_balance(upstream_inflow: float, total_inflow: float) -> Tuple[WastewaterData, WastewaterFlowsData]:
         return WastewaterData(
             total_inflow = 0.0,
-            sewer_inflow = total_inflow,
+            discharge = total_inflow,
             upstream_inflow = upstream_inflow,
             storage = 0.0,
             water_balance = 0.0
-        )
+        ), WastewaterFlowsData(flows=[
+            Flow(
+                source="wastewater",
+                destination="wastewater",
+                variable="inflow",
+                amount=upstream_inflow,
+                unit="L"
+            ),
+            Flow(
+                source="wastewater",
+                destination="sewer",
+                variable="discharge",
+                amount=total_inflow,
+                unit="L"
+            )
+        ])

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, VadoseData
+from duwcm.data_structures import UrbanWaterData, VadoseData, VadoseFlowsData, Flow
 from duwcm.functions import soil_selector, et_selector, gw_levels
 
 # Constants
@@ -44,7 +44,7 @@ class VadoseClass:
         self.moisture_wilting_point = self.et_params['theta_h4_mm'].values[0]
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> VadoseData:
+              current_state: UrbanWaterData) -> Tuple[VadoseData, VadoseFlowsData]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -98,16 +98,63 @@ class VadoseClass:
         water_balance = (pervious_infiltration - (transpiration + percolation) -
                          (final_moisture - initial_moisture)) * self.area
 
-        return VadoseData(
+        vadose_data = VadoseData(
             transpiration_threshold = transpiration_threshold,
             transpiration_factor = transpiration_factor,
-            transpiration = transpiration,
+            transpiration = transpiration * self.area,
             equilibrium_moisture = equilibrium_moisture,
             max_capillary = max_capillary,
             percolation = percolation,
             moisture = final_moisture,
             water_balance = water_balance
         )
+
+        vadose_flows = VadoseFlowsData(flows=[
+            Flow(
+                source="pervious",
+                destination="vadose",
+                variable="infiltration",
+                amount=pervious_infiltration * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="vadose",
+                destination="atmosphere",
+                variable="transpiration",
+                amount=transpiration * self.area,
+                unit="L"
+            ),
+            Flow(
+                source="vadose",
+                destination="groundwater",
+                variable="percolation",
+                amount=max(0, percolation * self.area),
+                unit="L"
+            ),
+            Flow(
+                source="groundwater",
+                destination="vadose",
+                variable="capillary_rise",
+                amount=max(0, -percolation * self.area),
+                unit="L"
+            )
+        ])
+
+        return vadose_data, vadose_flows
+
+    @staticmethod
+    def _zero_balance(initial_moisture: float) -> Tuple[VadoseData, VadoseFlowsData]:
+        return VadoseData(
+            transpiration_threshold = 0.0,
+            transpiration_factor = 0.0,
+            transpiration = 0.0,
+            equilibrium_moisture = 0.0,
+            max_capillary = 0.0,
+            percolation = 0.0,
+            moisture = initial_moisture,
+            water_balance = 0.0
+        ), VadoseFlowsData(flows=[])
+
 
     def _transpiration_threshold(self, reference_evaporation: float) -> float:
         if reference_evaporation < MIN_REFERENCE_EVAPORATION:
@@ -148,16 +195,3 @@ class VadoseClass:
             max_capillary_rise = self.soil_params[29]['capris_max[mm/d]']
 
         return equilibrium_moisture, max_capillary_rise
-
-    @staticmethod
-    def _zero_balance(initial_moisture: float) -> VadoseData:
-        return VadoseData(
-            transpiration_threshold = 0.0,
-            transpiration_factor = 0.0,
-            transpiration = 0.0,
-            equilibrium_moisture = 0.0,
-            max_capillary = 0.0,
-            percolation = 0.0,
-            moisture = initial_moisture,
-            water_balance = 0.0
-        )
