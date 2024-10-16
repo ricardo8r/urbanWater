@@ -111,7 +111,7 @@ class RainTankClass:
                 unit="L"
             ),
             Flow(
-                source="atmosphere",
+                source="input",
                 destination="raintank",
                 variable="precipitation",
                 amount=self.is_open * precipitation * self.area,
@@ -119,7 +119,7 @@ class RainTankClass:
             ),
             Flow(
                 source="raintank",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=evaporation,
                 unit="L"
@@ -158,7 +158,7 @@ class RainTankClass:
         ), RainTankFlowsData(flows=[
             Flow(
                 source="raintank",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=0.0,
                 unit="L"

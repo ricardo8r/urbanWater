@@ -100,7 +100,7 @@ class WastewaterClass:
             ),
             Flow(
                 source="wastewater",
-                destination="sewer",
+                destination="output",
                 variable="discharge",
                 amount=discharge,
                 unit="L"
@@ -127,7 +127,7 @@ class WastewaterClass:
             ),
             Flow(
                 source="wastewater",
-                destination="sewer",
+                destination="output",
                 variable="discharge",
                 amount=total_inflow,
                 unit="L"

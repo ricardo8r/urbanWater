@@ -169,7 +169,14 @@ class ReuseClass:
 
         reuse_flows = ReuseFlowsData(flows=[
             Flow(
-                source="external",
+                source="reuse",
+                destination="wastewater",
+                variable="spillover",
+                amount=wws_results.spillover,
+                unit="L"
+            ),
+            Flow(
+                source="input",
                 destination="reuse",
                 variable="imported_water",
                 amount=imported_water,

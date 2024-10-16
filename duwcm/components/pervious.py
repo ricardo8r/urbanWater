@@ -124,14 +124,14 @@ class PerviousClass:
 
         pervious_flows = PerviousFlowsData(flows=[
             Flow(
-                source="atmosphere",
+                source="input",
                 destination="pervious",
                 variable="precipitation",
                 amount=precipitation * self.area,
                 unit="L"
             ),
             Flow(
-                source="irrigation_source",
+                source="input",
                 destination="pervious",
                 variable="irrigation",
                 amount=irrigation * self.area,
@@ -153,7 +153,7 @@ class PerviousClass:
             ),
             Flow(
                 source="pervious",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=evaporation * self.area,
                 unit="L"

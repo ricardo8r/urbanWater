@@ -76,14 +76,14 @@ class RoofClass:
 
         roof_flows = RoofFlowsData(flows=[
             Flow(
-                source="atmosphere",
+                source="input",
                 destination="roof",
                 variable="precipitation",
                 amount=precipitation * self.area,
                 unit="L"
             ),
             Flow(
-                source="external",
+                source="input",
                 destination="roof",
                 variable="irrigation",
                 amount=irrigation * self.area,
@@ -105,7 +105,7 @@ class RoofClass:
             ),
             Flow(
                 source="roof",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=evaporation * self.area,
                 unit="L"

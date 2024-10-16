@@ -60,6 +60,7 @@ class VadoseData:
     equilibrium_moisture: float = field(default=0, metadata={'unit': 'mm'})
     max_capillary: float = field(default=0, metadata={'unit': 'mm/d'})
     percolation: float = field(default=0, metadata={'unit': 'mm'})
+    capillary_rise: float = field(default=0, metadata={'unit': 'mm'})
     moisture: float = field(default=0, metadata={'unit': 'mm'})
     water_balance: float = field(default=0, metadata={'unit': 'L'})
 

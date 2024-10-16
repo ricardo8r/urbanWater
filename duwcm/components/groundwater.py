@@ -152,14 +152,7 @@ class GroundwaterClass:
                 source="vadose",
                 destination="groundwater",
                 variable="percolation",
-                amount=max(0, vadose_percolation * self.vadose_area),
-                unit="L"
-            ),
-            Flow(
-                source="groundwater",
-                destination="vadose",
-                variable="capillary_rise",
-                amount=max(0, -vadose_percolation * self.vadose_area),
+                amount=vadose_percolation * self.vadose_area,
                 unit="L"
             ),
             Flow(
@@ -171,20 +164,20 @@ class GroundwaterClass:
             ),
             Flow(
                 source="groundwater",
-                destination="deep_groundwater",
+                destination="output",
                 variable="seepage",
                 amount=seepage * self.area,
                 unit="L"
             ),
             Flow(
-                source="external",
+                source="input",
                 destination="groundwater",
                 variable="irrigation_leakage",
                 amount=irrigation_leakage,
                 unit="L"
             ),
             Flow(
-                source="external",
+                source="input",
                 destination="groundwater",
                 variable="indoor_leakage",
                 amount=indoor_use_leakage,
@@ -192,7 +185,7 @@ class GroundwaterClass:
             ),
             Flow(
                 source="groundwater",
-                destination="surface_water",
+                destination="output",
                 variable="baseflow",
                 amount=baseflow * self.area,
                 unit="L"

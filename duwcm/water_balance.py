@@ -15,6 +15,9 @@ The simulation process includes:
 
 from typing import Dict, List
 from dataclasses import fields
+from collections import defaultdict
+import logging
+
 
 import pandas as pd
 from tqdm import tqdm
@@ -30,6 +33,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
     results_var = {field.name: [] for field in fields(UrbanWaterData)}
     results_flow = {field.name: [] for field in fields(UrbanWaterFlowsData)}
     results_agg = []
+    flow_tracker = defaultdict(lambda: defaultdict(float))
 
     # Add initial conditions to results at t=0
     initial_date = forcing.index[0] - pd.Timedelta(days=1)
@@ -53,12 +57,22 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
         'evaporation': 0
     })
 
+    logger = logging.getLogger(__name__)
+    is_debug = logger.getEffectiveLevel() == logging.DEBUG
+
     for t in tqdm(range(1, num_timesteps), desc="Water balance"):
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
-        _solve_timestep(model, results_var, results_flow, timestep_forcing, current_date)
+        _solve_timestep(model, results_var, results_flow, timestep_forcing, current_date, flow_tracker)
         model.distribute_wastewater()
         model.distribute_stormwater()
+
+        if is_debug:
+            logger.debug(f"Checking flow consistency for timestep {t}, date {current_date}")
+            _check_flow_consistency(flow_tracker)
+            # Clear flow tracker after each timestep in debug mode
+            flow_tracker.clear()
+
         _aggregate_timestep(model, results_agg, current_date)
         model.update_states()
 
@@ -72,7 +86,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
 
 def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]],
                     results_flow: Dict[str, List[Dict]], forcing: pd.Series,
-                    current_date: pd.Timestamp) -> None:
+                    current_date: pd.Timestamp, flow_tracker: Dict[str, Dict[str, float]]) -> None:
     """Solve the water balance for a single timestep for all cells in the specified order."""
     for cell_id in model.cell_order:
         upstream_cells = [int(up) for up in model.path.loc[cell_id][1:] if up != 0]
@@ -110,6 +124,11 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]],
                     'amount': flow.amount,
                     'unit': flow.unit
                 })
+                # Track the flow
+                flow_key = f"{flow.source}->{flow.destination}"
+                if flow_key not in flow_tracker:
+                    flow_tracker[flow_key] = defaultdict(float)
+                flow_tracker[flow_key][flow.variable] += flow.amount
 
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
@@ -150,12 +169,12 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
 
 def selected_results(flow_dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     selected_flows = {
-        'reuse': {'imported_water': ('external', 'reuse', 'imported_water')},
-        'stormwater': {'stormwater_runoff': ('stormwater', 'sewer', 'runoff')},
-        'wastewater': {'wastewater_runoff': ('wastewater', 'sewer', 'discharge')},
+        'reuse': {'imported_water': ('input', 'reuse', 'imported_water')},
+        'stormwater': {'stormwater_runoff': ('stormwater', 'output', 'runoff')},
+        'wastewater': {'wastewater_runoff': ('wastewater', 'output', 'discharge')},
         'groundwater': {
-            'baseflow': ('groundwater', 'surface_water', 'baseflow'),
-            'deep_seepage': ('groundwater', 'deep_groundwater', 'seepage')
+            'baseflow': ('groundwater', 'output', 'baseflow'),
+            'deep_seepage': ('groundwater', 'output', 'seepage')
         }
     }
 
@@ -168,12 +187,12 @@ def selected_results(flow_dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     # Compute evapotranspiration
     et_components = [
-        ('roof', 'atmosphere', 'evaporation'),
-        ('pavement', 'atmosphere', 'evaporation'),
-        ('pervious', 'atmosphere', 'evaporation'),
-        ('raintank', 'atmosphere', 'evaporation'),
-        ('stormwater', 'atmosphere', 'evaporation'),
-        ('vadose', 'atmosphere', 'transpiration')
+        ('roof', 'output', 'evaporation'),
+        ('pavement', 'output', 'evaporation'),
+        ('pervious', 'output', 'evaporation'),
+        ('raintank', 'output', 'evaporation'),
+        ('stormwater', 'output', 'evaporation'),
+        ('vadose', 'output', 'transpiration')
     ]
     et_data = []
     for module, destination, variable in et_components:
@@ -222,3 +241,37 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
     dataframe_results.update(flow_dataframes)
 
     return dataframe_results
+
+def _check_flow_consistency(flow_tracker: Dict[str, Dict[str, float]]) -> None:
+    inconsistencies = []
+
+    for flow_key, flow_data in flow_tracker.items():
+        source, destination = flow_key.split("->")
+
+        if source == 'input' or destination == 'output':
+            continue
+
+        reverse_key = f"{destination}->{source}"
+
+        if reverse_key in flow_tracker:
+            for variable, amount in flow_data.items():
+                reverse_amount = flow_tracker[reverse_key].get(variable, 0)
+
+                if abs(amount - reverse_amount) > 1e-6:
+                    inconsistencies.append(
+                        f"Inconsistency in {variable} flow between {source} and {destination}:\n"
+                        f"  {source} reports outflow of {amount}\n"
+                        f"  {destination} reports inflow of {reverse_amount}"
+                    )
+
+    logger = logging.getLogger(__name__)
+    if inconsistencies:
+        logger.debug("Flow inconsistencies detected:")
+        for inconsistency in inconsistencies:
+            logger.debug(inconsistency)
+    else:
+        logger.debug("All flows are consistent.")
+
+    logger.debug("Full flow tracker contents:")
+    for key, value in flow_tracker.items():
+        logger.debug("%s: %s", key, value)

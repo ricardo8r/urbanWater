@@ -91,14 +91,14 @@ class PavementClass:
 
         pavement_flows = PavementFlowsData(flows=[
             Flow(
-                source="atmosphere",
+                source="input",
                 destination="pavement",
                 variable="precipitation",
                 amount=precipitation * self.area,
                 unit="L"
             ),
             Flow(
-                source="external",
+                source="input",
                 destination="pavement",
                 variable="irrigation",
                 amount=irrigation * self.area,
@@ -113,7 +113,7 @@ class PavementClass:
             ),
             Flow(
                 source="pavement",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=evaporation * self.area,
                 unit="L"
@@ -153,4 +153,12 @@ class PavementClass:
             non_effective_runoff = 0.0,
             storage = 0.0,
             water_balance = 0.0
-        ), PavementFlowsData(flows=[])
+        ), PavementFlowsData(flows=[
+            Flow(
+                source="raintank",
+                destination="pavement",
+                variable="runoff",
+                amount=0.0,
+                unit="L"
+            )
+        ])

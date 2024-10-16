@@ -119,7 +119,7 @@ class VadoseClass:
             ),
             Flow(
                 source="vadose",
-                destination="atmosphere",
+                destination="output",
                 variable="transpiration",
                 amount=transpiration * self.area,
                 unit="L"
@@ -128,14 +128,7 @@ class VadoseClass:
                 source="vadose",
                 destination="groundwater",
                 variable="percolation",
-                amount=max(0, percolation * self.area),
-                unit="L"
-            ),
-            Flow(
-                source="groundwater",
-                destination="vadose",
-                variable="capillary_rise",
-                amount=max(0, -percolation * self.area),
+                amount=percolation * self.area,
                 unit="L"
             )
         ])

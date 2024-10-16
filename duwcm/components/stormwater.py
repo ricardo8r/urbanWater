@@ -59,7 +59,7 @@ class StormwaterClass:
                 evaporation: Evaporation volume if SWSop=1 [L]
                 final_storage: SWS storage at the end of the time step [L]
                 overflow: Overflow from SWS [L]
-                runoff_sewer: Storm\water runoff to sewer system [L]
+                runoff_sewer: Stormwater runoff to sewer system [L]
                 water_balance: Water balance of SWS [L]
         """
         precipitation = forcing.get('precipitation', 0.0)
@@ -77,7 +77,9 @@ class StormwaterClass:
         runoff = total_runoff - combined_sewer_inflow
 
         if self.capacity == 0:
-            return self._zero_balance(total_runoff, combined_sewer_inflow, upstream_inflow, runoff)
+            return self._zero_balance(raintank_runoff, pavement_runoff * self.pavement_area,
+                                      pervious_overflow * self.pervious_area, total_runoff,
+                                      combined_sewer_inflow, upstream_inflow, runoff)
 
         first_flush = min(runoff, self.first_flush)
         inflow = runoff - first_flush + self.is_open * precipitation * self.area
@@ -134,7 +136,7 @@ class StormwaterClass:
                 unit="L"
             ),
             Flow(
-                source="atmosphere",
+                source="input",
                 destination="stormwater",
                 variable="precipitation",
                 amount=self.is_open * precipitation * self.area,
@@ -142,7 +144,7 @@ class StormwaterClass:
             ),
             Flow(
                 source="stormwater",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=evaporation,
                 unit="L"
@@ -156,7 +158,7 @@ class StormwaterClass:
             ),
             Flow(
                 source="stormwater",
-                destination="sewer",
+                destination="output",
                 variable="runoff",
                 amount=runoff_sewer,
                 unit="L"
@@ -166,7 +168,8 @@ class StormwaterClass:
         return stormwater_data, stormwater_flows
 
     @staticmethod
-    def _zero_balance(total_runoff: float, combined_sewer_inflow: float,
+    def _zero_balance(raintank_runoff: float, pavement_runoff: float, pervious_overflow: float,
+                      total_runoff: float, combined_sewer_inflow: float,
                       upstream_inflow: float, runoff: float) -> Tuple[StormwaterData, StormwaterFlowsData]:
         return StormwaterData(
             total_runoff=total_runoff,
@@ -182,8 +185,29 @@ class StormwaterClass:
             water_balance=0.0
         ), StormwaterFlowsData(flows=[
             Flow(
+                source="raintank",
+                destination="stormwater",
+                variable="runoff",
+                amount=raintank_runoff,
+                unit="L"
+            ),
+            Flow(
+                source="pavement",
+                destination="stormwater",
+                variable="runoff",
+                amount=pavement_runoff,
+                unit="L"
+            ),
+            Flow(
+                source="pervious",
+                destination="stormwater",
+                variable="overflow",
+                amount=pervious_overflow,
+                unit="L"
+            ),
+            Flow(
                 source="stormwater",
-                destination="atmosphere",
+                destination="output",
                 variable="evaporation",
                 amount=0.0,
                 unit="L"
@@ -204,7 +228,7 @@ class StormwaterClass:
             ),
             Flow(
                 source="stormwater",
-                destination="sewer",
+                destination="output",
                 variable="runoff",
                 amount=runoff,
                 unit="L"
