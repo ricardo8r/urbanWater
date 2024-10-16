@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, RoofData, RoofFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, RoofData, ComponentFlows, FlowType
 
 class RoofClass:
     """
@@ -27,7 +27,7 @@ class RoofClass:
         self.time_step = params['general']['time_step']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[RoofData, RoofFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[RoofData, ComponentFlows]:
         """
         Args: 
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -74,48 +74,18 @@ class RoofClass:
             water_balance = water_balance
         )
 
-        roof_flows = RoofFlowsData(flows=[
-            Flow(
-                source="input",
-                destination="roof",
-                variable="precipitation",
-                amount=precipitation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="roof",
-                variable="irrigation",
-                amount=irrigation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="roof",
-                destination="raintank",
-                variable="effective_runoff",
-                amount=effective_runoff * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="roof",
-                destination="pervious",
-                variable="non_effective_runoff",
-                amount=non_effective_runoff * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="roof",
-                destination="output",
-                variable="evaporation",
-                amount=evaporation * self.area,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("input", "roof", FlowType.PRECIPITATION, precipitation * self.area)
+        flows.add_flow("input", "roof", FlowType.IRRIGATION, irrigation * self.area)
+        flows.add_flow("roof", "output", FlowType.EVAPORATION, evaporation * self.area)
+        flows.add_flow("roof", "raintank", FlowType.RUNOFF, effective_runoff * self.area)
+        flows.add_flow("roof", "pervious", FlowType.INFILTRATION, non_effective_runoff * self.area)
 
-        return roof_data, roof_flows
+
+        return roof_data, flows
 
     @staticmethod
-    def _zero_balance() -> Tuple[RoofData, RoofFlowsData]:
+    def _zero_balance() -> Tuple[RoofData, ComponentFlows]:
         return RoofData(
             irrigation = 0.0,
             evaporation = 0.0,
@@ -123,4 +93,4 @@ class RoofClass:
             non_effective_runoff = 0.0,
             storage = 0.0,
             water_balance = 0.0
-        ), RoofFlowsData(flows=[])
+        ), ComponentFlows()

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, PerviousData, PerviousFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, PerviousData, ComponentFlows, FlowType
 from duwcm.functions import soil_selector
 
 # Constants
@@ -48,7 +48,7 @@ class PerviousClass:
         self.saturated_permeability = SATURATED_PERMEABILITY_FACTOR * self.soil_params['k_sat']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[PerviousData, PerviousFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[PerviousData, ComponentFlows]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -122,62 +122,19 @@ class PerviousClass:
             water_balance = water_balance,
         )
 
-        pervious_flows = PerviousFlowsData(flows=[
-            Flow(
-                source="input",
-                destination="pervious",
-                variable="precipitation",
-                amount=precipitation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="pervious",
-                variable="irrigation",
-                amount=irrigation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="roof",
-                destination="pervious",
-                variable="non_effective_runoff",
-                amount=roof_runoff * self.roof_area,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="pervious",
-                variable="non_effective_runoff",
-                amount=pavement_runoff * self.pavement_area,
-                unit="L"
-            ),
-            Flow(
-                source="pervious",
-                destination="output",
-                variable="evaporation",
-                amount=evaporation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="pervious",
-                destination="vadose",
-                variable="infiltration",
-                amount=infiltration * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="pervious",
-                destination="stormwater",
-                variable="overflow",
-                amount=overflow * self.area,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("input", "pervious", FlowType.PRECIPITATION, precipitation * self.area)
+        flows.add_flow("input", "pervious", FlowType.IRRIGATION, irrigation * self.area)
+        flows.add_flow("roof", "pervious", FlowType.RUNOFF, roof_runoff * self.roof_area)
+        flows.add_flow("pavement", "pervious", FlowType.RUNOFF, pavement_runoff * self.pavement_area)
+        flows.add_flow("pervious", "output", FlowType.EVAPORATION, evaporation * self.area)
+        flows.add_flow("pervious", "vadose", FlowType.INFILTRATION, infiltration * self.area)
+        flows.add_flow("pervious", "stormwater", FlowType.RUNOFF, overflow * self.area)
 
-        return pervious_data, pervious_flows
+        return pervious_data, flows
 
     @staticmethod
-    def _zero_balance() -> Tuple[PerviousData, PerviousFlowsData]:
+    def _zero_balance() -> Tuple[PerviousData, ComponentFlows]:
         return PerviousData(
             inflow = 0.0,
             infiltration_capacity = 0.0,
@@ -187,4 +144,4 @@ class PerviousClass:
             overflow = 0.0,
             storage = 0.0,
             water_balance = 0.0
-        ), PerviousFlowsData(flows=[])
+        ), ComponentFlows()

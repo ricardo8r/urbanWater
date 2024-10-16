@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, NamedTuple
+from enum import Enum, auto
 
 @dataclass
 class RoofData:
@@ -142,59 +143,36 @@ class UrbanWaterData:
     reuse: ReuseData = field(default_factory=ReuseData)
 
 
-@dataclass
-class Flow:
+class FlowType(Enum):
+    PRECIPITATION = auto()
+    EVAPORATION = auto()
+    TRANSPIRATION = auto()
+    RUNOFF = auto()
+    INFILTRATION = auto()
+    PERCOLATION = auto()
+    BASEFLOW = auto()
+    SEEPAGE = auto()
+    IRRIGATION = auto()
+    IMPORTED_WATER = auto()
+    WASTEWATER = auto()
+    # Add other flow types as needed
+
+class Flow(NamedTuple):
     source: str
     destination: str
-    variable: str
-    amount: float = 0
+    flow_type: FlowType
+    amount: float
     unit: str = 'L'
 
-@dataclass
+@dataclass(frozen=True, slots=True)
 class ComponentFlows:
     flows: List[Flow] = field(default_factory=list)
 
-@dataclass
-class RoofFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class RainTankFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class PavementFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class PerviousFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class VadoseFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class GroundwaterFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class StormwaterFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class WastewaterFlowsData(ComponentFlows):
-    pass
-
-@dataclass
-class ReuseFlowsData(ComponentFlows):
-    pass
+    def add_flow(self, source: str, destination: str, flow_type: FlowType, amount: float, unit: str = 'L'):
+        self.flows.append(Flow(source, destination, flow_type, amount, unit))
 
 @dataclass
 class UrbanWaterFlowsData:
-    """
-    Urban water model data for flow tracking
-    """
     roof: ComponentFlows = field(default_factory=ComponentFlows)
     raintank: ComponentFlows = field(default_factory=ComponentFlows)
     pavement: ComponentFlows = field(default_factory=ComponentFlows)

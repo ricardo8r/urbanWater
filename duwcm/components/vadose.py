@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, VadoseData, VadoseFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, VadoseData, ComponentFlows, FlowType
 from duwcm.functions import soil_selector, et_selector, gw_levels
 
 # Constants
@@ -44,7 +44,7 @@ class VadoseClass:
         self.moisture_wilting_point = self.et_params['theta_h4_mm'].values[0]
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[VadoseData, VadoseFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[VadoseData, ComponentFlows]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -109,34 +109,15 @@ class VadoseClass:
             water_balance = water_balance
         )
 
-        vadose_flows = VadoseFlowsData(flows=[
-            Flow(
-                source="pervious",
-                destination="vadose",
-                variable="infiltration",
-                amount=pervious_infiltration * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="vadose",
-                destination="output",
-                variable="transpiration",
-                amount=transpiration * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="vadose",
-                destination="groundwater",
-                variable="percolation",
-                amount=percolation * self.area,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("pervious", "vadose", FlowType.INFILTRATION, pervious_infiltration * self.area)
+        flows.add_flow("vadose", "output", FlowType.TRANSPIRATION, transpiration * self.area)
+        flows.add_flow("vadose", "groundwater", FlowType.PERCOLATION, percolation * self.area)
 
-        return vadose_data, vadose_flows
+        return vadose_data, flows
 
     @staticmethod
-    def _zero_balance(initial_moisture: float) -> Tuple[VadoseData, VadoseFlowsData]:
+    def _zero_balance(initial_moisture: float) -> Tuple[VadoseData, ComponentFlows]:
         return VadoseData(
             transpiration_threshold = 0.0,
             transpiration_factor = 0.0,
@@ -146,7 +127,7 @@ class VadoseClass:
             percolation = 0.0,
             moisture = initial_moisture,
             water_balance = 0.0
-        ), VadoseFlowsData(flows=[])
+        ), ComponentFlows()
 
 
     def _transpiration_threshold(self, reference_evaporation: float) -> float:

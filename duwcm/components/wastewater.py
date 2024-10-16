@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, WastewaterData, WastewaterFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, WastewaterData, ComponentFlows, FlowType
 
 class WastewaterClass:
     """
@@ -21,7 +21,7 @@ class WastewaterClass:
         self.cluster_storage_capacity = params['wastewater']['capacity']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[WastewaterData, WastewaterFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[WastewaterData, ComponentFlows]:
         """
         Calculate the states and fluxes on wastewater storage during current time step.
 
@@ -69,67 +69,25 @@ class WastewaterClass:
             water_balance = water_balance
         )
 
-        wastewater_flows = WastewaterFlowsData(flows=[
-            Flow(
-                source="reuse",
-                destination="wastewater",
-                variable="spillover",
-                amount=reuse_outflow,
-                unit="L"
-            ),
-            Flow(
-                source="groundwater",
-                destination="wastewater",
-                variable="pipe_infiltration",
-                amount=infiltration * self.groundwater_area,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="wastewater",
-                variable="inflow",
-                amount=stormwater_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="wastewater",
-                destination="wastewater",
-                variable="upstream_inflow",
-                amount=upstream_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="wastewater",
-                destination="output",
-                variable="discharge",
-                amount=discharge,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("reuse", "wastewater", FlowType.WASTEWATER, reuse_outflow)
+        flows.add_flow("groundwater", "wastewater", FlowType.INFILTRATION, infiltration * self.groundwater_area)
+        flows.add_flow("stormwater", "wastewater", FlowType.WASTEWATER, stormwater_inflow)
+        flows.add_flow("wastewater", "wastewater", FlowType.WASTEWATER, upstream_inflow)
+        flows.add_flow("wastewater", "output", FlowType.WASTEWATER, discharge)
 
-        return wastewater_data, wastewater_flows
+        return wastewater_data, flows
 
     @staticmethod
-    def _zero_balance(upstream_inflow: float, total_inflow: float) -> Tuple[WastewaterData, WastewaterFlowsData]:
-        return WastewaterData(
+    def _zero_balance(upstream_inflow: float, total_inflow: float) -> Tuple[WastewaterData, ComponentFlows]:
+        wastewater_data = WastewaterData(
             total_inflow = 0.0,
             discharge = total_inflow,
             upstream_inflow = upstream_inflow,
             storage = 0.0,
             water_balance = 0.0
-        ), WastewaterFlowsData(flows=[
-            Flow(
-                source="wastewater",
-                destination="wastewater",
-                variable="inflow",
-                amount=upstream_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="wastewater",
-                destination="output",
-                variable="discharge",
-                amount=total_inflow,
-                unit="L"
-            )
-        ])
+        )
+        flows = ComponentFlows()
+        flows.add_flow("wastewater", "wastewater", FlowType.WASTEWATER, upstream_inflow)
+        flows.add_flow("wastewater", "output", FlowType.WASTEWATER, total_inflow)
+        return wastewater_data, flows

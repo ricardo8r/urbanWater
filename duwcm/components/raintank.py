@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, RainTankData, RainTankFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, RainTankData, ComponentFlows, FlowType
 
 class RainTankClass:
     """
@@ -34,7 +34,7 @@ class RainTankClass:
         self.roof_area = params['roof']['area']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[RainTankData, RainTankFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[RainTankData, ComponentFlows]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -102,50 +102,19 @@ class RainTankClass:
             water_balance=water_balance
         )
 
-        raintank_flows = RainTankFlowsData(flows=[
-            Flow(
-                source="roof",
-                destination="raintank",
-                variable="runoff",
-                amount=roof_runoff * self.roof_area * self.install_ratio,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="raintank",
-                variable="precipitation",
-                amount=self.is_open * precipitation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="raintank",
-                destination="output",
-                variable="evaporation",
-                amount=evaporation,
-                unit="L"
-            ),
-            Flow(
-                source="raintank",
-                destination="stormwater",
-                variable="runoff",
-                amount=runoff_stormwater,
-                unit="L"
-            ),
-            Flow(
-                source="raintank",
-                destination="pavement",
-                variable="runoff",
-                amount=runoff_pavement,
-                unit="L"
-            ),
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("roof", "raintank", FlowType.RUNOFF, roof_runoff * self.roof_area * self.install_ratio)
+        flows.add_flow("input", "raintank", FlowType.PRECIPITATION, self.is_open * precipitation * self.area)
+        flows.add_flow("raintank", "output", FlowType.EVAPORATION, evaporation)
+        flows.add_flow("raintank", "stormwater", FlowType.RUNOFF, runoff_stormwater)
+        flows.add_flow("raintank", "pavement", FlowType.RUNOFF, runoff_pavement)
 
-        return raintank_data, raintank_flows
+        return raintank_data, flows
 
     @staticmethod
     def _zero_balance(system_outflow: float, runoff_stormwater: float,
-                      runoff_pavement: float) -> Tuple[RainTankData, RainTankFlowsData]:
-        return RainTankData(
+                      runoff_pavement: float) -> Tuple[RainTankData, ComponentFlows]:
+        raintank_data = RainTankData(
             first_flush=0.0,
             inflow=0.0,
             overflow=0.0,
@@ -155,26 +124,10 @@ class RainTankClass:
             system_outflow=system_outflow,
             storage=0.0,
             water_balance=0.0
-        ), RainTankFlowsData(flows=[
-            Flow(
-                source="raintank",
-                destination="output",
-                variable="evaporation",
-                amount=0.0,
-                unit="L"
-            ),
-            Flow(
-                source="raintank",
-                destination="stormwater",
-                variable="runoff",
-                amount=runoff_stormwater,
-                unit="L"
-            ),
-            Flow(
-                source="raintank",
-                destination="pavement",
-                variable="runoff",
-                amount=runoff_pavement,
-                unit="L"
-            )
-        ])
+        )
+        flows = ComponentFlows()
+        flows.add_flow("raintank", "output", FlowType.EVAPORATION, 0.0)
+        flows.add_flow("raintank", "stormwater", FlowType.RUNOFF, runoff_stormwater)
+        flows.add_flow("raintank", "pavement", FlowType.RUNOFF, runoff_pavement)
+
+        return raintank_data, flows

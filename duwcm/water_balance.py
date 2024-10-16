@@ -23,7 +23,7 @@ import pandas as pd
 from tqdm import tqdm
 
 from duwcm.water_model import UrbanWaterModel
-from duwcm.data_structures import UrbanWaterData, UrbanWaterFlowsData
+from duwcm.data_structures import UrbanWaterData, UrbanWaterFlowsData, ComponentFlows, FlowType
 
 def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """Run the full simulation for all timesteps."""
@@ -120,7 +120,7 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]],
                     'date': current_date,
                     'source': flow.source,
                     'destination': flow.destination,
-                    'variable': flow.variable,
+                    'flow_type': flow.flow_type.name,
                     'amount': flow.amount,
                     'unit': flow.unit
                 })
@@ -128,7 +128,7 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]],
                 flow_key = f"{flow.source}->{flow.destination}"
                 if flow_key not in flow_tracker:
                     flow_tracker[flow_key] = defaultdict(float)
-                flow_tracker[flow_key][flow.variable] += flow.amount
+                flow_tracker[flow_key][flow.flow_type.name] += flow.amount
 
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
@@ -169,36 +169,36 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
 
 def selected_results(flow_dataframes: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     selected_flows = {
-        'reuse': {'imported_water': ('input', 'reuse', 'imported_water')},
-        'stormwater': {'stormwater_runoff': ('stormwater', 'output', 'runoff')},
-        'wastewater': {'wastewater_runoff': ('wastewater', 'output', 'discharge')},
+        'reuse': {'imported_water': (FlowType.IMPORTED_WATER, 'input', 'reuse')},
+        'stormwater': {'stormwater_runoff': (FlowType.RUNOFF, 'stormwater', 'output')},
+        'wastewater': {'wastewater_runoff': (FlowType.WASTEWATER, 'wastewater', 'output')},
         'groundwater': {
-            'baseflow': ('groundwater', 'output', 'baseflow'),
-            'deep_seepage': ('groundwater', 'output', 'seepage')
+            'baseflow': (FlowType.BASEFLOW, 'groundwater', 'output'),
+            'deep_seepage': (FlowType.SEEPAGE, 'groundwater', 'output')
         }
     }
 
     dataframe_results = {}
     for module, flows in selected_flows.items():
         df = flow_dataframes[f"{module}_flows"]
-        for new_name, (source, destination, variable) in flows.items():
-            dataframe_results[new_name] = df.xs((source, destination, variable),
-                                                level=['source', 'destination', 'variable'])['amount']
+        for new_name, (flow_type, source, destination) in flows.items():
+            dataframe_results[new_name] = df.xs((source, destination, flow_type.name),
+                                                level=['source', 'destination', 'flow_type'])['amount']
 
     # Compute evapotranspiration
     et_components = [
-        ('roof', 'output', 'evaporation'),
-        ('pavement', 'output', 'evaporation'),
-        ('pervious', 'output', 'evaporation'),
-        ('raintank', 'output', 'evaporation'),
-        ('stormwater', 'output', 'evaporation'),
-        ('vadose', 'output', 'transpiration')
+        ('roof', 'output', FlowType.EVAPORATION),
+        ('pavement', 'output', FlowType.EVAPORATION),
+        ('pervious', 'output', FlowType.EVAPORATION),
+        ('raintank', 'output', FlowType.EVAPORATION),
+        ('stormwater', 'output', FlowType.EVAPORATION),
+        ('vadose', 'output', FlowType.TRANSPIRATION)
     ]
     et_data = []
-    for module, destination, variable in et_components:
+    for module, destination, flow_type in et_components:
         df = flow_dataframes[f"{module}_flows"]
-        component_data = df.xs((module, destination, variable),
-                               level=['source', 'destination', 'variable'])['amount']
+        component_data = df.xs((module, destination, flow_type.name),
+                               level=['source', 'destination', 'flow_type'])['amount']
         et_data.append(component_data)
 
     dataframe_results['evapotranspiration'] = pd.concat(et_data, axis=1).sum(axis=1)
@@ -228,7 +228,7 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
     for module, data in results_flow.items():
         df = pd.DataFrame(data)
         df['date'] = pd.to_datetime(df['date'])
-        df = df.set_index(['cell', 'date', 'source', 'destination', 'variable'])
+        df = df.set_index(['cell', 'date', 'source', 'destination', 'flow_type'])
         flow_dataframes[f"{module}_flows"] = df
 
     # Process aggregated results
@@ -254,12 +254,12 @@ def _check_flow_consistency(flow_tracker: Dict[str, Dict[str, float]]) -> None:
         reverse_key = f"{destination}->{source}"
 
         if reverse_key in flow_tracker:
-            for variable, amount in flow_data.items():
-                reverse_amount = flow_tracker[reverse_key].get(variable, 0)
+            for flow_type, amount in flow_data.items():
+                reverse_amount = flow_tracker[reverse_key].get(flow_type, 0)
 
                 if abs(amount - reverse_amount) > 1e-6:
                     inconsistencies.append(
-                        f"Inconsistency in {variable} flow between {source} and {destination}:\n"
+                        f"Inconsistency in {flow_type} flow between {source} and {destination}:\n"
                         f"  {source} reports outflow of {amount}\n"
                         f"  {destination} reports inflow of {reverse_amount}"
                     )

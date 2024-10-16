@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 import numpy as np
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, GroundwaterData, GroundwaterFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, GroundwaterData, ComponentFlows, FlowType
 from duwcm.functions import soil_selector, gw_levels
 
 # Constants
@@ -60,7 +60,7 @@ class GroundwaterClass:
         self.soil_params = soil_selector(soil_data, et_data, soil_type, crop_type)
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[GroundwaterData, GroundwaterFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[GroundwaterData, ComponentFlows]:
         """
         Calculates the groundwater dynamics for the current time step.
 
@@ -147,59 +147,16 @@ class GroundwaterClass:
             water_balance = water_balance,
         )
 
-        groundwater_flows = GroundwaterFlowsData(flows=[
-            Flow(
-                source="vadose",
-                destination="groundwater",
-                variable="percolation",
-                amount=vadose_percolation * self.vadose_area,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="groundwater",
-                variable="infiltration",
-                amount=pavement_infiltration * self.pavement_area,
-                unit="L"
-            ),
-            Flow(
-                source="groundwater",
-                destination="output",
-                variable="seepage",
-                amount=seepage * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="groundwater",
-                variable="irrigation_leakage",
-                amount=irrigation_leakage,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="groundwater",
-                variable="indoor_leakage",
-                amount=indoor_use_leakage,
-                unit="L"
-            ),
-            Flow(
-                source="groundwater",
-                destination="output",
-                variable="baseflow",
-                amount=baseflow * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="groundwater",
-                destination="wastewater",
-                variable="pipe_infiltration",
-                amount=infiltration,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("vadose", "groundwater", FlowType.PERCOLATION, vadose_percolation * self.vadose_area)
+        flows.add_flow("pavement", "groundwater", FlowType.INFILTRATION, pavement_infiltration * self.pavement_area)
+        flows.add_flow("groundwater", "output", FlowType.SEEPAGE, seepage * self.area)
+        flows.add_flow("input", "groundwater", FlowType.IRRIGATION, irrigation_leakage)
+        flows.add_flow("input", "groundwater", FlowType.WASTEWATER, indoor_use_leakage)
+        flows.add_flow("groundwater", "output", FlowType.BASEFLOW, baseflow * self.area)
+        flows.add_flow("groundwater", "wastewater", FlowType.INFILTRATION, infiltration)
 
-        return groundwater_data, groundwater_flows
+        return groundwater_data, flows
 
 
     def _storage_coefficient(self, initial_level: float) -> float:
@@ -230,7 +187,8 @@ class GroundwaterClass:
                               (self.drainage_resistance + self.seepage_resistance +
                                self.infiltration_recession * self.drainage_resistance * self.seepage_resistance)) *
                              np.exp(-self.time_step * (self.drainage_resistance + self.seepage_resistance +
-                                                       self.infiltration_recession * self.drainage_resistance * self.seepage_resistance) /
+                                                       self.infiltration_recession * self.drainage_resistance *
+                                                       self.seepage_resistance) /
                                     (storage_coefficient * self.drainage_resistance * self.seepage_resistance)))
 
             avg_water_level = 0.5 * (water_level + initial_level + above_level)

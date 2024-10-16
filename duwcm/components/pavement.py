@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, PavementData, PavementFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, PavementData, ComponentFlows, FlowType
 
 class PavementClass:
     """
@@ -28,7 +28,7 @@ class PavementClass:
         self.time_step = params['general']['time_step']
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[PavementData, PavementFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[PavementData, ComponentFlows]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -89,62 +89,19 @@ class PavementClass:
             water_balance = water_balance
         )
 
-        pavement_flows = PavementFlowsData(flows=[
-            Flow(
-                source="input",
-                destination="pavement",
-                variable="precipitation",
-                amount=precipitation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="pavement",
-                variable="irrigation",
-                amount=irrigation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="raintank",
-                destination="pavement",
-                variable="runoff",
-                amount=raintank_runoff,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="output",
-                variable="evaporation",
-                amount=evaporation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="groundwater",
-                variable="infiltration",
-                amount=infiltration * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="stormwater",
-                variable="effective_runoff",
-                amount=effective_runoff * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="pervious",
-                variable="non_effective_runoff",
-                amount=non_effective_runoff * self.area,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("input", "pavement", FlowType.PRECIPITATION, precipitation * self.area)
+        flows.add_flow("input", "pavement", FlowType.IRRIGATION, irrigation * self.area)
+        flows.add_flow("raintank", "pavement", FlowType.RUNOFF, raintank_runoff)
+        flows.add_flow("pavement", "output", FlowType.EVAPORATION, evaporation * self.area)
+        flows.add_flow("pavement", "groundwater", FlowType.INFILTRATION, infiltration * self.area)
+        flows.add_flow("pavement", "stormwater", FlowType.RUNOFF, effective_runoff * self.area)
+        flows.add_flow("pavement", "pervious", FlowType.RUNOFF, non_effective_runoff * self.area)
 
-        return pavement_data, pavement_flows
+        return pavement_data, flows
 
     @staticmethod
-    def _zero_balance() -> Tuple[PavementData, PavementFlowsData]:
+    def _zero_balance() -> Tuple[PavementData, ComponentFlows]:
         return PavementData(
             inflow = 0.0,
             evaporation = 0.0,
@@ -153,12 +110,4 @@ class PavementClass:
             non_effective_runoff = 0.0,
             storage = 0.0,
             water_balance = 0.0
-        ), PavementFlowsData(flows=[
-            Flow(
-                source="raintank",
-                destination="pavement",
-                variable="runoff",
-                amount=0.0,
-                unit="L"
-            )
-        ])
+        ), ComponentFlows()

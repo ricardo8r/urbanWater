@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, ReuseData, ReuseFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, ReuseData, ComponentFlows, FlowType
 
 @dataclass
 class GraywaterData:
@@ -96,7 +96,7 @@ class ReuseClass:
         self.toilet_demand = self.demand['T'].values[0]
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[ReuseData, ReuseFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[ReuseData, ComponentFlows]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -167,24 +167,11 @@ class ReuseClass:
             imported_water=imported_water
         )
 
-        reuse_flows = ReuseFlowsData(flows=[
-            Flow(
-                source="reuse",
-                destination="wastewater",
-                variable="spillover",
-                amount=wws_results.spillover,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="reuse",
-                variable="imported_water",
-                amount=imported_water,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("reuse", "wastewater", FlowType.WASTEWATER, wws_results.spillover)
+        flows.add_flow("input", "reuse", FlowType.IMPORTED_WATER, imported_water)
 
-        return reuse_data, reuse_flows
+        return reuse_data, flows
 
     def _calculate_ssg(self, total_irrigation: float) -> (float, GraywaterData):
         """

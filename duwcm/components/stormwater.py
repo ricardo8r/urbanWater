@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, StormwaterData, StormwaterFlowsData, Flow
+from duwcm.data_structures import UrbanWaterData, StormwaterData, ComponentFlows, FlowType
 
 class StormwaterClass:
     """
@@ -30,7 +30,7 @@ class StormwaterClass:
         self.wastewater_runoff_ratio = params['stormwater']['wastewater_runoff_per'] / 100
 
     def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[StormwaterData, StormwaterFlowsData]:
+              current_state: UrbanWaterData) -> Tuple[StormwaterData, ComponentFlows]:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -106,72 +106,23 @@ class StormwaterClass:
             water_balance=water_balance
         )
 
-        stormwater_flows = StormwaterFlowsData(flows=[
-            Flow(
-                source="raintank",
-                destination="stormwater",
-                variable="runoff",
-                amount=raintank_runoff,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="stormwater",
-                variable="runoff",
-                amount=pavement_runoff * self.pavement_area,
-                unit="L"
-            ),
-            Flow(
-                source="pervious",
-                destination="stormwater",
-                variable="overflow",
-                amount=pervious_overflow * self.pervious_area,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="stormwater",
-                variable="upstream_inflow",
-                amount=upstream_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="input",
-                destination="stormwater",
-                variable="precipitation",
-                amount=self.is_open * precipitation * self.area,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="output",
-                variable="evaporation",
-                amount=evaporation,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="wastewater",
-                variable="combined_sewer_inflow",
-                amount=combined_sewer_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="output",
-                variable="runoff",
-                amount=runoff_sewer,
-                unit="L"
-            )
-        ])
+        flows = ComponentFlows()
+        flows.add_flow("raintank", "stormwater", FlowType.RUNOFF, raintank_runoff)
+        flows.add_flow("pavement", "stormwater", FlowType.RUNOFF, pavement_runoff * self.pavement_area)
+        flows.add_flow("pervious", "stormwater", FlowType.RUNOFF, pervious_overflow * self.pervious_area)
+        flows.add_flow("stormwater", "stormwater", FlowType.RUNOFF, upstream_inflow)
+        flows.add_flow("input", "stormwater", FlowType.PRECIPITATION, self.is_open * precipitation * self.area)
+        flows.add_flow("stormwater", "output", FlowType.EVAPORATION, evaporation)
+        flows.add_flow("stormwater", "wastewater", FlowType.WASTEWATER, combined_sewer_inflow)
+        flows.add_flow("stormwater", "output", FlowType.RUNOFF, runoff_sewer)
 
-        return stormwater_data, stormwater_flows
+        return stormwater_data, flows
 
     @staticmethod
     def _zero_balance(raintank_runoff: float, pavement_runoff: float, pervious_overflow: float,
                       total_runoff: float, combined_sewer_inflow: float,
-                      upstream_inflow: float, runoff: float) -> Tuple[StormwaterData, StormwaterFlowsData]:
-        return StormwaterData(
+                      upstream_inflow: float, runoff: float) -> Tuple[StormwaterData, ComponentFlows]:
+        stormwater_data = StormwaterData(
             total_runoff=total_runoff,
             combined_sewer_inflow=combined_sewer_inflow,
             upstream_inflow=upstream_inflow,
@@ -183,54 +134,13 @@ class StormwaterClass:
             runoff_sewer=runoff,
             storage=0.0,
             water_balance=0.0
-        ), StormwaterFlowsData(flows=[
-            Flow(
-                source="raintank",
-                destination="stormwater",
-                variable="runoff",
-                amount=raintank_runoff,
-                unit="L"
-            ),
-            Flow(
-                source="pavement",
-                destination="stormwater",
-                variable="runoff",
-                amount=pavement_runoff,
-                unit="L"
-            ),
-            Flow(
-                source="pervious",
-                destination="stormwater",
-                variable="overflow",
-                amount=pervious_overflow,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="output",
-                variable="evaporation",
-                amount=0.0,
-                unit="L"
-            ),
-            Flow(
-                source="upstream",
-                destination="stormwater",
-                variable="inflow",
-                amount=upstream_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="wastewater",
-                variable="inflow",
-                amount=combined_sewer_inflow,
-                unit="L"
-            ),
-            Flow(
-                source="stormwater",
-                destination="output",
-                variable="runoff",
-                amount=runoff,
-                unit="L"
-            )
-        ])
+        )
+        flows = ComponentFlows()
+        flows.add_flow("raintank", "stormwater", FlowType.RUNOFF, raintank_runoff)
+        flows.add_flow("pavement", "stormwater", FlowType.RUNOFF, pavement_runoff)
+        flows.add_flow("pervious", "stormwater", FlowType.RUNOFF, pervious_overflow)
+        flows.add_flow("stormwater", "output", FlowType.EVAPORATION, 0.0)
+        flows.add_flow("upstream", "stormwater", FlowType.RUNOFF, upstream_inflow)
+        flows.add_flow("stormwater", "wastewater", FlowType.WASTEWATER, combined_sewer_inflow)
+        flows.add_flow("stormwater", "output", FlowType.RUNOFF, runoff)
+        return stormwater_data, flows
