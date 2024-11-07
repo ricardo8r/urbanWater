@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 import numpy as np
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, GroundwaterData, ComponentFlows, FlowType
+from duwcm.data_structures import GroundwaterData
 from duwcm.functions import soil_selector, gw_levels
 
 # Constants
@@ -18,11 +18,12 @@ class GroundwaterClass:
             pavement infiltration
     Outflows: Seepage to deep groundwater, baseflow to open water, pipe insfiltration
     """
-    def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame, et_data: pd.DataFrame):
+    def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame,
+                 et_data: pd.DataFrame, groundwater_data: GroundwaterData):
         """
         Args:
             params (Dict[str, float]): Groundwater parameters
-                Area: Groundwater area [m^2]
+                area: Groundwater area [m^2]
                 roof_area: Roof area [m^2]
                 pavement_area: Paved area [m^2]
                 pervious_area: Pervious area [m^2]
@@ -39,125 +40,105 @@ class GroundwaterClass:
                 crop_type: Crop type
                 dt: Time step [day]
         """
-        self.area = params['groundwater']['area']
+        self.groundwater_data = groundwater_data
+        self.groundwater_data.area = params['groundwater']['area']
+        self.groundwater_data.storage_coefficient = 0  # Will be updated during calculations
+
         self.roof_area = params['roof']['area']
         self.pavement_area = params['pavement']['area']
         self.pervious_area = params['pervious']['area']
         self.vadose_area = params['vadose']['area']
-        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
-        self.seepage_model = params['groundwater']['seepage_model']
-        self.drainage_resistance = params['groundwater']['drainage_resistance']
-        self.seepage_resistance = params['groundwater']['seepage_resistance']
-        self.infiltration_recession = params['groundwater']['infiltration_recession']
-        self.hydraulic_head = params['groundwater']['hydraulic_head']
-        self.downward_seepage = params['groundwater']['downward_seepage']
+
+        self.groundwater_data.leakage_rate = params['groundwater']['leakage_rate'] / 100
+        self.groundwater_data.seepage_model = params['groundwater']['seepage_model']
+        self.groundwater_data.drainage_resistance = params['groundwater']['drainage_resistance']
+        self.groundwater_data.seepage_resistance = params['groundwater']['seepage_resistance']
+        self.groundwater_data.infiltration_recession = params['groundwater']['infiltration_recession']
+        self.groundwater_data.hydraulic_head = params['groundwater']['hydraulic_head']
+        self.groundwater_data.downward_seepage = params['groundwater']['downward_seepage']
+
         self.indoor_water_use = params['general']['indoor_water_use']
         self.time_step = params['general']['time_step']
-        self.irrigation_factor = params['irrigation']['pervious']
-
         soil_type = params['soil']['soil_type']
         crop_type = params['soil']['crop_type']
         self.soil_params = soil_selector(soil_data, et_data, soil_type, crop_type)
 
-    def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[GroundwaterData, ComponentFlows]:
+    def solve(self, forcing: pd.Series) -> None:
         """
         Calculates the groundwater dynamics for the current time step.
 
         Args:
 
             forcing (pd.DataFrame): Climate forcing data with columns:
-                roof_irrigation: Irrigation on roof area [mm]
-                pavement_irrigation: Irrigation on pavement area [mm]
-                pervious_irrigation: Irrigation on pervious area [mm]
                 open_water_level: Open water level [m-SL]
-            previous_state (pd.DataFrame): State variables from the previous time step with columns:
-                Groundwater:
-                    initial_level: Groundwater storage level [m-SL]
-            current_state (pd.DataFrame): Current state variables with columns:
-                Vadose zone:
-                    vadose_percolation: Percolation from vadose zone [mm m^2]
-                Pavement:
-                    pavement_infiltration: Infiltration from pavement to groundwater [mm m^2]
 
-        Returns:
-            Dict[str, float]: Computed states and fluxes of groundwater during current time step
-                total_irrigation: Total irrigation [L]
-                leakage_depth: Leakage depth [mm]
-                inflow: Percolation from vadose zone and infiltration from road [mm]
-                storage_coefficient: Storage coefficient
-                seepage: Seepage from groundwater to deep groundwater [L]
-                pipe_infiltration: Infiltration to wastewater pipe [L]
-                baseflow: Flow to open water [L]
-                water_level: Groundwater level [m]
-                water_balance: Total water balance [L]
+        Updates groundwater_data with:
+            water_level: Groundwater level [m-SL]
+            surface_water_level: Surface water level [m-SL]
+            storage_coefficient: Storage coefficient [-]
+        Updates flows with:
+            from_vadose: Percolation from vadose zone [L]
+            from_pavement: Infiltration from pavement [L]
+            from_input: Irrigation and indoor use leakage [L]
+            to_output: Seepage and baseflow [L]
+            to_wastewater: Pipe infiltration [L]
         """
-        roof_irrigation = forcing.get('roof_irrigation', 0.0)
-        pavement_irrigation = forcing.get('pavement_irrigation', 0.0)
-        pervious_irrigation = forcing.get('pervious_irrigation', 0.0) * self.irrigation_factor
         open_water_level = forcing.get('open_water_level', 0.0)
 
-        initial_level = previous_state.groundwater.water_level
-        initial_surface_level = previous_state.groundwater.surface_water_level
-        vadose_percolation = current_state.vadose.percolation
-        pavement_infiltration = current_state.pavement.infiltration
+        # Calculate total inflow
+        irrigation_leakage = (self.groundwater_data.flows.get_flow('from_roof') +
+                              self.groundwater_data.flows.get_flow('from_pavement_leakage') +
+                              self.groundwater_data.flows.get_flow('from_pervious'))
 
-        total_irrigation = (roof_irrigation * self.roof_area +
-                            pavement_irrigation * self.pavement_area +
-                            pervious_irrigation * self.pervious_area)
+        indoor_use_leakage = (self.indoor_water_use * self.groundwater_data.leakage_rate /
+                              (1 - self.groundwater_data.leakage_rate))
+        leakage = irrigation_leakage + indoor_use_leakage
 
-        irrigation_leakage = (total_irrigation * self.leakage_rate /
-                              (1 - self.leakage_rate))
+        vadose_percolation = self.groundwater_data.flows.get_flow('from_vadose')
+        pavement_infiltration = self.groundwater_data.flows.get_flow('from_pavement_infiltration')
 
-        indoor_use_leakage = (self.indoor_water_use * self.leakage_rate /
-                              (1 - self.leakage_rate))
+        inflow = (leakage + vadose_percolation + pavement_infiltration) / self.groundwater_data.area
 
-        leakage = (irrigation_leakage + indoor_use_leakage) / self.area
+        # Calculate storage coefficient
+        storage_coefficient = self._storage_coefficient(self.groundwater_data.water_level.previous)
 
-        inflow = (leakage + (vadose_percolation * self.vadose_area +
-                                   pavement_infiltration * self.pavement_area) / self.area)
-
-        storage_coefficient = self._storage_coefficient(initial_level)
-
-        water_level, seepage, infiltration = self._gw_dynamics(inflow, open_water_level, storage_coefficient,
-                                                               initial_level, initial_surface_level)
-        baseflow = (inflow - seepage - infiltration - storage_coefficient *
-                    (initial_level + initial_surface_level / storage_coefficient - water_level) * 1000)
-
-        water_level = max(0, initial_level + initial_surface_level / storage_coefficient -
-                          (inflow - seepage - infiltration - baseflow) / (1000 * storage_coefficient))
-        surface_level = -1 * max(0, (0 - (initial_level + initial_surface_level / storage_coefficient
-                                          - (inflow - seepage - infiltration - baseflow) /
-                                          (1000 * storage_coefficient)))) * storage_coefficient
-
-        water_balance = (inflow - seepage - infiltration - baseflow - storage_coefficient
-                         * (initial_level + initial_surface_level / storage_coefficient -
-                            (water_level + surface_level / storage_coefficient)) * 1000) * self.area
-
-        groundwater_data = GroundwaterData(
-            total_irrigation = total_irrigation,
-            leakage = leakage,
-            inflow = inflow,
-            storage_coefficient = storage_coefficient,
-            seepage = seepage * self.area,
-            baseflow = baseflow * self.area,
-            pipe_infiltration = infiltration,
-            water_level = water_level,
-            surface_water_level = surface_level,
-            water_balance = water_balance,
+        # Calculate groundwater dynamics
+        water_level, seepage, infiltration = self._gw_dynamics(
+            inflow, open_water_level, storage_coefficient,
+            self.groundwater_data.water_level.previous,
+            self.groundwater_data.surface_water_level.previous
         )
 
-        flows = ComponentFlows()
-        flows.add_flow("vadose", "groundwater", FlowType.PERCOLATION, vadose_percolation * self.vadose_area)
-        flows.add_flow("pavement", "groundwater", FlowType.INFILTRATION, pavement_infiltration * self.pavement_area)
-        flows.add_flow("groundwater", "output", FlowType.SEEPAGE, seepage * self.area)
-        flows.add_flow("input", "groundwater", FlowType.IRRIGATION, irrigation_leakage)
-        flows.add_flow("input", "groundwater", FlowType.WASTEWATER, indoor_use_leakage)
-        flows.add_flow("groundwater", "output", FlowType.BASEFLOW, baseflow * self.area)
-        flows.add_flow("groundwater", "wastewater", FlowType.INFILTRATION, infiltration)
+        # Calculate baseflow
+        baseflow = (inflow - seepage - infiltration - storage_coefficient *
+                   (self.groundwater_data.water_level.previous +
+                    self.groundwater_data.surface_water_level.previous / storage_coefficient -
+                    water_level) * 1000)
 
-        return groundwater_data, flows
+        # Update water levels
+        water_level = max(0,self.groundwater_data.water_level.previous +
+                            self.groundwater_data.surface_water_level.previous / storage_coefficient -
+                          (inflow - seepage - infiltration - baseflow) / (1000 * storage_coefficient))
+        surface_water_level = max(0, -1 * (water_level -
+                                           (self.groundwater_data.water_level.previous +
+                                            self.groundwater_data.surface_water_level.previous / storage_coefficient -
+                                            (inflow - seepage - infiltration - baseflow) /
+                                            (1000 * storage_coefficient))) * storage_coefficient)
 
+        self.groundwater_data.water_level.amount = water_level
+        self.groundwater_data.surface_water_level.amount = surface_water_level
+
+        water_balance = (inflow - seepage - infiltration - baseflow - storage_coefficient *
+                         (self.groundwater_data.water_level.previous +
+                          self.groundwater_data.surface_water_level.previous / storage_coefficient -
+                          (self.groundwater_data.water_level.amount +
+                           self.groundwater_data.surface_water_level.amount / storage_coefficient)) *
+                         1000) * self.groundwater_data.area
+
+        # Update flows
+        self.groundwater_data.flows.set_flow('seepage', seepage * self.groundwater_data.area)
+        self.groundwater_data.flows.set_flow('baseflow', baseflow * self.groundwater_data.area)
+        self.groundwater_data.flows.set_flow('to_wastewater', infiltration * self.groundwater_data.area)
 
     def _storage_coefficient(self, initial_level: float) -> float:
         gw_up, gw_low, id_up, id_low = gw_levels(initial_level)
@@ -170,43 +151,57 @@ class GroundwaterClass:
 
 
     def _gw_dynamics(self, inflow: float, open_water_level: float, storage_coefficient: float,
-                     initial_level: float, above_level: float) -> Tuple[float, float, float]:
-
-        if self.seepage_model > INFILTRATION_FACTOR:
-            water_level = - ((inflow/1000 * self.drainage_resistance * self.seepage_resistance -
-                              self.hydraulic_head * self.drainage_resistance -
-                              open_water_level * self.seepage_resistance -
-                              3.0 * self.infiltration_recession * self.drainage_resistance * self.seepage_resistance) /
-                             (self.drainage_resistance + self.seepage_resistance +
-                              self.infiltration_recession * self.drainage_resistance * self.seepage_resistance) +
-                             ( - (initial_level + above_level) -
-                              (inflow/1000 * self.drainage_resistance * self.seepage_resistance -
-                               self.hydraulic_head * self.drainage_resistance -
-                               open_water_level * self.seepage_resistance -
-                               3.0 * self.infiltration_recession * self.drainage_resistance * self.seepage_resistance) /
-                              (self.drainage_resistance + self.seepage_resistance +
-                               self.infiltration_recession * self.drainage_resistance * self.seepage_resistance)) *
-                             np.exp(-self.time_step * (self.drainage_resistance + self.seepage_resistance +
-                                                       self.infiltration_recession * self.drainage_resistance *
-                                                       self.seepage_resistance) /
-                                    (storage_coefficient * self.drainage_resistance * self.seepage_resistance)))
-
+                    initial_level: float, above_level: float) -> Tuple[float, float, float]:
+        """Calculate groundwater dynamics."""
+        if self.groundwater_data.seepage_model > INFILTRATION_FACTOR:
+            water_level = self._dynamic_flux(inflow, open_water_level, storage_coefficient,
+                                           initial_level, above_level)
             avg_water_level = 0.5 * (water_level + initial_level + above_level)
-            seepage = (self.hydraulic_head - avg_water_level) * 1000 * self.time_step / self.seepage_resistance
-            infiltration = (PIPE_DEPTH - avg_water_level) * 1000 * self.infiltration_recession * self.time_step
+            seepage = ((self.groundwater_data.hydraulic_head - avg_water_level) * 1000 *
+                      self.time_step / self.groundwater_data.seepage_resistance)
+            infiltration = ((3.0 - avg_water_level) * 1000 *
+                          self.groundwater_data.infiltration_recession * self.time_step)
         else:
-            water_level = - (((inflow - self.downward_seepage) /1000 * self.drainage_resistance -
-                              3.0 * self.infiltration_recession * self.drainage_resistance - open_water_level) /
-                             (1 + self.infiltration_recession * self.drainage_resistance) +
-                             ( - (initial_level + above_level) -
-                              ((inflow - self.downward_seepage) /1000 * self.drainage_resistance -
-                               3.0 * self.infiltration_recession * self.drainage_resistance - open_water_level) /
-                              (1 + self.infiltration_recession * self.drainage_resistance)) *
-                             np.exp(-self.time_step * (1 + self.infiltration_recession * self.drainage_resistance) /
-                                    (storage_coefficient * self.drainage_resistance)))
-
+            water_level = self._constant_flux(inflow, open_water_level, storage_coefficient,
+                                            initial_level, above_level)
             avg_water_level = 0.5 * (water_level + initial_level + above_level)
-            seepage = self.downward_seepage * self.time_step
-            infiltration = (PIPE_DEPTH - avg_water_level) * 1000 * self.infiltration_recession * self.time_step
+            seepage = self.groundwater_data.downward_seepage * self.time_step
+            infiltration = ((3.0 - avg_water_level) * 1000 *
+                          self.groundwater_data.infiltration_recession * self.time_step)
 
         return water_level, seepage, infiltration
+
+    def _dynamic_flux(self, inflow: float, open_water_level: float,
+                     storage_coefficient: float, initial_level: float,
+                     above_level: float) -> float:
+        """Calculate water level for dynamic flux model."""
+        numerator = (inflow/1000 * self.groundwater_data.drainage_resistance *
+                     self.groundwater_data.seepage_resistance -
+                     self.groundwater_data.hydraulic_head * self.groundwater_data.drainage_resistance -
+                     open_water_level * self.groundwater_data.seepage_resistance -
+                     3.0 * self.groundwater_data.infiltration_recession *
+                     self.groundwater_data.drainage_resistance * self.groundwater_data.seepage_resistance)
+        denominator = (self.groundwater_data.drainage_resistance + self.groundwater_data.seepage_resistance +
+                       self.groundwater_data.infiltration_recession * self.groundwater_data.drainage_resistance *
+                       self.groundwater_data.seepage_resistance)
+
+        exp_term = np.exp(-self.time_step * denominator /
+                          (storage_coefficient * self.groundwater_data.drainage_resistance *
+                          self.groundwater_data.seepage_resistance))
+
+        return -(numerator/denominator + (-(initial_level + above_level) - numerator/denominator) * exp_term)
+
+    def _constant_flux(self, inflow: float, open_water_level: float,
+                      storage_coefficient: float, initial_level: float,
+                      above_level: float) -> float:
+        """Calculate water level for constant flux model."""
+        numerator = ((inflow - self.groundwater_data.downward_seepage)/1000 *
+                     self.groundwater_data.drainage_resistance -
+                     3.0 * self.groundwater_data.infiltration_recession *
+                     self.groundwater_data.drainage_resistance - open_water_level)
+        denominator = 1 + self.groundwater_data.infiltration_recession * self.groundwater_data.drainage_resistance
+
+        exp_term = np.exp(-self.time_step * denominator /
+                         (storage_coefficient * self.groundwater_data.drainage_resistance))
+
+        return -(numerator/denominator + (-(initial_level + above_level) - numerator/denominator) * exp_term)

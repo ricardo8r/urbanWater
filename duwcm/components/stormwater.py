@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, StormwaterData, ComponentFlows, FlowType
+from duwcm.data_structures import StormwaterData
 
 class StormwaterClass:
     """
@@ -9,7 +9,7 @@ class StormwaterClass:
     Inflows: Precipitation, raintank runoff, pavement runoff, pervious runoff, upstream inflow
     Outflows: Flush, overflow, evaporation, wastewater inflow
     """
-    def __init__(self, params: Dict[str, Dict[str, Any]]):
+    def __init__(self, params: Dict[str, Dict[str, Any]], stormwater_data: StormwaterData):
         """
         Args:
             params (Dict[str, Dict[str, Any]]): Stormwater storage parameters
@@ -21,126 +21,87 @@ class StormwaterClass:
                 first_flush: Predefined first flush of stormwater storage [L]
                 wastewater_runoff_ratio: Percentage of runoff that becomes inflow to wastewater system [%]
         """
-        self.pavement_area = params['pavement']['area']
-        self.pervious_area = params['pervious']['area']
-        self.is_open = params['stormwater']['is_open']
-        self.area = params['stormwater']['area']
-        self.capacity = params['stormwater']['capacity']
-        self.first_flush = params['stormwater']['first_flush']
+        self.stormwater_data = stormwater_data
+        self.stormwater_data.area = params['stormwater']['area']
+        self.stormwater_data.is_open = params['stormwater']['is_open']
+        self.stormwater_data.storage.capacity = params['stormwater']['capacity']
+        self.stormwater_data.first_flush = params['stormwater']['first_flush']
         self.wastewater_runoff_ratio = params['stormwater']['wastewater_runoff_per'] / 100
 
-    def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[StormwaterData, ComponentFlows]:
+        self.pavement_area = params['pavement']['area']
+        self.pervious_area = params['pervious']['area']
+
+    def solve(self, forcing: pd.Series) -> None:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
                 precipitation: Precipitation of the time step [mm]
                 potential_evaporation: Potential evaporation of the time step [mm]
-            previous_state (pd.DataFrame): State variables from the previous time step with columns:
-                Stormwater:
-                    intial_storage: Stormwater storage volume [L]
-                    upstream_inflow: Stormwater and wastewater flow from upstream grid [L] (default: 0)
-            current_state (pd.DataFrame): Current state variables with columns:
-                Raintank:
-                    raintank_runoff: Outflow from roof-rain tank system [L]
-                Pavement:
-                    pavement_runoff: Effective impervious surface runoff from pavement area [mm]
-                Pervious:
-                    pervious_overflow: Overflow from pervious area interception [mm]
 
-        Returns:
-            Dict[str, float]: Computed states and fluxes of storm water storage during current time step
-                total_runoff: Total runoff [L]
-                combined_sewer_inflow: Inflow of storm water to wastewater sewer system [L]
-                runoff: Runoff to storm water system [L]
-                first_flush: Actual first flush [L]
-                inflow: Inflow to SWS, RUN - first flush + Precipitation if SWSop=1 [L]
-                initial_storage: Storage volume in the beginning of the time step [L]
-                evaporation: Evaporation volume if SWSop=1 [L]
-                final_storage: SWS storage at the end of the time step [L]
-                overflow: Overflow from SWS [L]
-                runoff_sewer: Stormwater runoff to sewer system [L]
-                water_balance: Water balance of SWS [L]
+        Updates stormwater_data with:
+            storage: Storage volume at the end of the time step [L]
+        Updates flows with:
+            precipitation: Direct precipitation if storage is open [L]
+            from_raintank: Outflow from raintank [L]
+            from_pavement: Runoff from pavement [L]
+            from_pervious: Overflow from pervious [L]
+            from_upstream: Stormwater from upstream cells [L]
+            to_wastewater: Combined sewer inflow [L]
+            to_downstream: Stormwater discharge [L]
+            evaporation: Evaporation if storage is open [L]
         """
         precipitation = forcing.get('precipitation', 0.0)
         potential_evaporation = forcing.get('potential_evaporation', 0.0)
 
-        initial_storage = previous_state.stormwater.storage
-        upstream_inflow = current_state.stormwater.upstream_inflow
-        raintank_runoff = current_state.raintank.runoff_stormwater
-        pavement_runoff = current_state.pavement.effective_runoff
-        pervious_overflow = current_state.pervious.overflow
+        # Calculate total runoff
+        raintank_runoff = self.stormwater_data.flows.get_flow('from_raintank')
+        pavement_runoff = self.stormwater_data.flows.get_flow('from_pavement')
+        pervious_runoff = self.stormwater_data.flows.get_flow('from_pervious')
+        upstream_inflow = self.stormwater_data.flows.get_flow('from_upstream')
 
-        total_runoff = (raintank_runoff + pavement_runoff * self.pavement_area +
-                        pervious_overflow * self.pervious_area + upstream_inflow)
+        total_runoff = raintank_runoff + pavement_runoff + pervious_runoff + upstream_inflow
+
+        # Handle zero capacity case
+        if self.stormwater_data.storage.capacity == 0:
+            combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
+            runoff = total_runoff - combined_sewer_inflow
+
+            # Update flows for zero capacity case
+            self.stormwater_data.flows.set_flow('to_wastewater', combined_sewer_inflow)
+            self.stormwater_data.flows.set_flow('to_downstream', runoff)
+            return
+
+        # Calculate runoff distribution
         combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
         runoff = total_runoff - combined_sewer_inflow
 
-        if self.capacity == 0:
-            return self._zero_balance(raintank_runoff, pavement_runoff * self.pavement_area,
-                                      pervious_overflow * self.pervious_area, total_runoff,
-                                      combined_sewer_inflow, upstream_inflow, runoff)
+        # Calculate first flush and inflow
+        first_flush = min(runoff, self.stormwater_data.first_flush)
+        inflow = runoff - first_flush
+        if self.stormwater_data.is_open:
+            inflow += precipitation * self.stormwater_data.area
 
-        first_flush = min(runoff, self.first_flush)
-        inflow = runoff - first_flush + self.is_open * precipitation * self.area
+        # Calculate storage and evaporation
+        current_storage = min(self.stormwater_data.storage.capacity,
+                            max(0.0, self.stormwater_data.storage.previous + inflow))
+        evaporation = 0.0
+        if self.stormwater_data.is_open:
+            evaporation = min(potential_evaporation * self.stormwater_data.area, current_storage)
 
-        current_storage = min(self.capacity, max(0.0, initial_storage + inflow))
-        evaporation = self.is_open * min(potential_evaporation * self.area, current_storage)
+        # Calculate final storage and overflow
         final_storage = current_storage - evaporation
-        overflow = max(0.0, initial_storage + inflow - final_storage)
+        overflow = max(0.0, self.stormwater_data.storage.previous + inflow - final_storage)
         runoff_sewer = first_flush + overflow
 
-        water_balance = inflow - (evaporation + overflow) - (final_storage - initial_storage)
+        water_balance = (inflow - evaporation - overflow -
+                         (final_storage - self.stormwater_data.storage.previous))
 
-        stormwater_data = StormwaterData(
-            total_runoff=total_runoff,
-            combined_sewer_inflow=combined_sewer_inflow,
-            upstream_inflow=upstream_inflow,
-            runoff=runoff,
-            first_flush=first_flush,
-            inflow=inflow,
-            evaporation=evaporation,
-            overflow=overflow,
-            runoff_sewer=runoff_sewer,
-            storage=final_storage,
-            water_balance=water_balance
-        )
+        # Update storage
+        self.stormwater_data.storage.amount = final_storage
 
-        flows = ComponentFlows()
-        flows.add_flow("raintank", "stormwater", FlowType.RUNOFF, raintank_runoff)
-        flows.add_flow("pavement", "stormwater", FlowType.RUNOFF, pavement_runoff * self.pavement_area)
-        flows.add_flow("pervious", "stormwater", FlowType.RUNOFF, pervious_overflow * self.pervious_area)
-        flows.add_flow("stormwater", "stormwater", FlowType.RUNOFF, upstream_inflow)
-        flows.add_flow("input", "stormwater", FlowType.PRECIPITATION, self.is_open * precipitation * self.area)
-        flows.add_flow("stormwater", "output", FlowType.EVAPORATION, evaporation)
-        flows.add_flow("stormwater", "wastewater", FlowType.WASTEWATER, combined_sewer_inflow)
-        flows.add_flow("stormwater", "output", FlowType.RUNOFF, runoff_sewer)
-
-        return stormwater_data, flows
-
-    @staticmethod
-    def _zero_balance(raintank_runoff: float, pavement_runoff: float, pervious_overflow: float,
-                      total_runoff: float, combined_sewer_inflow: float,
-                      upstream_inflow: float, runoff: float) -> Tuple[StormwaterData, ComponentFlows]:
-        stormwater_data = StormwaterData(
-            total_runoff=total_runoff,
-            combined_sewer_inflow=combined_sewer_inflow,
-            upstream_inflow=upstream_inflow,
-            runoff=runoff,
-            first_flush=0.0,
-            inflow=0.0,
-            evaporation=0.0,
-            overflow=0.0,
-            runoff_sewer=runoff,
-            storage=0.0,
-            water_balance=0.0
-        )
-        flows = ComponentFlows()
-        flows.add_flow("raintank", "stormwater", FlowType.RUNOFF, raintank_runoff)
-        flows.add_flow("pavement", "stormwater", FlowType.RUNOFF, pavement_runoff)
-        flows.add_flow("pervious", "stormwater", FlowType.RUNOFF, pervious_overflow)
-        flows.add_flow("stormwater", "output", FlowType.EVAPORATION, 0.0)
-        flows.add_flow("upstream", "stormwater", FlowType.RUNOFF, upstream_inflow)
-        flows.add_flow("stormwater", "wastewater", FlowType.WASTEWATER, combined_sewer_inflow)
-        flows.add_flow("stormwater", "output", FlowType.RUNOFF, runoff)
-        return stormwater_data, flows
+        # Update flows
+        if self.stormwater_data.is_open:
+            self.stormwater_data.flows.set_flow('precipitation', precipitation * self.stormwater_data.area)
+            self.stormwater_data.flows.set_flow('evaporation', evaporation)
+        self.stormwater_data.flows.set_flow('to_wastewater', combined_sewer_inflow)
+        self.stormwater_data.flows.set_flow('to_downstream', runoff_sewer)

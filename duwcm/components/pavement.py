@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, PavementData, ComponentFlows, FlowType
+from duwcm.data_structures import PavementData
 
 class PavementClass:
     """
@@ -10,7 +10,7 @@ class PavementClass:
     Outflows: Evaporation, infiltration, effective runoff, non-effective runoff
     """
 
-    def __init__(self, params: Dict[str, Dict[str, Any]]):
+    def __init__(self, params: Dict[str, Dict[str, Any]], pavement_data: PavementData):
         """
         Args:
             params (Dict[str, float]): Surface parameters
@@ -20,15 +20,16 @@ class PavementClass:
                 infiltration_capacity: Pavement infiltration capacity to groundwater [mm/d]
                 time_step: Time step [day]
         """
-        self.area = params['pavement']['area']
-        self.effective_area = (1.0 if params['pervious']['area'] == 0
-                               else params['pavement']['effective_area'] / 100)
-        self.max_storage = params['pavement']['max_storage']
-        self.infiltration_capacity = params['pavement']['infiltration_capacity']
+        self.pavement_data = pavement_data
+        self.pavement_data.area = params['pavement']['area']
+        self.pavement_data.storage.capacity = params['pavement']['max_storage']
+        self.pavement_data.effective_outflow = (1.0 if params['pervious']['area'] == 0
+                                                else params['pavement']['effective_area'] / 100)
+        self.pavement_data.infiltration_capacity = params['pavement']['infiltration_capacity']
+        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
         self.time_step = params['general']['time_step']
 
-    def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[PavementData, ComponentFlows]:
+    def solve(self, forcing: pd.Series) -> None:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
@@ -38,76 +39,50 @@ class PavementClass:
             previous_state (pd.DataFrame): State variables from the previous time step with columns:
                 Pavement:
                     previous_storage: Initial storage at current time step (t) [L]
-            current_state (pd.DataFrame): Current state variables with columns:
+            flows (UrbanWaterFlowsData): Current state variables with columns:
                 Rain tank:
                     raintank_runoff: Effective imprevious surface runoff from raintank to pavement [L]
-
-        Returns:
-            Dict[str, float]:
-                inflow: Effective impervious surface runoff inflow [mm/m^2]
-                evaporation: Evaporation from interception storage on pavement area [mm]
-                infiltration: Infiltration to groundwater (if current storage = max storage) [mm]
-                effective_runoff: Effective impervious surface runoff [mm]
-                non_effective_runoff: Non-effective runoff [mm]
-                storage: Final interception storage level (t+1) [mm]
-                water_balance: Total water balance [L]
+        Data:
+            storage: Final interception storage level (t+1) [mm]
+        Flows:
+            inflow: Effective impervious surface runoff inflow [mm/m^2]
+            evaporation: Evaporation from interception storage on pavement area [mm]
+            infiltration: Infiltration to groundwater (if current storage = max storage) [mm]
+            effective_runoff: Effective impervious surface runoff [mm]
+            non_effective_runoff: Non-effective runoff [mm]
         """
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
         irrigation = forcing.get('pavement_irrigation', 0)
 
-        previous_storage = previous_state.pavement.storage
-        raintank_runoff = current_state.raintank.runoff_pavement
+        if self.pavement_data.area == 0:
+            return
 
-        if self.area == 0:
-            return self._zero_balance()
+        irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
+        raintank_inflow = self.pavement_data.flows.get_flow('from_raintank') / self.pavement_data.area
+        inflow = precipitation + irrigation + raintank_inflow / self.pavement_data.area
 
-        inflow = raintank_runoff / self.area
-        total_inflow = precipitation + irrigation + inflow
+        storage = min(self.pavement_data.storage.capacity,
+                      max(0.0, self.pavement_data.storage.previous + inflow))
+        evaporation = min(potential_evaporation, storage)
 
-        current_storage = min(self.max_storage, max(0.0, previous_storage + total_inflow))
-        evaporation = min(potential_evaporation, current_storage)
+        final_storage = storage - evaporation
+        infiltration = max(0.0, min(self.pavement_data.infiltration_capacity * self.time_step,
+                                    inflow - self.pavement_data.storage.capacity + self.pavement_data.storage.previous))
 
-        final_storage = current_storage - evaporation
-        infiltration = max(0.0, min(total_inflow - (self.max_storage - previous_storage),
-                                    self.infiltration_capacity * self.time_step))
-
-        excess_water = (total_inflow - evaporation - infiltration -
-                        (final_storage - previous_storage))
-        effective_runoff = self.effective_area * max(0.0, excess_water)
+        excess_water = inflow - evaporation - infiltration - (final_storage - self.pavement_data.storage.previous)
+        effective_runoff = self.pavement_data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
-        water_balance = (excess_water - effective_runoff - non_effective_runoff) * self.area
+        water_balance = (excess_water - effective_runoff - non_effective_runoff) * self.pavement_data.area
 
-        pavement_data = PavementData(
-            inflow = inflow,
-            evaporation = evaporation * self.area,
-            infiltration = infiltration,
-            effective_runoff = effective_runoff,
-            non_effective_runoff = non_effective_runoff,
-            storage = final_storage,
-            water_balance = water_balance
-        )
+        self.pavement_data.storage.amount = final_storage
 
-        flows = ComponentFlows()
-        flows.add_flow("input", "pavement", FlowType.PRECIPITATION, precipitation * self.area)
-        flows.add_flow("input", "pavement", FlowType.IRRIGATION, irrigation * self.area)
-        flows.add_flow("raintank", "pavement", FlowType.RUNOFF, raintank_runoff)
-        flows.add_flow("pavement", "output", FlowType.EVAPORATION, evaporation * self.area)
-        flows.add_flow("pavement", "groundwater", FlowType.INFILTRATION, infiltration * self.area)
-        flows.add_flow("pavement", "stormwater", FlowType.RUNOFF, effective_runoff * self.area)
-        flows.add_flow("pavement", "pervious", FlowType.RUNOFF, non_effective_runoff * self.area)
-
-        return pavement_data, flows
-
-    @staticmethod
-    def _zero_balance() -> Tuple[PavementData, ComponentFlows]:
-        return PavementData(
-            inflow = 0.0,
-            evaporation = 0.0,
-            infiltration = 0.0,
-            effective_runoff = 0.0,
-            non_effective_runoff = 0.0,
-            storage = 0.0,
-            water_balance = 0.0
-        ), ComponentFlows()
+        # Update flows using setters
+        self.pavement_data.flows.set_flow('precipitation', precipitation * self.pavement_data.area)
+        self.pavement_data.flows.set_flow('irrigation', irrigation * self.pavement_data.area)
+        self.pavement_data.flows.set_flow('evaporation', evaporation * self.pavement_data.area)
+        self.pavement_data.flows.set_flow('to_stormwater', effective_runoff * self.pavement_data.area)
+        self.pavement_data.flows.set_flow('to_pervious', non_effective_runoff * self.pavement_data.area)
+        self.pavement_data.flows.set_flow('to_groundwater_infiltration', infiltration * self.pavement_data.area)
+        self.pavement_data.flows.set_flow('to_groundwater_leakage', irrigation_leakage * self.pavement_data.area)

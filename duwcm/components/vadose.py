@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, VadoseData, ComponentFlows, FlowType
+from duwcm.data_structures import VadoseData
 from duwcm.functions import soil_selector, et_selector, gw_levels
 
 # Constants
@@ -12,7 +12,8 @@ class VadoseClass:
     """
     Simulates water balance in the vadose zone.
     """
-    def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame, et_data: pd.DataFrame):
+    def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame,
+                 et_data: pd.DataFrame, vadose_data: VadoseData):
         """
         Args:
             params (Dict[str, float]): Zone parameters
@@ -28,7 +29,8 @@ class VadoseClass:
             moisture_field_capacity: Groundwater level at bottom root zone, i.e. field capacity
             moisture_wilting_point: Transpiration = 0, i.e. permanent wilting point
         """
-        self.area = params['vadose']['area']
+        self.vadose_data = vadose_data
+        self.vadose_data.area = params['vadose']['area']
         self.time_step = params['general']['time_step']
         soil_type = params['soil']['soil_type']
         crop_type = params['soil']['crop_type']
@@ -43,92 +45,58 @@ class VadoseClass:
         self.moisture_field_capacity = self.et_params['theta_h2_mm'].values[0]
         self.moisture_wilting_point = self.et_params['theta_h4_mm'].values[0]
 
-    def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[VadoseData, ComponentFlows]:
+    def solve(self, forcing: pd.Series) -> None:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
                 reference_evaporation: Reference evaporation [mm] (potential evaporation)
-            previous_state (pd.DataFrame): State variables from the previous time step with columns:
-                Groundwater:
-                    groundwater_level: Groundwater storage level [m-SL]
-                Vadose:
-                    initial_moisture: Initial moisture content of root zone (t) [mm]
-            current_state (pd.DataFrame): Current state variables with columns:
-                Pervious:
-                    infiltration: Infiltration from pervious area [mm m^2]
 
-        Returns:
-            Dict[str, float]:
-                transpiration_threshold: Equilibriuym moisture content of soil in root zone 
-                                        when transpiration reduction starts [mm]
-                transpiration_factor: Transpiration reduction factor [-]
-                transpiration: Transpiration from vadose zone [mm]
-                equilibrium_moisture: Equilibrium moisture content of soil [mm]
-                max_capillary: Maximum capillary rise rate [mm/d]
-                percolation: Percolation from vadose zone to groundwater [mm]
-                            (+percolation -capillary rise)
-                moisture: Moisture content of root zone (t+1) [mm]
-                water_balance: Total water balance in vadose zone [L]
+        Updates vadose_data with:
+            moisture: Moisture content of root zone (t+1) [mm]
+        Updates flows with:
+            from_pervious: Infiltration from pervious area [mm*m^2]
+            transpiration: Transpiration from vadose zone [mm*m^2]
+            to_groundwater: Percolation to groundwater [mm*m^2]
         """
         reference_evaporation = forcing['potential_evaporation']
 
-        initial_moisture = previous_state.vadose.moisture
-        groundwater_level = previous_state.groundwater.water_level
-        pervious_infiltration = current_state.pervious.infiltration
+        if self.vadose_data.area == 0:
+            return
 
-        if self.area == 0:
-            return self._zero_balance(initial_moisture)
+        # Get infiltration from pervious area through flows
+        pervious_infiltration = self.vadose_data.flows.get_flow('from_pervious') / self.vadose_data.area
 
-        transpiration_threshold = self._transpiration_threshold(reference_evaporation)
-        transpiration_factor = self._transpiration_factor(pervious_infiltration,
-                                                          transpiration_threshold, initial_moisture)
-        transpiration = transpiration_factor * reference_evaporation
+        # Calculate transpiration
+        self.vadose_data.transpiration_threshold = self._transpiration_threshold(reference_evaporation)
+        self.vadose_data.transpiration_factor = self._transpiration_factor(
+                                                        pervious_infiltration,
+                                                        self.vadose_data.transpiration_threshold,
+                                                        self.vadose_data.moisture.previous
+                                                        )
+        transpiration = self.vadose_data.transpiration_factor * reference_evaporation
 
-        equilibrium_moisture, max_capillary = self._soil_properties(groundwater_level)
+        # Calculate soil moisture dynamics
+        equilibrium_moisture, self.vadose_data.max_capillary = self._soil_properties(
+                                                                        self.vadose_data.groundwater_level.previous)
+        current_moisture = self.vadose_data.moisture.previous + pervious_infiltration - transpiration
 
-        current_moisture = initial_moisture + pervious_infiltration - transpiration
+        # Calculate percolation
         if current_moisture > equilibrium_moisture:
-            percolation = min(current_moisture - equilibrium_moisture, self.time_step * self.saturated_conductivity)
+            percolation = min(current_moisture - equilibrium_moisture,
+                              self.time_step * self.saturated_conductivity)
         else:
-            percolation = -1 * min((equilibrium_moisture - current_moisture), self.time_step * max_capillary)
+            percolation = -1 * min(equilibrium_moisture - current_moisture,
+                                   self.time_step * self.vadose_data.max_capillary)
 
+        # Update final moisture
         #infiltration = np.sqrt(current_moisture - percolation) * self.infiltration_recession
-        final_moisture = current_moisture - percolation # - infiltration
-        water_balance = (pervious_infiltration - (transpiration + percolation) -
-                         (final_moisture - initial_moisture)) * self.area
+        self.vadose_data.moisture.amount = current_moisture - percolation #- infiltration
+        water_balance = (pervious_infiltration - transpiration - percolation -
+                         self.vadose_data.moisture.change) * self.vadose_data.area
 
-        vadose_data = VadoseData(
-            transpiration_threshold = transpiration_threshold,
-            transpiration_factor = transpiration_factor,
-            transpiration = transpiration * self.area,
-            equilibrium_moisture = equilibrium_moisture,
-            max_capillary = max_capillary,
-            percolation = percolation,
-            moisture = final_moisture,
-            water_balance = water_balance
-        )
-
-        flows = ComponentFlows()
-        flows.add_flow("pervious", "vadose", FlowType.INFILTRATION, pervious_infiltration * self.area)
-        flows.add_flow("vadose", "output", FlowType.TRANSPIRATION, transpiration * self.area)
-        flows.add_flow("vadose", "groundwater", FlowType.PERCOLATION, percolation * self.area)
-
-        return vadose_data, flows
-
-    @staticmethod
-    def _zero_balance(initial_moisture: float) -> Tuple[VadoseData, ComponentFlows]:
-        return VadoseData(
-            transpiration_threshold = 0.0,
-            transpiration_factor = 0.0,
-            transpiration = 0.0,
-            equilibrium_moisture = 0.0,
-            max_capillary = 0.0,
-            percolation = 0.0,
-            moisture = initial_moisture,
-            water_balance = 0.0
-        ), ComponentFlows()
-
+        # Update flows
+        self.vadose_data.flows.set_flow('transpiration', transpiration * self.vadose_data.area)
+        self.vadose_data.flows.set_flow('to_groundwater', percolation * self.vadose_data.area)
 
     def _transpiration_threshold(self, reference_evaporation: float) -> float:
         if reference_evaporation < MIN_REFERENCE_EVAPORATION:

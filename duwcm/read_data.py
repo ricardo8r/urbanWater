@@ -124,7 +124,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: pd.Da
                 'capacity': altwater_params.RTc,
                 'first_flush': altwater_params.RTff,
                 'initial_storage': altwater_params.RT0,
-                'effective_system_outflow': calibration_params.loc['ERA_out', param_index],
+                'effective_area': calibration_params.loc['ERA_out', param_index],
                 'install_ratio': altwater_params.pRT
             },
             'pavement': {

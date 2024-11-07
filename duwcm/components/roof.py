@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, RoofData, ComponentFlows, FlowType
+from duwcm.data_structures import RoofData
 
 class RoofClass:
     """
@@ -10,87 +10,64 @@ class RoofClass:
     Outflows: evaporation, effective runoff, non-effectiverunoff
     """
 
-    def __init__(self, params: Dict[str, Dict[str, Any]]):
+    def __init__(self, params: Dict[str, Dict[str, Any]], roof_data: RoofData):
         """
         Args:
             params (Dict[str, float]): System parameters
                 area: Roof area [m^2]
-                effective_roof_area: Area connected with gutter [%]
-                roof_initial_loss: Maximum initial loss [mm]
-                roof_current_storage: Roof initial storage (t=0) [mm]
+                effective_outflow: Area connected with gutter [%]
+                roof_initial_storage: Roof initial storage (t=0) [mm]
+                leakage_rate: Leakage to groundwater [%]
                 time_step: Time step [day]
         """
-        self.area = params['roof']['area']
-        self.effective_area_ratio = (1.0 if  params['pervious']['area'] == 0
-                                     else params['roof']['effective_area'] / 100)
-        self.max_storage = params['roof']['max_storage']
+        self.roof_data = roof_data
+        self.roof_data.area = params['roof']['area']
+        self.roof_data.storage.capacity = params['roof']['max_storage']
+        self.roof_data.effective_outflow = (1.0 if  params['pervious']['area'] == 0
+                                            else params['roof']['effective_area'] / 100)
+        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
         self.time_step = params['general']['time_step']
 
-    def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[RoofData, ComponentFlows]:
+    def solve(self, forcing: pd.Series) -> None:
         """
         Args: 
             forcing (pd.DataFrame): Climate forcing data with columns:
                 precipitation: Precipitation [mm]
                 potential_evaporation: Potential evaporation [mm]
                 irrigation: Irrigation on roof (default: 0) [mm]
-            previous_state (pd.DataFrame): State variables from the previous time step with columns:
-                Roof:
-                    previous_storage: Initial storage at the current time step (t) [L]
-
-        Returns:
-            Dict[str, float]: Water balance components for the current time step
-                evaporation: Evaporation from interception storage in roof [mm]
-                effective_runoff: Effective impervious surface runoff (Rain tank and sewer) [mm]
-                non_effective_runoff: Non effective runoff (pavement and pervious)
-                storage: Roof interception storage after total ouflows (t+1) [mm]
-                water_balance: Total water balance [L]
+        Data:
+            storage: Roof interception storage after total ouflows (t+1) [mm]
+        Flows:
+            evaporation: Evaporation from interception storage in roof [mm]
+            effective_runoff: Effective impervious surface runoff (Rain tank and sewer) [mm]
+            non_effective_runoff: Non effective runoff (pavement and pervious)
         """
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
         irrigation = forcing.get('roof_irrigation', 0.0)
 
-        previous_storage = previous_state.roof.storage
+        if self.roof_data.area == 0:
+            return
 
-        if self.area == 0:
-            return self._zero_balance()
-
+        irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
         total_inflow = precipitation + irrigation
-        current_storage = min(self.max_storage, max(0.0, previous_storage + total_inflow))
+        current_storage = min(self.roof_data.storage.capacity, max(0.0, self.roof_data.storage.previous + total_inflow))
         evaporation = min(potential_evaporation, current_storage)
         final_storage = current_storage - evaporation
 
-        excess_water = total_inflow - evaporation - (final_storage - previous_storage)
-        effective_runoff = self.effective_area_ratio * max(0.0, excess_water)
+        excess_water = total_inflow - evaporation - (final_storage - self.roof_data.storage.previous)
+        effective_runoff = self.roof_data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
-        water_balance = (excess_water - effective_runoff - non_effective_runoff) * self.area
+        water_balance = (excess_water - effective_runoff - non_effective_runoff) * self.roof_data.area
 
-        roof_data = RoofData(
-            evaporation = evaporation * self.area,
-            effective_runoff = effective_runoff,
-            non_effective_runoff = non_effective_runoff,
-            storage = final_storage,
-            water_balance = water_balance
-        )
-
-        flows = ComponentFlows()
-        flows.add_flow("input", "roof", FlowType.PRECIPITATION, precipitation * self.area)
-        flows.add_flow("input", "roof", FlowType.IRRIGATION, irrigation * self.area)
-        flows.add_flow("roof", "output", FlowType.EVAPORATION, evaporation * self.area)
-        flows.add_flow("roof", "raintank", FlowType.RUNOFF, effective_runoff * self.area)
-        flows.add_flow("roof", "pervious", FlowType.INFILTRATION, non_effective_runoff * self.area)
+        self.roof_data.storage.amount = final_storage
 
 
-        return roof_data, flows
-
-    @staticmethod
-    def _zero_balance() -> Tuple[RoofData, ComponentFlows]:
-        return RoofData(
-            irrigation = 0.0,
-            evaporation = 0.0,
-            effective_runoff = 0.0,
-            non_effective_runoff = 0.0,
-            storage = 0.0,
-            water_balance = 0.0
-        ), ComponentFlows()
+        # Update flows using setters
+        self.roof_data.flows.set_flow('precipitation', precipitation * self.roof_data.area)
+        self.roof_data.flows.set_flow('irrigation', irrigation * self.roof_data.area)
+        self.roof_data.flows.set_flow('evaporation', evaporation * self.roof_data.area)
+        self.roof_data.flows.set_flow('to_raintank', effective_runoff * self.roof_data.area)
+        self.roof_data.flows.set_flow('to_pervious', non_effective_runoff * self.roof_data.area)
+        self.roof_data.flows.set_flow('to_groundwater', irrigation_leakage * self.roof_data.area)

@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import UrbanWaterData, PerviousData, ComponentFlows, FlowType
+from duwcm.data_structures import PerviousData
 from duwcm.functions import soil_selector
 
 # Constants
@@ -14,7 +14,8 @@ class PerviousClass:
     Outflows: Evaporation, overflow from pervious interception, infiltration to groundwater 
     """
 
-    def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame, et_data: pd.DataFrame):
+    def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame,
+                 et_data: pd.DataFrame, pervious_data: PerviousData):
         """
         Args:
             params (Dict[str, float]): Surface parameters
@@ -33,115 +34,86 @@ class PerviousClass:
             moisture_root_capacity: Root zone water capacity [mm]
             saturated_permeability: Saturated soil permeability [mm/d]
         """
-        self.area = params['pervious']['area']
+        self.pervious_data = pervious_data
+        self.pervious_data.area = params['pervious']['area']
+        self.pervious_data.storage.capacity = params['pervious']['max_storage']
+        self.pervious_data.infiltration_capacity = params['pervious']['infiltration_capacity']
+        self.pervious_data.irrigation_factor = params['irrigation']['pervious']
+
         self.roof_area = params['roof']['area']
         self.pavement_area = params['pavement']['area']
         self.time_step = params['general']['time_step']
-        self.max_storage = params['pervious']['max_storage']
-        self.infiltration_capacity = params['pervious']['infiltration_capacity']
-        self.irrigation_factor = params['irrigation']['pervious']
-        self.soil_type = params['soil']['soil_type']
-        self.crop_type = params['soil']['crop_type']
+        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
 
-        self.soil_params = soil_selector(soil_data, et_data, self.soil_type, self.crop_type)[0]
-        self.moisture_root_capacity = self.soil_params['moist_cont_eq_rz[mm]']
-        self.saturated_permeability = SATURATED_PERMEABILITY_FACTOR * self.soil_params['k_sat']
+        # Get soil parameters
+        soil_params = soil_selector(soil_data, et_data,
+                                  params['soil']['soil_type'],
+                                  params['soil']['crop_type'])[0]
+        self.moisture_root_capacity = soil_params['moist_cont_eq_rz[mm]']
+        self.saturated_permeability = 10 * soil_params['k_sat']
 
-    def solve(self, forcing: pd.Series, previous_state: UrbanWaterData,
-              current_state: UrbanWaterData) -> Tuple[PerviousData, ComponentFlows]:
+    def solve(self, forcing: pd.Series) -> None:
         """
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
                 precipitation: Precipitation [mm]
                 potential_evaporation: Potential evaporation [mm]
                 irrigation: Irrigation on area (default: 0) [mm]
-            previous_state (pd.DataFrame): State variables from the previous time step with columns:
-                Vadose:
-                    vadose_moisture: Moisture content in vadose zone [mm]
-                Pavement:
-                    previous_storage: Initial storage at current time step (t) [L]
-            current_state (pd.DataFrame): Current state variables with columns:
-                Roof:
-                    roof_runoff: Non-effective runoff from roof area) [mm m^2]
-                Pavement:
-                    pavement_runoff: Non-effective runoff from pavement area [mm m^2]
 
-        Returns:
-            Dict[str, float]: Water balance components for the current time step
-                inflow: Inflow from imprevious area [mm]
-                infiltration_capacity: Infiltration capacity on pervious area [mm]
-                time_factor: Time step fraction when interception storage is available [mm]
-                evaporation: Evaporation [mm]
-                infiltration: Infiltration to vadose zone [mm]
-                overflow: Overflow from pervious interception [mm]
-                storage: Final interception storage level (t+1) [mm]
-                water_balance: Total water balance [L]
+        Updates pervious_data with:
+            storage: Final interception storage level (t+1) [mm]
+        Updates flows with:
+            precipitation: Precipitation on pervious area [mm*m^2]
+            irrigation: Irrigation on pervious area [mm*m^2]
+            from_roof: Non-effective runoff from roof area [mm*m^2]
+            from_pavement: Non-effective runoff from pavement area [mm*m^2]
+            evaporation: Evaporation from pervious area [mm*m^2]
+            to_vadose: Infiltration to vadose zone [mm*m^2]
+            to_groundwater: Leakage to groundwater [mm*m^2]
+            to_stormwater: Overflow from pervious interception [mm*m^2]
         """
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
-        irrigation = forcing.get('pervious_irrigation', 0.0) * self.irrigation_factor
+        irrigation = forcing.get('pervious_irrigation', 0.0) * self.pervious_data.irrigation_factor
 
-        previous_storage = previous_state.pervious.storage
-        vadose_moisture = previous_state.vadose.moisture
-        roof_runoff = current_state.roof.non_effective_runoff
-        pavement_runoff = current_state.pavement.non_effective_runoff
+        if self.pervious_data.area == 0:
+            return
 
-        if self.area == 0:
-            return self._zero_balance()
+        # Calculate inflows
+        irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
+        roof_inflow = self.pervious_data.flows.get_flow('from_roof') / self.pervious_data.area
+        pavement_inflow = self.pervious_data.flows.get_flow('from_pavement') / self.pervious_data.area
+        total_inflow = precipitation + irrigation + roof_inflow + pavement_inflow
 
-        inflow = (roof_runoff * self.roof_area +
-                  pavement_runoff * self.pavement_area) / self.area
-        current_storage = max(0.0, previous_storage + precipitation + inflow + irrigation)
+        # Calculate current storage
+        current_storage = max(0.0, self.pervious_data.storage.previous + total_inflow)
 
-        infiltration_capacity = min(self.time_step * self.infiltration_capacity,
-                                    self.moisture_root_capacity - vadose_moisture +
-                                    min(self.moisture_root_capacity - vadose_moisture,
-                                        self.time_step * self.saturated_permeability)
-                                    )
+        # Calculate infiltration capacity using linked vadose moisture
+        infiltration_capacity = min(
+            self.time_step * self.pervious_data.infiltration_capacity,
+            self.moisture_root_capacity - self.pervious_data.vadose_moisture.previous +
+            min(self.moisture_root_capacity - self.pervious_data.vadose_moisture.previous,
+                self.time_step * self.saturated_permeability)
+        )
 
+        # Calculate time factor and resulting fluxes
         time_factor = min(1.0, current_storage / (potential_evaporation + infiltration_capacity))
         evaporation = time_factor * potential_evaporation
         infiltration = time_factor * infiltration_capacity
 
-        final_storage = min(self.max_storage, max(0.0,current_storage - evaporation - infiltration))
-        overflow = max(0.0, (precipitation + inflow + irrigation) - (evaporation + infiltration) -
-                       (final_storage - previous_storage))
+        # Calculate final storage and overflow
+        self.pervious_data.storage.amount = min(self.pervious_data.storage.capacity,
+                                                max(0.0, current_storage - evaporation - infiltration))
+        overflow = max(0.0, total_inflow - evaporation - infiltration -
+                       self.pervious_data.storage.change)
 
-        water_balance = ((precipitation + inflow + irrigation) -
-                         (evaporation + infiltration + overflow) -
-                         (final_storage - previous_storage)) * self.area
+        water_balance = (total_inflow - evaporation - infiltration - overflow -
+                         (self.pervious_data.storage.change)) * self.pervious_data.area
 
-        pervious_data = PerviousData(
-            inflow = inflow,
-            infiltration_capacity = infiltration_capacity,
-            time_factor = time_factor,
-            evaporation = evaporation * self.area,
-            infiltration = infiltration,
-            overflow = overflow,
-            storage = final_storage,
-            water_balance = water_balance,
-        )
-
-        flows = ComponentFlows()
-        flows.add_flow("input", "pervious", FlowType.PRECIPITATION, precipitation * self.area)
-        flows.add_flow("input", "pervious", FlowType.IRRIGATION, irrigation * self.area)
-        flows.add_flow("roof", "pervious", FlowType.RUNOFF, roof_runoff * self.roof_area)
-        flows.add_flow("pavement", "pervious", FlowType.RUNOFF, pavement_runoff * self.pavement_area)
-        flows.add_flow("pervious", "output", FlowType.EVAPORATION, evaporation * self.area)
-        flows.add_flow("pervious", "vadose", FlowType.INFILTRATION, infiltration * self.area)
-        flows.add_flow("pervious", "stormwater", FlowType.RUNOFF, overflow * self.area)
-
-        return pervious_data, flows
-
-    @staticmethod
-    def _zero_balance() -> Tuple[PerviousData, ComponentFlows]:
-        return PerviousData(
-            inflow = 0.0,
-            infiltration_capacity = 0.0,
-            time_factor = 0.0,
-            evaporation = 0.0,
-            infiltration = 0.0,
-            overflow = 0.0,
-            storage = 0.0,
-            water_balance = 0.0
-        ), ComponentFlows()
+        # Update flows
+        self.pervious_data.flows.set_flow('precipitation', precipitation * self.pervious_data.area)
+        self.pervious_data.flows.set_flow('irrigation', irrigation * self.pervious_data.area)
+        self.pervious_data.flows.set_flow('evaporation', evaporation * self.pervious_data.area)
+        self.pervious_data.flows.set_flow('to_vadose', infiltration * self.pervious_data.area)
+        self.pervious_data.flows.set_flow('to_stormwater', overflow * self.pervious_data.area)
+        self.pervious_data.flows.set_flow('to_groundwater', irrigation_leakage * self.pervious_data.area)

@@ -68,7 +68,6 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
     index = pd.to_datetime(plot_data.index)
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
-
     for i, config in enumerate(plot_configs):
         fig, ax1 = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
         ax1.set_xlabel("Time")

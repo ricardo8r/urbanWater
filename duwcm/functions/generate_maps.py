@@ -10,6 +10,8 @@ from shapely.geometry import LineString
 def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.DataFrame,
                 variable_name: str, cmap: str) -> Optional[plt.cm.ScalarMappable]:
     runoff_data = gdf_geometry[variable_name]
+    if runoff_data.abs().max() > runoff_data.max():
+        cmap = f"{cmap}_r"
     vmin, vmax = runoff_data.min(), runoff_data.max()
     norm = plt.Normalize(vmin=vmin, vmax=vmax)
     cmap_obj = plt.get_cmap(cmap)
@@ -74,6 +76,9 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     else:
         vmin = gdf_geometry[variable_name].min()
         vmax = gdf_geometry[variable_name].max()
+        vmax2 = gdf_geometry[variable_name].abs().max()
+        if vmax2 > vmax:
+            cmap = f"{cmap}_r"
         sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
         sm.set_array([])
         gdf_geometry[gdf_geometry[variable_name].notnull()].plot(column=variable_name, ax=ax,
