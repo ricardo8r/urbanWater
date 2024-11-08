@@ -9,29 +9,40 @@ from shapely.geometry import LineString
 
 def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.DataFrame,
                 variable_name: str, cmap: str) -> Optional[plt.cm.ScalarMappable]:
-    runoff_data = gdf_geometry[variable_name]
-    if runoff_data.abs().max() > runoff_data.max():
-        cmap = f"{cmap}_r"
+    runoff_data = gdf_geometry[variable_name].dropna()
+    if runoff_data.empty:
+        return None
+
+    # Determine colormap direction based on data
+    if runoff_data.mean() < 0:
+        cmap = cmap + "_r"
+
     vmin, vmax = runoff_data.min(), runoff_data.max()
     norm = plt.Normalize(vmin=vmin, vmax=vmax)
     cmap_obj = plt.get_cmap(cmap)
 
     def get_line_width(value):
-        return np.interp(value, [vmin, vmax], [0.5, 3])
+        # Scale line width between 0.5 and 3 based on absolute value
+        abs_min, abs_max = min(abs(vmin), abs(vmax)), max(abs(vmin), abs(vmax))
+        return np.interp(abs(value), [abs_min, abs_max], [0.5, 3])
 
     cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
-    for cell_id, row in cell_data.items():
-        runoff_value = row[variable_name]
-        downstream_id = flow_paths.loc[cell_id, 'down']
-        if downstream_id in cell_data:
-            start_point = row.geometry.centroid
-            end_point = cell_data[downstream_id].geometry.centroid
-            line = LineString([start_point, end_point])
-            color = cmap_obj(norm(runoff_value))
-            linewidth = get_line_width(runoff_value)
-            ax.plot(*line.xy, color=color, linewidth=linewidth, solid_capstyle='round')
 
-    sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
+    # Only plot flows for cells that have data
+    for cell_id, row in cell_data.items():
+        if pd.notna(row[variable_name]):  # Only process cells with data
+            downstream_id = flow_paths.loc[cell_id, 'down']
+            if downstream_id in cell_data:
+                start_point = row.geometry.centroid
+                end_point = cell_data[downstream_id].geometry.centroid
+                line = LineString([start_point, end_point])
+
+                value = row[variable_name]
+                color = cmap_obj(norm(value))
+                linewidth = get_line_width(value)
+                ax.plot(*line.xy, color=color, linewidth=linewidth, solid_capstyle='round')
+
+    sm = plt.cm.ScalarMappable(cmap=cmap_obj, norm=norm)
     sm.set_array([])
     return sm
 
@@ -51,7 +62,7 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     if gdf_background.crs != gdf_geometry.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
 
-    gdf_geometry.plot(ax=ax, color='lightgray', edgecolor='lightgray', alpha=0.8)
+    gdf_geometry.plot(ax=ax, color='lightgray', edgecolor='none', alpha=0.8)
     gdf_background.plot(ax=ax, color='none', edgecolor='gray', alpha=0.8)
 
     # Plot feature shapefiles
@@ -66,7 +77,7 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
             color = 'dodgerblue'
         else:
             edgecolor = 'gray'
-            color = 'lightgray'
+            color = 'none'
 
         gdf_feature.plot(ax=ax, color=color, edgecolor=edgecolor, alpha=0.8, linewidth=1)
 
@@ -74,15 +85,27 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     if variable_name in ['stormwater_runoff', 'wastewater_runoff']:
         sm = plot_linear(ax, gdf_geometry, flow_paths, variable_name, cmap)
     else:
-        vmin = gdf_geometry[variable_name].min()
-        vmax = gdf_geometry[variable_name].max()
-        vmax2 = gdf_geometry[variable_name].abs().max()
-        if vmax2 > vmax:
-            cmap = f"{cmap}_r"
-        sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
-        sm.set_array([])
-        gdf_geometry[gdf_geometry[variable_name].notnull()].plot(column=variable_name, ax=ax,
-                                                                 cmap=cmap, alpha=0.6, vmin=vmin, vmax=vmax)
+        values = gdf_geometry[variable_name].dropna()
+        if not values.empty:
+            # Determine if we should reverse the colormap based on data
+            mean_value = values.mean()
+            if mean_value < 0:
+                cmap = cmap + "_r"
+
+            vmin = values.min()
+            vmax = values.max()
+            sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
+            sm.set_array([])
+
+            # Plot only cells with data
+            gdf_geometry[gdf_geometry[variable_name].notnull()].plot(
+                column=variable_name,
+                ax=ax,
+                cmap=cmap,
+                alpha=0.5,
+                vmin=vmin,
+                vmax=vmax
+            )
 
     ax.set_title(f'{variable_name.replace("_", " ").capitalize()}')
     ax.axis('off')
@@ -104,10 +127,10 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
     variables_to_plot = {
         'evapotranspiration': ('Greens', None),
         'imported_water': ('YlOrRd', None),
-        'stormwater_runoff': ('YlOrBr', flow_paths),
-        'wastewater_runoff': ('RdPu', flow_paths),
-        'baseflow': ('Purples', None),
-        'deep_seepage': ('Oranges', None)
+        'stormwater_runoff': ('BuPu', flow_paths),
+        'wastewater_runoff': ('PuRd', flow_paths),
+        'baseflow': ('Blues', None),
+        'deep_seepage': ('PuBuGn', None)
     }
 
     for variable_name, (cmap, paths) in variables_to_plot.items():

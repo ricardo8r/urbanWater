@@ -23,12 +23,6 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
                      "axes.spines.right": False, "axes.spines.left": False}
     sns.set_theme(context='notebook', style='ticks', palette='colorblind',
                   font='serif', font_scale=0.8, rc=custom_params)
-    #mpl.rcParams.update({
-    #    "font.family": "serif",
-    #    "font.serif": ["Computer Modern Roman"],
-    #    "text.usetex": True,
-    #    "pgf.rcfonts": False,
-    #})
 
     color_palette = [
         "#4e79a7", "#f28e2b", "#e15759",
@@ -52,7 +46,7 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
     results.index = forcing.index
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'],
-        'Evaporation': forcing['potential_evaporation'],
+        'PotentialEvaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (results['evaporation'] + results['transpiration']) / total_area,
         'Stormwater': results['stormwater'] / total_area,
         'Wastewater': results['wastewater'] / total_area,
@@ -62,11 +56,33 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
     plot_configs = [
         ('Stormwater'),
         ('Baseflow'),
-        ('Wastewater'),
-        ('Evapotranspiration')
+        ('Wastewater')
     ]
     index = pd.to_datetime(plot_data.index)
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+    fig, ax1 = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
+    ax1.set_xlabel("Time")
+    ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+
+    ax1.fill_between(index, 0, plot_data['Precipitation'],
+                            facecolor='C0', alpha=0.8, label='Precipitation')
+    ax1.plot(index, plot_data['PotentialEvaporation'], linestyle='--', linewidth=lw,
+             color='C6', label='Potential Evaporation')
+    ax1.plot(index, plot_data['Evapotranspiration'], color='C4', linewidth=lw, label='Evapotranspiration')
+    ax1.set_ylabel(r"Precipitation & Evapotranspiration [mm/day]")
+
+    plt.tight_layout()
+
+    lines, labels = ax1.get_legend_handles_labels()
+    ax1.legend(lines, labels, loc=0)
+
+    # Save the figure
+    base_filename = output_dir / 'evapotranspiration'
+    plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
+    plt.close(fig)
+
 
     for i, config in enumerate(plot_configs):
         fig, ax1 = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
@@ -76,8 +92,9 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
 
         ax1.fill_between(index, 0, plot_data['Precipitation'],
                                 facecolor='C0', alpha=0.8, label='Precipitation')
-        ax1.plot(index, plot_data['Evaporation'], linestyle='--', linewidth=lw, color='C6', label='Evaporation')
-        ax1.set_ylabel(r"Precipitation & Evaporation [mm/day]")
+        ax1.plot(index, plot_data['Evapotranspiration'], linestyle='--', linewidth=lw,
+                 color='C4', label='Evapotranspiration')
+        ax1.set_ylabel(r"Precipitation & Evapotranspiration [mm/day]")
 
         ax2 = ax1.twinx()
         config_color = color_cycle[(i+1) % len(color_cycle)]
@@ -94,3 +111,4 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
         base_filename = output_dir / config.lower()
         plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
         plt.close(fig)
+
