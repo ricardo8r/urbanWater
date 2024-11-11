@@ -78,13 +78,24 @@ def save_specific_cell_results():
     cell_data = {}
 
     for module, df in results.items():
-        if module != 'aggregated':
-            if isinstance(df.index, pd.MultiIndex):
+        if module == 'forcing':
+            continue
+        if module == 'aggregated':
+            continue
+
+        if isinstance(df.index, pd.MultiIndex):
+            try:
                 cell_df = df.xs(args.cell_id, level='cell')
                 for column in cell_df.columns:
                     cell_data[f"{module}_{column}"] = cell_df[column]
-            else:
-                print(f"Warning: Module '{module}' does not have a MultiIndex. Skipping.")
+            except KeyError:
+                print(f"Warning: Cell ID {args.cell_id} not found in module '{module}'. Skipping.")
+        else:
+            print(f"Warning: Module '{module}' does not have a MultiIndex structure. Skipping.")
+
+    if not cell_data:
+        print(f"No data found for cell ID {args.cell_id}")
+        return
 
     cell_results = pd.DataFrame(cell_data)
 
