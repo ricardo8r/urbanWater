@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 import geopandas as gpd
 import matplotlib.pyplot as plt
+from matplotlib.ticker import ScalarFormatter, LogFormatter, FuncFormatter
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
 
@@ -24,7 +25,7 @@ def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.Dat
     def get_line_width(value):
         # Scale line width between 0.5 and 3 based on absolute value
         abs_min, abs_max = min(abs(vmin), abs(vmax)), max(abs(vmin), abs(vmax))
-        return np.interp(abs(value), [abs_min, abs_max], [0.5, 3])
+        return np.interp(abs(value), [abs_min, abs_max], [1.5, 5])
 
     cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
 
@@ -82,7 +83,7 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
         gdf_feature.plot(ax=ax, color=color, edgecolor=edgecolor, alpha=0.8, linewidth=1)
 
     # Plot data
-    if variable_name in ['stormwater_runoff', 'wastewater_runoff']:
+    if variable_name in ['stormwater', 'wastewater']:
         sm = plot_linear(ax, gdf_geometry, flow_paths, variable_name, cmap)
     else:
         values = gdf_geometry[variable_name].dropna()
@@ -109,10 +110,21 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
 
     ax.set_title(f'{variable_name.replace("_", " ").capitalize()}')
     ax.axis('off')
+
+
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad=0.1)
     cbar = plt.colorbar(sm, cax=cax)
-    cbar.set_label(f'{variable_name.replace("_", " ").capitalize()} [ML/yr]', rotation=270, labelpad=15)
+
+    # Format with scientific notation
+    cbar.formatter.set_powerlimits((0, 0))
+    cbar.ax.yaxis.set_offset_position('right')
+    cbar.ax.yaxis.offsetText.set_fontsize(8)  # Adjust exponent text size
+    cbar.ax.yaxis.offsetText.set_position((0, 1.05))  # Position exponent at top
+    cbar.update_ticks()
+
+    cbar.set_label(fr'{variable_name.replace("_", " ").capitalize()} [$\mathrm{{m}}^3$/yr]',
+                   rotation=270, labelpad=15)
 
     # Save the plot
     plt.tight_layout()
@@ -127,14 +139,16 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
     variables_to_plot = {
         'evapotranspiration': ('Greens', None),
         'imported_water': ('YlOrRd', None),
-        'stormwater_runoff': ('BuPu', flow_paths),
-        'wastewater_runoff': ('PuRd', flow_paths),
+        'stormwater': ('BuPu', flow_paths),
+        'wastewater': ('PuRd', flow_paths),
         'baseflow': ('Blues', None),
-        'deep_seepage': ('PuBuGn', None)
+        'deep_seepage': ('PuBuGn', None),
+        'moisture': ('Purples', None),
+        'groundwater': ('Oranges', None)
     }
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
-        data = local_results[variable_name].groupby(level='cell').sum() / 1000000  # Convert to ML/yr
+        data = local_results[variable_name].groupby(level='cell').sum() *0.001  # Convert to m^3/yr
         output_path = output_dir / f'{variable_name}_map.png'
         plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
                       data, variable_name, output_path, cmap, flow_paths=paths)

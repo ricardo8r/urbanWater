@@ -8,7 +8,7 @@ from .vadose import VadoseClass
 from .groundwater import GroundwaterClass
 from .stormwater import StormwaterClass
 from .wastewater import WastewaterClass
-from .reuse import ReuseClass
+from .demand import DemandClass
 
 __all__ = [
     "RoofClass",
@@ -19,5 +19,5 @@ __all__ = [
     "GroundwaterClass",
     "StormwaterClass",
     "WastewaterClass",
-    "ReuseClass"
+    "DemandClass"
 ]

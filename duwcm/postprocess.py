@@ -4,7 +4,7 @@ import argparse
 import pandas as pd
 
 from duwcm.read_data import read_data
-from duwcm.functions import load_results, load_config, plot_results, check_cell, check_all
+from duwcm.functions import load_results, load_config, generate_plots, check_cell, check_all
 
 def plot_global():
     parser = argparse.ArgumentParser(description="Generate aggregated plots from simulation results")
@@ -17,10 +17,9 @@ def plot_global():
     results = load_results(args.results)
     output_dir = Path(config.output.output_directory) / 'figures'
 
-    plot_results(results['aggregated'], results['forcing'], output_dir)
+    generate_plots(results['aggregated'], results['forcing'], output_dir)
 
     print('Aggregated plots saved in %s', output_dir)
-
 
 def check_water_balance():
     parser = argparse.ArgumentParser(description="Run water balance checks on simulation results")
@@ -32,36 +31,31 @@ def check_water_balance():
     config = load_config(args.config, args.env)
     results = load_results(args.results)
 
-    # Load parameters
-    model_params, _, _, _, _, _ = read_data(config)
+    # Load parameters and create model instance
+    model_params, _, _, soil_data, et_data, flow_paths = read_data(config)
 
-    # Load forcing data
-    forcing = results.get('forcing')
-    if forcing is None:
-        raise ValueError("Forcing data not found in the results file. Make sure to save it during simulation.")
+    forcing_data = results.get('forcing')
+    if forcing_data is None:
+        raise ValueError("Forcing data not found in the results file.")
 
-    # Run checkers
-    global_balance = check_all(results, model_params, forcing)
-    cell_balance = check_cell(results, model_params, forcing)
+    # Initialize model
+    model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data,
+                           demand_data, reuse_settings, config.grid.direction)
 
-    # Save results to the same HDF5 file
-    output_file = Path(config.output.output_directory) / 'simulation_results.h5'
+    # Run checks
+    logger.info("Running water balance checks...")
+    check_results, critical_issues = check_all(model.data)
 
-    with pd.HDFStore(output_file, mode='a') as store:
-        # Save overall water balance
-        store.put('global_water_balance', global_balance, format='table', data_columns=True)
+    # Generate report
+    output_dir = Path(config.output.output_directory) / 'checks'
+    generate_report(check_results, output_dir)
 
-        # Save cell-wise water balance
-        store.put('cell_water_balance', cell_balance, format='table', data_columns=True)
-
-    print(f"Water balance checks completed and saved to {output_file}")
-
-    # Log some summary statistics
-    print("\nOverall water balance summary:")
-    print(f"Total inflow: {global_balance['inflow'].sum():.2f}")
-    print(f"Total outflow: {global_balance['outflow'].sum():.2f}")
-    print(f"Total storage change: {global_balance['storage_change'].sum():.2f}")
-    print(f"Final water balance: {global_balance['water_balance_1'].iloc[-1]:.2f}")
+    if critical_issues:
+        logger.warning("Critical issues found:")
+        for issue in critical_issues:
+            print(issue)
+    else:
+        logger.info("No critical issues found in water balance checks.")
 
 def save_specific_cell_results():
     parser = argparse.ArgumentParser(description="Save results for a specific cell ID")

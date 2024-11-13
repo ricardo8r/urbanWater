@@ -60,45 +60,41 @@ class RainTankClass:
             system_outflow: Outflow from roof-rain tank system [L]
             water_balance: Total water balance [L]
         """
+        data = self.raintank_data
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
 
-        roof_inflow = self.raintank_data.flows.get_flow('from_roof')
+        roof_inflow = data.flows.get_flow('from_roof')
 
-        if self.raintank_data.storage.capacity == 0:
+        if data.storage.capacity == 0:
             system_outflow = roof_inflow
-            runoff_stormwater = self.raintank_data.effective_outflow * system_outflow
+            runoff_stormwater = data.effective_outflow * system_outflow
             runoff_pavement = system_outflow - runoff_stormwater
 
             # Update flows for zero capacity case
-            self.raintank_data.flows.set_flow('to_stormwater', runoff_stormwater)
-            self.raintank_data.flows.set_flow('to_pavement', runoff_pavement)
+            data.flows.set_flow('to_stormwater', runoff_stormwater)
+            data.flows.set_flow('to_pavement', runoff_pavement)
             return
 
-        first_flush = min(roof_inflow * self.raintank_data.install_ratio,
-                          self.raintank_data.first_flush)
-        inflow = (roof_inflow * self.raintank_data.install_ratio - first_flush +
-                            self.raintank_data.is_open * precipitation * self.raintank_data.area)
+        first_flush = min(roof_inflow * data.install_ratio,
+                          data.first_flush)
+        inflow = (roof_inflow * data.install_ratio - first_flush +
+                            data.is_open * precipitation * data.area)
 
-        self.raintank_data.storage.amount = min(self.raintank_data.storage.capacity,
-                                                max(0.0, self.raintank_data.storage.previous + inflow))
-        evaporation = self.raintank_data.is_open * min(potential_evaporation * self.raintank_data.area,
-                                                       self.raintank_data.storage.amount)
-        self.raintank_data.storage.amount -= evaporation
+        data.storage.amount = min(data.storage.capacity, max(0.0, data.storage.previous + inflow))
+        evaporation = data.is_open * min(potential_evaporation * data.area, data.storage.amount)
+        data.storage.amount -= evaporation
 
-        overflow = max(0.0, inflow - evaporation - self.raintank_data.storage.change)
-        system_outflow = (first_flush + overflow + roof_inflow *
-                          (1.0 - self.raintank_data.install_ratio))
+        overflow = max(0.0, inflow - evaporation - data.storage.change)
+        system_outflow = first_flush + overflow + roof_inflow * (1.0 - data.install_ratio)
 
-        water_balance = inflow - evaporation - overflow - self.raintank_data.storage.change
-
-        runoff_stormwater = self.raintank_data.effective_outflow * system_outflow
+        runoff_stormwater = data.effective_outflow * system_outflow
         runoff_pavement = system_outflow - runoff_stormwater
 
 
         # Update flows using setters
-        if self.raintank_data.is_open:
-            self.raintank_data.flows.set_flow('precipitation', precipitation * self.raintank_data.area)
-        self.raintank_data.flows.set_flow('evaporation', evaporation)
-        self.raintank_data.flows.set_flow('to_stormwater', runoff_stormwater)
-        self.raintank_data.flows.set_flow('to_pavement', runoff_pavement)
+        if data.is_open:
+            data.flows.set_flow('precipitation', precipitation * data.area)
+        data.flows.set_flow('evaporation', evaporation)
+        data.flows.set_flow('to_stormwater', runoff_stormwater)
+        data.flows.set_flow('to_pavement', runoff_pavement)

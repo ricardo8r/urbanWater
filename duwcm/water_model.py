@@ -18,7 +18,7 @@ The module supports the simulation of:
     - Vadose zone
     - Groundwater dynamics
     - Stormwater
-    - Water reuse
+    - Water demand
     - Wastewater
 
 The UrbanWaterModel class provides methods for initializing the model, updating states,
@@ -34,7 +34,7 @@ from duwcm.data_structures import UrbanWaterData
 
 from duwcm.components import (
     roof, raintank, pavement, pervious, vadose,
-    groundwater, stormwater, reuse, wastewater
+    groundwater, stormwater, demand, wastewater
 )
 
 class UrbanWaterModel:
@@ -47,12 +47,12 @@ class UrbanWaterModel:
         - Vadose
         - Groundwater
         - Stormawater
-        - Reuse
+        - Demand
         - Wastewater
     """
 
     def __init__(self, params: Dict[str, Dict[str, float]], path: pd.DataFrame, soil_data: pd.DataFrame,
-                 et_data: pd.DataFrame, demand_data: pd.DataFrame, reuse_settings: pd.DataFrame, direction: int):
+                 et_data: pd.DataFrame, demand_settings: pd.DataFrame, reuse_settings: pd.DataFrame, direction: int):
         """
         Initialize the UrbanWaterModel.
 
@@ -61,7 +61,7 @@ class UrbanWaterModel:
             path: Downstream path DataFrame.
             soil_data: Soil parameter data.
             et_data: Evapotranspiration parameter data.
-            demand_data: Water demand data.
+            demand_settings: Water demand data.
             reuse_settings: Water reuse settings.
             num_timesteps: Number of time steps in the simulation.
             direction: Number of neighbors considered (4, 6, or 8)
@@ -70,7 +70,7 @@ class UrbanWaterModel:
         self.params = params
         self.soil_data = soil_data
         self.et_data = et_data
-        self.demand_data = demand_data
+        self.demand_settings = demand_settings
         self.reuse_settings = reuse_settings
 
         # Initialize submodels
@@ -104,8 +104,8 @@ class UrbanWaterModel:
                 'groundwater': groundwater.GroundwaterClass(cell_params, self.soil_data, self.et_data,
                                                             self.data[cell_id].groundwater),
                 'stormwater': stormwater.StormwaterClass(cell_params, self.data[cell_id].stormwater),
-                'reuse': reuse.ReuseClass(cell_params, self.demand_data, self.reuse_settings[reuse_index],
-                                          self.data[cell_id].reuse),
+                'demand': demand.DemandClass(cell_params, self.demand_settings, self.reuse_settings[reuse_index],
+                                          self.data[cell_id].demand),
                 'wastewater': wastewater.WastewaterClass(cell_params, self.data[cell_id].wastewater)
             }
             self.classes[cell_id] = cell_submodels
@@ -152,22 +152,22 @@ class UrbanWaterModel:
                 # Toilet use
                 wws_toilet_use = min(
                     self.data[w].wastewater.storage.amount,
-                    self.data[select].reuse.rt_toilet_demand * setreuse.cWWSforT
+                    self.data[select].demand.rt_toilet_demand * setreuse.cWWSforT
                 )
-                self.data[select].reuse.rt_toilet_demand -= wws_toilet_use
+                self.data[select].demand.rt_toilet_demand -= wws_toilet_use
 
                 # Irrigation use
                 wws_irrigation_use = min(
                     self.data[w].wastewater.storage.amount - wws_toilet_use,
-                    self.data[select].reuse.rt_irrigation_demand * setreuse.cWWSforIR
+                    self.data[select].demand.rt_irrigation_demand * setreuse.cWWSforIR
                 )
-                self.data[select].reuse.rt_irrigation_demand -= wws_irrigation_use
+                self.data[select].demand.rt_irrigation_demand -= wws_irrigation_use
 
                 # Update storages and uses
                 self.data[w].wastewater.storage.amount -= (wws_toilet_use + wws_irrigation_use)
                 self.data[w].wastewater.use += (wws_toilet_use + wws_irrigation_use)
                 self.data[select].wastewater.supply += (wws_toilet_use + wws_irrigation_use)
-                self.data[select].reuse.imported_water -= (wws_toilet_use + wws_irrigation_use)
+                self.data[select].demand.imported_water -= (wws_toilet_use + wws_irrigation_use)
 
                 available_cells.remove(select)
 
@@ -182,21 +182,21 @@ class UrbanWaterModel:
                 # Toilet use
                 sws_toilet_use = min(
                     self.data[s].stormwater.storage.amount,
-                    self.data[select].reuse.rt_toilet_demand * setreuse.SWSforT
+                    self.data[select].demand.rt_toilet_demand * setreuse.SWSforT
                 )
-                self.data[select].reuse.rt_toilet_demand -= sws_toilet_use
+                self.data[select].demand.rt_toilet_demand -= sws_toilet_use
 
                 # Irrigation use
                 sws_irrigation_use = min(
                     self.data[s].stormwater.storage.amount - sws_toilet_use,
-                    self.data[select].reuse.rt_irrigation_demand * setreuse.SWSforIR
+                    self.data[select].demand.rt_irrigation_demand * setreuse.SWSforIR
                 )
-                self.data[select].reuse.rt_irrigation_demand -= sws_irrigation_use
+                self.data[select].demand.rt_irrigation_demand -= sws_irrigation_use
 
                 # Update storages and uses
                 self.data[s].stormwater.storage.amount -= (sws_toilet_use + sws_irrigation_use)
                 self.data[s].stormwater.use += (sws_toilet_use + sws_irrigation_use)
                 self.data[select].stormwater.supply += (sws_toilet_use + sws_irrigation_use)
-                self.data[select].reuse.imported_water -= (sws_toilet_use + sws_irrigation_use)
+                self.data[select].demand.imported_water -= (sws_toilet_use + sws_irrigation_use)
 
                 available_cells.remove(select)

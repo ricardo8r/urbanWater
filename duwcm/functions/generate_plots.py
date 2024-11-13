@@ -2,12 +2,11 @@ from typing import Dict, List
 from pathlib import Path
 import pandas as pd
 
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import seaborn as sns
 
-def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path):
+def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path):
     """
     Plot figures for aggregated results across all cells using df.plot with custom styling.
 
@@ -48,9 +47,9 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
         'Precipitation': forcing['precipitation'],
         'PotentialEvaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (results['evaporation'] + results['transpiration']) / total_area,
-        'Stormwater': results['stormwater'] / total_area,
-        'Wastewater': results['wastewater'] / total_area,
-        'Baseflow': results['baseflow'] / total_area
+        'Stormwater': results['stormwater'] * 0.001,
+        'Wastewater': results['wastewater'] * 0.001,
+        'Baseflow': results['baseflow'] * 0.001
     })
 
     plot_configs = [
@@ -99,7 +98,12 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
         ax2 = ax1.twinx()
         config_color = color_cycle[(i+1) % len(color_cycle)]
         ax2.plot(index, plot_data[config], color=config_color, linewidth=lw, label=config)
-        ax2.set_ylabel(f"{config} [mm/day]")
+        ax2.set_ylabel(fr"{config} [$\mathrm{{m}}^3$/day]")
+
+        # Format with scientific notation
+        ax2.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
+        ax2.yaxis.offsetText.set_fontsize(8)  # Adjust exponent text size
+        ax2.yaxis.offsetText.set_position((1.05, 1.0))
 
         plt.tight_layout()
 
@@ -111,4 +115,3 @@ def plot_results(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Path)
         base_filename = output_dir / config.lower()
         plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
         plt.close(fig)
-

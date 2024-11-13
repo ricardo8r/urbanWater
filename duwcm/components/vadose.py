@@ -31,6 +31,7 @@ class VadoseClass:
         """
         self.vadose_data = vadose_data
         self.vadose_data.area = params['vadose']['area']
+        self.vadose_data.moisture.capacity = 1e6 #TODO
         self.time_step = params['general']['time_step']
         soil_type = params['soil']['soil_type']
         crop_type = params['soil']['crop_type']
@@ -58,27 +59,27 @@ class VadoseClass:
             transpiration: Transpiration from vadose zone [mm*m^2]
             to_groundwater: Percolation to groundwater [mm*m^2]
         """
+        data = self.vadose_data
         reference_evaporation = forcing['potential_evaporation']
 
-        if self.vadose_data.area == 0:
+        if data.area == 0:
             return
 
         # Get infiltration from pervious area through flows
-        pervious_infiltration = self.vadose_data.flows.get_flow('from_pervious') / self.vadose_data.area
+        pervious_infiltration = data.flows.get_flow('from_pervious') / data.area
 
         # Calculate transpiration
-        self.vadose_data.transpiration_threshold = self._transpiration_threshold(reference_evaporation)
-        self.vadose_data.transpiration_factor = self._transpiration_factor(
-                                                        pervious_infiltration,
-                                                        self.vadose_data.transpiration_threshold,
-                                                        self.vadose_data.moisture.previous
-                                                        )
-        transpiration = self.vadose_data.transpiration_factor * reference_evaporation
+        data.transpiration_threshold = self._transpiration_threshold(reference_evaporation)
+        data.transpiration_factor = self._transpiration_factor(pervious_infiltration,
+                                                               data.transpiration_threshold,
+                                                               data.moisture.previous
+                                                               )
+        transpiration = min(data.transpiration_factor * reference_evaporation,
+                            data.moisture.previous + pervious_infiltration)
 
         # Calculate soil moisture dynamics
-        equilibrium_moisture, self.vadose_data.max_capillary = self._soil_properties(
-                                                                        self.vadose_data.groundwater_level.previous)
-        current_moisture = self.vadose_data.moisture.previous + pervious_infiltration - transpiration
+        equilibrium_moisture, data.max_capillary = self._soil_properties(data.groundwater_level.previous)
+        current_moisture = data.moisture.previous + pervious_infiltration - transpiration
 
         # Calculate percolation
         if current_moisture > equilibrium_moisture:
@@ -86,17 +87,15 @@ class VadoseClass:
                               self.time_step * self.saturated_conductivity)
         else:
             percolation = -1 * min(equilibrium_moisture - current_moisture,
-                                   self.time_step * self.vadose_data.max_capillary)
+                                   self.time_step * data.max_capillary)
 
         # Update final moisture
         #infiltration = np.sqrt(current_moisture - percolation) * self.infiltration_recession
-        self.vadose_data.moisture.amount = current_moisture - percolation #- infiltration
-        water_balance = (pervious_infiltration - transpiration - percolation -
-                         self.vadose_data.moisture.change) * self.vadose_data.area
+        data.moisture.amount = current_moisture - percolation #- infiltration
 
         # Update flows
-        self.vadose_data.flows.set_flow('transpiration', transpiration * self.vadose_data.area)
-        self.vadose_data.flows.set_flow('to_groundwater', percolation * self.vadose_data.area)
+        data.flows.set_flow('transpiration', transpiration * data.area)
+        data.flows.set_flow('to_groundwater', percolation * data.area)
 
     def _transpiration_threshold(self, reference_evaporation: float) -> float:
         if reference_evaporation < MIN_REFERENCE_EVAPORATION:

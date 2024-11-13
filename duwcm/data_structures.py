@@ -3,7 +3,7 @@ from typing import Dict, List, Any
 from duwcm.flow_manager import (
     RoofFlows, RainTankFlows, PavementFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
-    WastewaterFlows, ReuseFlows
+    WastewaterFlows, DemandFlows, Flow
 )
 
 @dataclass
@@ -105,15 +105,21 @@ class WastewaterData:
     area: float = field(default=0, metadata={'unit': 'm^2'})
 
 @dataclass
-class ReuseData:
-    """Water reuse component"""
-    flows: ReuseFlows = field(default_factory=ReuseFlows)
+class DemandData:
+    """Water demand component"""
+    flows: DemandFlows = field(default_factory=DemandFlows)
     rt_storage: Storage = field(default_factory=Storage)  # Changed to Storage type
     rt_water_balance: float = field(default=0, metadata={'unit': 'L'})  # Rain tank water balance
     rt_domestic_demand: float = field(default=0, metadata={'unit': 'L'})  # Rain tank domestic demand
     rt_toilet_demand: float = field(default=0, metadata={'unit': 'L'})  # Rain tank toilet demand
     rt_irrigation_demand: float = field(default=0, metadata={'unit': 'L'})  # Rain tank irrigation demand
     wws_storage: float = field(default=0, metadata={'unit': 'L'})  # Wastewater storage
+
+@dataclass
+class ExternalData:
+    """Container for external flow data"""
+    flow: Flow = field(default_factory=Flow)
+
 
 @dataclass
 class UrbanWaterData:
@@ -126,16 +132,25 @@ class UrbanWaterData:
     groundwater: GroundwaterData = field(default_factory=GroundwaterData)
     stormwater: StormwaterData = field(default_factory=StormwaterData)
     wastewater: WastewaterData = field(default_factory=WastewaterData)
-    reuse: ReuseData = field(default_factory=ReuseData)
+    demand: DemandData = field(default_factory=DemandData)
+
+    # External components
+    precipitation: ExternalData = field(default_factory=ExternalData)
+    evaporation: ExternalData = field(default_factory=ExternalData)
+    irrigation: ExternalData = field(default_factory=ExternalData)
+    imported_water: ExternalData = field(default_factory=ExternalData)
+    baseflow: ExternalData = field(default_factory=ExternalData)
+    deep_seepage: ExternalData = field(default_factory=ExternalData)
 
     # Define components at class level
     COMPONENTS = [
         'roof', 'raintank', 'pavement', 'pervious', 'vadose',
-        'groundwater', 'stormwater', 'reuse', 'wastewater'
+        'groundwater', 'stormwater', 'demand', 'wastewater'
     ]
 
     # Define flow connections at class level
     FLOW_CONNECTIONS = {
+        # Regular component flows
         ('roof', 'to_raintank'): ('raintank', 'from_roof'),
         ('roof', 'to_pervious'): ('pervious', 'from_roof'),
         ('roof', 'to_groundwater'): ('groundwater', 'from_roof'),
@@ -151,7 +166,34 @@ class UrbanWaterData:
         ('vadose', 'to_groundwater'): ('groundwater', 'from_vadose'),
         ('groundwater', 'to_wastewater'): ('wastewater', 'from_groundwater'),
         ('stormwater', 'to_wastewater'): ('wastewater', 'from_stormwater'),
-        ('reuse', 'to_wastewater'): ('wastewater', 'from_reuse')
+        ('demand', 'to_wastewater'): ('wastewater', 'from_demand'),
+
+        # Precipitation flows
+        ('precipitation', 'to_roof'): ('roof', 'precipitation'),
+        ('precipitation', 'to_pavement'): ('pavement', 'precipitation'),
+        ('precipitation', 'to_pervious'): ('pervious', 'precipitation'),
+        ('precipitation', 'to_raintank'): ('raintank', 'precipitation'),
+        ('precipitation', 'to_stormwater'): ('stormwater', 'precipitation'),
+
+        # Evaporation flows
+        ('roof', 'evaporation'): ('evaporation', 'from_roof'),
+        ('pavement', 'evaporation'): ('evaporation', 'from_pavement'),
+        ('pervious', 'evaporation'): ('evaporation', 'from_pervious'),
+        ('raintank', 'evaporation'): ('evaporation', 'from_raintank'),
+        ('stormwater', 'evaporation'): ('evaporation', 'from_stormwater'),
+        ('vadose', 'transpiration'): ('evaporation', 'from_vadose'),
+
+        # Deep flows
+        ('groundwater', 'baseflow'): ('baseflow', 'from_groundwater'),
+        ('groundwater', 'seepage'): ('deep_seepage', 'from_groundwater'),
+
+        # Irrigation flows
+        ('irrigation', 'to_roof'): ('roof', 'irrigation'),
+        ('irrigation', 'to_pavement'): ('pavement', 'irrigation'),
+        ('irrigation', 'to_pervious'): ('pervious', 'irrigation'),
+
+        # Imported water flows
+        ('imported_water', 'to_demand'): ('demand', 'imported_water')
     }
 
     def __post_init__(self):
@@ -159,12 +201,20 @@ class UrbanWaterData:
         for (source_comp, source_flow), (target_comp, target_flow) in self.FLOW_CONNECTIONS.items():
             source = getattr(self, source_comp)
             target = getattr(self, target_comp)
-            setattr(target.flows, target_flow, getattr(source.flows, source_flow))
+
+            # For external components, link the Flow directly
+            if isinstance(source, ExternalData):
+                setattr(target.flows, target_flow, source.flow)
+            elif isinstance(target, ExternalData):
+                setattr(source.flows, source_flow, target.flow)
+            # For regular components, link existing flows
+            else:
+                setattr(target.flows, target_flow, getattr(source.flows, source_flow))
 
         #Link shared variables between components
         self.pervious.vadose_moisture = self.vadose.moisture
         self.vadose.groundwater_level = self.groundwater.water_level
-        self.reuse.rt_storage = self.raintank.storage
+        self.demand.rt_storage = self.raintank.storage
 
     def validate_flows(self) -> Dict[str, List[str]]:
         """Validate flows between components"""
@@ -177,6 +227,9 @@ class UrbanWaterData:
         for (source_comp, source_flow), (target_comp, target_flow) in self.FLOW_CONNECTIONS.items():
             source = getattr(self, source_comp)
             target = getattr(self, target_comp)
+
+            if isinstance(source, ExternalData) or isinstance(target, ExternalData):
+                continue
             source_attr = getattr(source.flows, source_flow)
             target_attr = getattr(target.flows, target_flow)
 

@@ -50,25 +50,26 @@ class StormwaterClass:
             to_downstream: Stormwater discharge [L]
             evaporation: Evaporation if storage is open [L]
         """
+        data = self.stormwater_data
         precipitation = forcing.get('precipitation', 0.0)
         potential_evaporation = forcing.get('potential_evaporation', 0.0)
 
         # Calculate total runoff
-        raintank_runoff = self.stormwater_data.flows.get_flow('from_raintank')
-        pavement_runoff = self.stormwater_data.flows.get_flow('from_pavement')
-        pervious_runoff = self.stormwater_data.flows.get_flow('from_pervious')
-        upstream_inflow = self.stormwater_data.flows.get_flow('from_upstream')
+        raintank_runoff = data.flows.get_flow('from_raintank')
+        pavement_runoff = data.flows.get_flow('from_pavement')
+        pervious_runoff = data.flows.get_flow('from_pervious')
+        upstream_inflow = data.flows.get_flow('from_upstream')
 
         total_runoff = raintank_runoff + pavement_runoff + pervious_runoff + upstream_inflow
 
         # Handle zero capacity case
-        if self.stormwater_data.storage.capacity == 0:
+        if data.storage.capacity == 0:
             combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
             runoff = total_runoff - combined_sewer_inflow
 
             # Update flows for zero capacity case
-            self.stormwater_data.flows.set_flow('to_wastewater', combined_sewer_inflow)
-            self.stormwater_data.flows.set_flow('to_downstream', runoff)
+            data.flows.set_flow('to_wastewater', combined_sewer_inflow)
+            data.flows.set_flow('to_downstream', runoff)
             return
 
         # Calculate runoff distribution
@@ -76,32 +77,25 @@ class StormwaterClass:
         runoff = total_runoff - combined_sewer_inflow
 
         # Calculate first flush and inflow
-        first_flush = min(runoff, self.stormwater_data.first_flush)
+        first_flush = min(runoff, data.first_flush)
         inflow = runoff - first_flush
-        if self.stormwater_data.is_open:
-            inflow += precipitation * self.stormwater_data.area
+        if data.is_open:
+            inflow += precipitation * data.area
 
         # Calculate storage and evaporation
-        current_storage = min(self.stormwater_data.storage.capacity,
-                            max(0.0, self.stormwater_data.storage.previous + inflow))
+        current_storage = min(data.storage.capacity, max(0.0, data.storage.previous + inflow))
         evaporation = 0.0
-        if self.stormwater_data.is_open:
-            evaporation = min(potential_evaporation * self.stormwater_data.area, current_storage)
+        if data.is_open:
+            evaporation = min(potential_evaporation * data.area, current_storage)
 
         # Calculate final storage and overflow
-        final_storage = current_storage - evaporation
-        overflow = max(0.0, self.stormwater_data.storage.previous + inflow - final_storage)
+        data.storage.amount = current_storage - evaporation
+        overflow = max(0.0, inflow - data.storage.change)
         runoff_sewer = first_flush + overflow
 
-        water_balance = (inflow - evaporation - overflow -
-                         (final_storage - self.stormwater_data.storage.previous))
-
-        # Update storage
-        self.stormwater_data.storage.amount = final_storage
-
         # Update flows
-        if self.stormwater_data.is_open:
-            self.stormwater_data.flows.set_flow('precipitation', precipitation * self.stormwater_data.area)
-            self.stormwater_data.flows.set_flow('evaporation', evaporation)
-        self.stormwater_data.flows.set_flow('to_wastewater', combined_sewer_inflow)
-        self.stormwater_data.flows.set_flow('to_downstream', runoff_sewer)
+        if data.is_open:
+            data.flows.set_flow('precipitation', precipitation * data.area)
+            data.flows.set_flow('evaporation', evaporation)
+        data.flows.set_flow('to_wastewater', combined_sewer_inflow)
+        data.flows.set_flow('to_downstream', runoff_sewer)

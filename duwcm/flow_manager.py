@@ -150,6 +150,8 @@ class RoofFlows(ComponentFlows):
 class RainTankFlows(ComponentFlows):
     """Raintank component flows"""
     # Environmental flows
+    precipitation: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
     evaporation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
     # Component flows
@@ -268,7 +270,7 @@ class WastewaterFlows(ComponentFlows):
         default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.IN))
     from_stormwater: Flow = field(
         default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.IN))
-    from_reuse: Flow = field(
+    from_demand: Flow = field(
         default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.IN))
     from_upstream: MultiSourceFlow = field(
         default_factory=lambda: MultiSourceFlow(type=FlowType.WASTEWATER, direction=FlowDirection.IN))
@@ -276,8 +278,8 @@ class WastewaterFlows(ComponentFlows):
         default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.OUT))
 
 @dataclass
-class ReuseFlows(ComponentFlows):
-    """Reuse water flows"""
+class DemandFlows(ComponentFlows):
+    """Demand water flows"""
     # Environmental flows
     imported_water: Flow = field(
         default_factory=lambda: Flow(type=FlowType.IMPORTED_WATER, direction=FlowDirection.IN))

@@ -32,7 +32,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
     # Initialize results as dictionaries of lists
     results = {field.name: [] for field in fields(UrbanWaterData)}
     results_agg = []
-    flow_tracker = defaultdict(lambda: defaultdict(float))
 
     # Add initial conditions to results at t=0
     initial_date = forcing.index[0] - pd.Timedelta(days=1)
@@ -57,13 +56,13 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
     for t in tqdm(range(1, num_timesteps), desc="Water balance"):
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
-        _solve_timestep(model, results, timestep_forcing, current_date, flow_tracker)
+        _solve_timestep(model, results, timestep_forcing, current_date)
         model.distribute_wastewater()
         model.distribute_stormwater()
         _aggregate_timestep(model, results_agg, current_date)
         model.update_states()
 
-    df_results = results_to_dataframes(results, results_agg, model)
+    df_results = results_to_dataframes(results, results_agg)
 
     total_area = sum(data.groundwater.area for data in model.data.values())
     df_results['aggregated'].attrs['total_area'] = total_area
@@ -72,7 +71,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
     return df_results
 
 def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], forcing: pd.Series,
-                    current_date: pd.Timestamp, flow_tracker: Dict[str, Dict[str, float]]) -> None:
+                    current_date: pd.Timestamp) -> None:
     """Solve the water balance for a single timestep for all cells in the specified order."""
     for cell_id in model.cell_order:
         cell_data = model.data[cell_id]
@@ -107,7 +106,7 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
         # Aggregate other flows
         aggregated['baseflow'] += data.groundwater.flows.baseflow.amount
         aggregated['total_seepage'] += data.groundwater.flows.seepage.amount
-        aggregated['imported_water'] += data.reuse.flows.imported_water.amount
+        aggregated['imported_water'] += data.demand.flows.imported_water.amount
         aggregated['transpiration'] += data.vadose.flows.transpiration.amount
         aggregated['evaporation'] += (
             data.roof.flows.evaporation.amount +
@@ -123,8 +122,7 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     results_agg.append(aggregated)
 
 def results_to_dataframes(results_var: Dict[str, List[Dict]],
-                         results_agg: List[Dict],
-                         model: UrbanWaterModel) -> Dict[str, pd.DataFrame]:
+                         results_agg: List[Dict]) -> Dict[str, pd.DataFrame]:
     """Convert results dictionaries to DataFrames."""
     dataframe_results = {}
 
@@ -141,7 +139,7 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
     dataframe_results['aggregated'] = df_agg
 
     # Create local results
-    local_results = _create_local_results(dataframe_results, model)
+    local_results = _create_local_results(dataframe_results)
     dataframe_results['local'] = local_results
 
     return dataframe_results
@@ -161,27 +159,26 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
             elif isinstance(attr_value, Storage):
                 results[attr_name] = attr_value.amount
 
-    # Add flows - this is what was missing
     if hasattr(component, 'flows'):
         flows = component.flows
         for flow_name, flow in vars(flows).items():
             if hasattr(flow, 'get_flow'):  # Check if it's a Flow or MultiSourceFlow object
-                results[flow_name] = flow.get_flow()
+                flow_value = flow.get_flow()
+                results[flow_name] = flow_value
 
     return results
 
-def _create_local_results(dataframe_results: Dict[str, pd.DataFrame],
-                         model: UrbanWaterModel) -> pd.DataFrame:
+def _create_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     """Create DataFrame of selected local results."""
     selected = {
-        'imported_water': ('reuse', 'imported_water'),
-        'stormwater_runoff': ('stormwater', 'to_downstream'),
-        'wastewater_runoff': ('wastewater', 'to_downstream'),
+        'imported_water': ('demand', 'imported_water'),
+        'stormwater': ('stormwater', 'to_downstream'),
+        'wastewater': ('wastewater', 'to_downstream'),
         'baseflow': ('groundwater', 'baseflow'),
-        'deep_seepage': ('groundwater', 'seepage')
+        'deep_seepage': ('groundwater', 'seepage'),
+        'moisture': ('vadose', 'moisture')
     }
 
-    # Collect evaporation components
     evaporation_components = [
         ('roof', 'evaporation'),
         ('pavement', 'evaporation'),
@@ -197,6 +194,11 @@ def _create_local_results(dataframe_results: Dict[str, pd.DataFrame],
     for col_name, (component, flow) in selected.items():
         if component in dataframe_results and flow in dataframe_results[component].columns:
             results_dict[col_name] = dataframe_results[component][flow]
+
+    results_dict['groundwater'] = -1 * (
+        dataframe_results['groundwater']['water_level'] +
+        dataframe_results['groundwater']['surface_water_level']
+    )
 
     # Calculate evapotranspiration by summing all components
     evap_sum = None

@@ -36,23 +36,19 @@ class WastewaterClass:
             from_stormwater: Inflow of stormwater [L]
             to_downstream: Wastewater sewer discharge [L]
         """
-        # Calculate total inflow
-        total_inflow = (self.wastewater_data.flows.get_flow('from_reuse') +
-                      self.wastewater_data.flows.get_flow('from_groundwater') +
-                      self.wastewater_data.flows.get_flow('from_stormwater') +
-                      self.wastewater_data.flows.get_flow('from_upstream'))
+        data = self.wastewater_data
+        total_inflow = (data.flows.get_flow('from_reuse') +
+                        data.flows.get_flow('from_groundwater') +
+                        data.flows.get_flow('from_stormwater') +
+                        data.flows.get_flow('from_upstream'))
 
-        if self.wastewater_data.storage.capacity == 0:
-            self.wastewater_data.flows.set_flow('to_downstream', total_inflow)
+        if data.storage.capacity == 0:
+            data.flows.set_flow('to_downstream', total_inflow)
             return
 
         # Calculate storage and discharge
-        self.wastewater_data.storage.amount = min(self.wastewater_data.storage.capacity,
-                                                  self.wastewater_data.storage.previous + total_inflow)
-        discharge = max(0.0, total_inflow - self.wastewater_data.storage.change)
-
-        # Update storage
-        water_balance = total_inflow - discharge - self.wastewater_data.storage.change
+        data.storage.amount = min(data.storage.capacity, data.storage.previous + total_inflow)
+        discharge = max(0.0, total_inflow - data.storage.change)
 
         # Update flows
-        self.wastewater_data.flows.set_flow('to_downstream', discharge)
+        data.flows.set_flow('to_downstream', discharge)

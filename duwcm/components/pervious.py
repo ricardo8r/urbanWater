@@ -72,27 +72,28 @@ class PerviousClass:
             to_groundwater: Leakage to groundwater [mm*m^2]
             to_stormwater: Overflow from pervious interception [mm*m^2]
         """
+        data = self.pervious_data
         precipitation = forcing['precipitation']
         potential_evaporation = forcing['potential_evaporation']
-        irrigation = forcing.get('pervious_irrigation', 0.0) * self.pervious_data.irrigation_factor
+        irrigation = forcing.get('pervious_irrigation', 0.0) * data.irrigation_factor
 
-        if self.pervious_data.area == 0:
+        if data.area == 0:
             return
 
         # Calculate inflows
         irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
-        roof_inflow = self.pervious_data.flows.get_flow('from_roof') / self.pervious_data.area
-        pavement_inflow = self.pervious_data.flows.get_flow('from_pavement') / self.pervious_data.area
+        roof_inflow = data.flows.get_flow('from_roof') / data.area
+        pavement_inflow = data.flows.get_flow('from_pavement') / data.area
         total_inflow = precipitation + irrigation + roof_inflow + pavement_inflow
 
         # Calculate current storage
-        current_storage = max(0.0, self.pervious_data.storage.previous + total_inflow)
+        current_storage = max(0.0, data.storage.previous + total_inflow)
 
         # Calculate infiltration capacity using linked vadose moisture
         infiltration_capacity = min(
-            self.time_step * self.pervious_data.infiltration_capacity,
-            self.moisture_root_capacity - self.pervious_data.vadose_moisture.previous +
-            min(self.moisture_root_capacity - self.pervious_data.vadose_moisture.previous,
+            self.time_step * data.infiltration_capacity,
+            self.moisture_root_capacity - data.vadose_moisture.previous +
+            min(self.moisture_root_capacity - data.vadose_moisture.previous,
                 self.time_step * self.saturated_permeability)
         )
 
@@ -102,18 +103,14 @@ class PerviousClass:
         infiltration = time_factor * infiltration_capacity
 
         # Calculate final storage and overflow
-        self.pervious_data.storage.amount = min(self.pervious_data.storage.capacity,
-                                                max(0.0, current_storage - evaporation - infiltration))
-        overflow = max(0.0, total_inflow - evaporation - infiltration -
-                       self.pervious_data.storage.change)
-
-        water_balance = (total_inflow - evaporation - infiltration - overflow -
-                         (self.pervious_data.storage.change)) * self.pervious_data.area
+        data.storage.amount = min(data.storage.capacity,
+                                  max(0.0, current_storage - evaporation - infiltration))
+        overflow = max(0.0, total_inflow - evaporation - infiltration - data.storage.change)
 
         # Update flows
-        self.pervious_data.flows.set_flow('precipitation', precipitation * self.pervious_data.area)
-        self.pervious_data.flows.set_flow('irrigation', irrigation * self.pervious_data.area)
-        self.pervious_data.flows.set_flow('evaporation', evaporation * self.pervious_data.area)
-        self.pervious_data.flows.set_flow('to_vadose', infiltration * self.pervious_data.area)
-        self.pervious_data.flows.set_flow('to_stormwater', overflow * self.pervious_data.area)
-        self.pervious_data.flows.set_flow('to_groundwater', irrigation_leakage * self.pervious_data.area)
+        data.flows.set_flow('precipitation', precipitation * data.area)
+        data.flows.set_flow('irrigation', irrigation * data.area)
+        data.flows.set_flow('evaporation', evaporation * data.area)
+        data.flows.set_flow('to_vadose', infiltration * data.area)
+        data.flows.set_flow('to_stormwater', overflow * data.area)
+        data.flows.set_flow('to_groundwater', irrigation_leakage * data.area)

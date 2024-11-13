@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 import pandas as pd
-from duwcm.data_structures import ReuseData
+from duwcm.data_structures import DemandData
 
 @dataclass
 class GraywaterData:
@@ -43,13 +43,13 @@ class RainTankData:
     water_balance: float = 0
     check: bool = False
 
-class ReuseClass:
+class DemandClass:
     """
     Simulates the supply, demand, use, and deficit of SSG, WWS, and rain tank.
     Updates the water level and water balance of rain tank.
     """
-    def __init__(self, params: Dict[str, Dict[str, Any]], demand_data: pd.Series,
-                 reuse_settings: pd.DataFrame, reuse_data: ReuseData):
+    def __init__(self, params: Dict[str, Dict[str, Any]], demand_settings: pd.Series,
+                 reuse_settings: pd.DataFrame, demand_data: DemandData):
         """
         Args:
             params (Dict[str, float]): System parameters
@@ -61,7 +61,7 @@ class ReuseClass:
             demand: Water demand of different indoor water use per block [L/day/block]
             setreuse: Setting of the supply and use priority (boolean)
         """
-        self.reuse_data = reuse_data
+        self.demand_data = demand_data
 
         # Initialize areas
         self.roof_area = params['roof']['area']
@@ -81,7 +81,7 @@ class ReuseClass:
         self.irrigation_factor = params['irrigation']['pervious']
 
         # Initialize demand patterns
-        self.demand = demand_data * self.indoor_water_use / 100
+        self.setdemand = demand_settings * self.indoor_water_use / 100
         self.setreuse = reuse_settings
         self._initialize_demands()
 
@@ -90,18 +90,18 @@ class ReuseClass:
         ssg_suply: Subsurface graywater irrigation suply [L]:
         raintank_suply: Max supply from rain tank [L]
         """
-        self.ssg_supply = (self.setreuse.KforSSG * self.demand['K'].values[0] +
-                           self.setreuse.BforSSG * self.demand['B'].values[0] +
-                           self.setreuse.LforSSG * self.demand['L'].values[0])
+        self.ssg_supply = (self.setreuse.KforSSG * self.setdemand['K'].values[0] +
+                           self.setreuse.BforSSG * self.setdemand['B'].values[0] +
+                           self.setreuse.LforSSG * self.setdemand['L'].values[0])
 
-        self.raintank_supply = (self.setreuse.RTforK * self.demand['K'].values[0] +
-                                 self.setreuse.RTforB * self.demand['B'].values[0] +
-                                 self.setreuse.RTforL * self.demand['L'].values[0])
+        self.raintank_supply = (self.setreuse.RTforK * self.setdemand['K'].values[0] +
+                                 self.setreuse.RTforB * self.setdemand['B'].values[0] +
+                                 self.setreuse.RTforL * self.setdemand['L'].values[0])
 
-        self.kitchen_demand = self.demand['K'].values[0]
-        self.bathroom_demand = self.demand['B'].values[0]
-        self.laundry_demand = self.demand['L'].values[0]
-        self.toilet_demand = self.demand['T'].values[0]
+        self.kitchen_demand = self.setdemand['K'].values[0]
+        self.bathroom_demand = self.setdemand['B'].values[0]
+        self.laundry_demand = self.setdemand['L'].values[0]
+        self.toilet_demand = self.setdemand['T'].values[0]
 
     def solve(self, forcing: pd.Series) -> None:
         """
@@ -118,6 +118,7 @@ class ReuseClass:
                 rt_results: Rain tank balance
                 imported_water: Required imported water [L] 
         """
+        data = self.demand_data
         roof_irrigation = forcing.get('roof_irrigation', 0.0)
         pavement_irrigation = forcing.get('pavement_irrigation', 0.0)
         pervious_irrigation = forcing.get('pervious_irrigation', 0.0) * self.irrigation_factor
@@ -130,9 +131,8 @@ class ReuseClass:
         # Use class's internal calculation methods
         ssg_irrigation, ssg_results = self._calculate_ssg(total_irrigation)
         wws_irrigation, wws_toilet, wws_results = self._calculate_wws(ssg_results, ssg_irrigation,
-                                                                      self.reuse_data.wws_storage)
-        rt_results = self._calculate_raintank(self.reuse_data.rt_storage,
-                                              wws_toilet, wws_irrigation)
+                                                                      data.wws_storage)
+        rt_results = self._calculate_raintank(data.rt_storage, wws_toilet, wws_irrigation)
 
         # Calculate imported water including leakage
         indoor_use_leakage = self.indoor_water_use * self.leakage_rate / (1 - self.leakage_rate) / self.groundwater_area
@@ -143,16 +143,16 @@ class ReuseClass:
                          rt_results.irrigation_demand + total_leakage)
 
         # Update ReuseData state
-        self.reuse_data.rt_storage = rt_results.storage
-        self.reuse_data.rt_water_balance = rt_results.water_balance
-        self.reuse_data.wws_storage = wws_results.storage
-        self.reuse_data.rt_domestic_demand = rt_results.domestic_demand
-        self.reuse_data.rt_toilet_demand = rt_results.toilet_demand
-        self.reuse_data.rt_irrigation_demand = rt_results.irrigation_demand
+        data.rt_storage = rt_results.storage
+        data.rt_water_balance = rt_results.water_balance
+        data.wws_storage = wws_results.storage
+        data.rt_domestic_demand = rt_results.domestic_demand
+        data.rt_toilet_demand = rt_results.toilet_demand
+        data.rt_irrigation_demand = rt_results.irrigation_demand
 
         # Update flows
-        self.reuse_data.flows.set_flow('imported_water', imported_water)
-        self.reuse_data.flows.set_flow('to_wastewater', wws_results.spillover)
+        data.flows.set_flow('imported_water', imported_water)
+        data.flows.set_flow('to_wastewater', wws_results.spillover)
 
     def _calculate_ssg(self, total_irrigation: float) -> (float, GraywaterData):
         """

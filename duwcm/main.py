@@ -9,8 +9,10 @@ from duwcm.water_model import UrbanWaterModel
 from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
+from duwcm.summary import print_summary
 from duwcm.functions import (load_config, check_all, check_cell,
-                             plot_results, export_geodata, generate_maps)
+                             generate_report, export_geodata, generate_plots,
+                             generate_maps, generate_chord)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -55,7 +57,7 @@ def run(config: Dynaconf) -> Tuple[Dict[str, pd.DataFrame], List[Dict[str, Any]]
     results = run_water_balance(model, forcing_data)
 
     logger.info("Simulation completed")
-    return results, model_params, forcing_data, flow_paths
+    return results, model, forcing_data, flow_paths
 
 def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
                  config: Dynaconf) -> None:
@@ -75,26 +77,30 @@ def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
 
     logger.info("Results and forcing data saved to %s", output_file)
 
-def check_results(results: Dict[str, pd.DataFrame], params: Dict[int, Dict[str, Dict[str, float]]],
-                  forcing: pd.DataFrame, config: Dynaconf) -> None:
+def check_results(model: UrbanWaterModel, config: Dynaconf) -> None:
+    """
+    Run comprehensive water balance checks and generate reports.
 
-    overall_balance = check_all(results, params, forcing).infer_objects()
-    cell_balance = check_cell(results, params, forcing).infer_objects()
-    output_file = Path(config.output.output_directory) / 'check_results.h5'
+    Args:
+        model (UrbanWaterModel): The model instance containing cell data
+        config (Dynaconf): Configuration object
+    """
+    logger.info("Running water balance checks...")
 
-    with pd.HDFStore(output_file, mode='w') as store:
-        store.put('global_water_balance', overall_balance, format='table', data_columns=True)
-        store.put('cell_water_balance', cell_balance, format='table', data_columns=True)
+    # Run checks on all cells
+    check_balance, critical_issues = check_all(model.data)
 
-    logger.info("Water balance checks saved to %s", output_file)
+    # Generate report
+    output_dir = Path(config.output.output_directory) / 'checks'
+    generate_report(check_balance, output_dir)
 
-    # Log some summary statistics
-    logger.info("Overall water balance summary:")
-    logger.info("Total inflow: %.2f", overall_balance['inflow'].sum())
-    logger.info("Total outflow: %.2f", overall_balance['outflow'].sum())
-    logger.info("Total storage change: %.2f", overall_balance['storage_change'].sum())
-    logger.info("Final water balance: %.2f", overall_balance['water_balance_1'].iloc[-1])
-
+    # Log critical issues
+    if critical_issues:
+        logger.warning("Critical issues found during water balance checks:")
+        for issue in critical_issues:
+            logger.warning(issue)
+    else:
+        logger.info("No critical issues found in water balance checks.")
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Urban Water Model")
@@ -109,17 +115,14 @@ def main() -> None:
 
     try:
         # Run simulation
-        results, model_params, forcing_data, flow_paths = run(config)
-
-        # Save results
-        save_results(results, forcing_data, config)
+        results, model, forcing_data, flow_paths = run(config)
 
         # Generate plots
         if args.plot:
             output_dir = Path(config.output.output_directory) / 'figures'
-            plot_results(results['aggregated'],
-                                    forcing_data,
-                                    output_dir)
+            generate_plots(results['aggregated'],
+                           forcing_data,
+                           output_dir)
             logger.info("Plots saved to %s", output_dir)
 
             geo_dir = Path(config.geodata_directory)
@@ -139,6 +142,14 @@ def main() -> None:
             )
             logger.info("Maps saved to %s", output_dir)
 
+            # Generate chord diagrams
+            output_dir = Path(config.output.output_directory) / 'chord'
+            generate_chord(
+                results=results,
+                output_dir=output_dir
+            )
+            logger.info("Chord diagrams saved to %s", output_dir)
+
         if args.gis:
             output_dir = Path(config.output.output_directory) / 'gis'
             output_dir.mkdir(parents=True, exist_ok=True)
@@ -152,10 +163,14 @@ def main() -> None:
             )
             logger.info("Geodata saved to %s", output_dir)
 
+        # Save results
+        save_results(results, forcing_data, config)
 
         # Check results and save water balance
         if args.check:
-            check_results(results, model_params, forcing_data, config)
+            check_results(model, config)
+            print_summary(results)
+
 
     except Exception as e:
         logger.error("Simulation failed: %s", str(e))
