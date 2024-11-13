@@ -70,6 +70,8 @@ class StormwaterClass:
             # Update flows for zero capacity case
             data.flows.set_flow('to_wastewater', combined_sewer_inflow)
             data.flows.set_flow('to_downstream', runoff)
+            data.flows.set_flow('precipitation', 0)
+            data.flows.set_flow('evaporation', 0)
             return
 
         # Calculate runoff distribution
@@ -96,6 +98,6 @@ class StormwaterClass:
         # Update flows
         if data.is_open:
             data.flows.set_flow('precipitation', precipitation * data.area)
-            data.flows.set_flow('evaporation', evaporation)
+        data.flows.set_flow('evaporation', evaporation)
         data.flows.set_flow('to_wastewater', combined_sewer_inflow)
         data.flows.set_flow('to_downstream', runoff_sewer)

@@ -75,14 +75,11 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], 
     """Solve the water balance for a single timestep for all cells in the specified order."""
     for cell_id in model.cell_order:
         cell_data = model.data[cell_id]
-
-        # Solve each component
         for component_name, component in cell_data.iter_components():
-            getattr(model.classes[cell_id][component_name], 'solve')(forcing)
-
-            results_var[component_name].append(
-                _collect_component_results(cell_id, current_date, component)
-            )
+            component_class = model.classes[cell_id][component_name]
+            component_class.solve(forcing)
+            results = _collect_component_results(cell_id, current_date, component)
+            results_var[component_name].append(results)
 
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
@@ -100,20 +97,20 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     for cell_id, data in model.data.items():
         # Aggregate end-point flows
         if model.path.loc[cell_id, 'down'] == 0:
-            aggregated['stormwater'] += data.stormwater.flows.to_downstream.amount
-            aggregated['wastewater'] += data.wastewater.flows.to_downstream.amount
+            aggregated['stormwater'] += data.stormwater.flows.to_downstream.get_flow()
+            aggregated['wastewater'] += data.wastewater.flows.to_downstream.get_flow()
 
-        # Aggregate other flows
-        aggregated['baseflow'] += data.groundwater.flows.baseflow.amount
-        aggregated['total_seepage'] += data.groundwater.flows.seepage.amount
-        aggregated['imported_water'] += data.demand.flows.imported_water.amount
-        aggregated['transpiration'] += data.vadose.flows.transpiration.amount
+        # Aggregate other flows using get_flow() instead of direct amount access
+        aggregated['baseflow'] += data.groundwater.flows.baseflow.get_flow()
+        aggregated['total_seepage'] += data.groundwater.flows.seepage.get_flow()
+        aggregated['imported_water'] += data.demand.flows.imported_water.get_flow()
+        aggregated['transpiration'] += data.vadose.flows.transpiration.get_flow()
         aggregated['evaporation'] += (
-            data.roof.flows.evaporation.amount +
-            data.pavement.flows.evaporation.amount +
-            data.pervious.flows.evaporation.amount +
-            data.raintank.flows.evaporation.amount +
-            data.stormwater.flows.evaporation.amount
+            data.roof.flows.evaporation.get_flow() +
+            data.pavement.flows.evaporation.get_flow() +
+            data.pervious.flows.evaporation.get_flow() +
+            data.raintank.flows.evaporation.get_flow() +
+            data.stormwater.flows.evaporation.get_flow()
         )
 
     #aggregated['imported_water'] -= sum(model.current[w].wastewater.use for w in model.wastewater_cells)

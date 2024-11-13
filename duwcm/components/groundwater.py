@@ -132,8 +132,8 @@ class GroundwaterClass:
 
         # Update flows
         data.flows.set_flow('seepage', seepage * data.area)
-        data.flows.set_flow('baseflow', baseflow * data.area)
-        data.flows.set_flow('to_wastewater', infiltration * data.area)
+        data.flows.set_flow('baseflow', -baseflow * data.area)
+        data.flows.set_flow('to_wastewater', -infiltration * data.area)
 
     def _storage_coefficient(self, initial_level: float) -> float:
         gw_up, gw_low, id_up, id_low = gw_levels(initial_level)

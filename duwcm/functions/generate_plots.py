@@ -75,13 +75,14 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
     plt.tight_layout()
 
     lines, labels = ax1.get_legend_handles_labels()
-    ax1.legend(lines, labels, loc=0)
+    # Modified legend positioning
+    ax1.legend(lines, labels, loc='upper center', bbox_to_anchor=(0.5, 1.15),
+              ncol=3, frameon=False)
 
     # Save the figure
     base_filename = output_dir / 'evapotranspiration'
     plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
     plt.close(fig)
-
 
     for i, config in enumerate(plot_configs):
         fig, ax1 = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
@@ -102,14 +103,16 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
 
         # Format with scientific notation
         ax2.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-        ax2.yaxis.offsetText.set_fontsize(8)  # Adjust exponent text size
+        ax2.yaxis.offsetText.set_fontsize(8)
         ax2.yaxis.offsetText.set_position((1.05, 1.0))
 
         plt.tight_layout()
 
         lines, labels = ax1.get_legend_handles_labels()
         lines2, labels2 = ax2.get_legend_handles_labels()
-        ax2.legend(lines + lines2, labels + labels2, loc=0)
+        # Modified legend positioning
+        ax2.legend(lines + lines2, labels + labels2, loc='upper center',
+                  bbox_to_anchor=(0.5, 1.15), ncol=3, frameon=False)
 
         # Save the figure
         base_filename = output_dir / config.lower()

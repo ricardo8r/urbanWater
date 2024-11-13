@@ -167,33 +167,6 @@ class UrbanWaterData:
         ('groundwater', 'to_wastewater'): ('wastewater', 'from_groundwater'),
         ('stormwater', 'to_wastewater'): ('wastewater', 'from_stormwater'),
         ('demand', 'to_wastewater'): ('wastewater', 'from_demand'),
-
-        # Precipitation flows
-        ('precipitation', 'to_roof'): ('roof', 'precipitation'),
-        ('precipitation', 'to_pavement'): ('pavement', 'precipitation'),
-        ('precipitation', 'to_pervious'): ('pervious', 'precipitation'),
-        ('precipitation', 'to_raintank'): ('raintank', 'precipitation'),
-        ('precipitation', 'to_stormwater'): ('stormwater', 'precipitation'),
-
-        # Evaporation flows
-        ('roof', 'evaporation'): ('evaporation', 'from_roof'),
-        ('pavement', 'evaporation'): ('evaporation', 'from_pavement'),
-        ('pervious', 'evaporation'): ('evaporation', 'from_pervious'),
-        ('raintank', 'evaporation'): ('evaporation', 'from_raintank'),
-        ('stormwater', 'evaporation'): ('evaporation', 'from_stormwater'),
-        ('vadose', 'transpiration'): ('evaporation', 'from_vadose'),
-
-        # Deep flows
-        ('groundwater', 'baseflow'): ('baseflow', 'from_groundwater'),
-        ('groundwater', 'seepage'): ('deep_seepage', 'from_groundwater'),
-
-        # Irrigation flows
-        ('irrigation', 'to_roof'): ('roof', 'irrigation'),
-        ('irrigation', 'to_pavement'): ('pavement', 'irrigation'),
-        ('irrigation', 'to_pervious'): ('pervious', 'irrigation'),
-
-        # Imported water flows
-        ('imported_water', 'to_demand'): ('demand', 'imported_water')
     }
 
     def __post_init__(self):
