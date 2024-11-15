@@ -42,8 +42,6 @@ class GroundwaterClass:
         """
         self.groundwater_data = groundwater_data
         self.groundwater_data.area = params['groundwater']['area']
-        self.groundwater_data.water_level.capacity = 1e6 #TODO
-        self.groundwater_data.surface_water_level.capacity = 1e6 #TODO
         self.groundwater_data.storage_coefficient = 0
 
         self.roof_area = params['roof']['area']
@@ -132,7 +130,7 @@ class GroundwaterClass:
 
         # Update flows
         data.flows.set_flow('seepage', seepage * data.area)
-        data.flows.set_flow('baseflow', -baseflow * data.area)
+        data.flows.set_flow('baseflow', baseflow * data.area)
         data.flows.set_flow('to_wastewater', -infiltration * data.area)
 
     def _storage_coefficient(self, initial_level: float) -> float:

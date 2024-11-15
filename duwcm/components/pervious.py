@@ -36,8 +36,9 @@ class PerviousClass:
         """
         self.pervious_data = pervious_data
         self.pervious_data.area = params['pervious']['area']
-        self.pervious_data.storage.capacity = params['pervious']['max_storage']
-        self.pervious_data.infiltration_capacity = params['pervious']['infiltration_capacity']
+        self.pervious_data.storage.capacity = (params['pervious']['max_storage'] *
+                                               params['pervious']['area'])
+        self.pervious_data.infiltration_capacity = params['pervious']['infiltration_capacity'] 
         self.pervious_data.irrigation_factor = params['irrigation']['pervious']
 
         self.roof_area = params['roof']['area']
@@ -61,35 +62,35 @@ class PerviousClass:
                 irrigation: Irrigation on area (default: 0) [mm]
 
         Updates pervious_data with:
-            storage: Final interception storage level (t+1) [mm]
+            storage: Final interception storage level (t+1) [L]
         Updates flows with:
-            precipitation: Precipitation on pervious area [mm*m^2]
-            irrigation: Irrigation on pervious area [mm*m^2]
-            from_roof: Non-effective runoff from roof area [mm*m^2]
-            from_pavement: Non-effective runoff from pavement area [mm*m^2]
-            evaporation: Evaporation from pervious area [mm*m^2]
-            to_vadose: Infiltration to vadose zone [mm*m^2]
-            to_groundwater: Leakage to groundwater [mm*m^2]
-            to_stormwater: Overflow from pervious interception [mm*m^2]
+            precipitation: Precipitation on pervious area [L]
+            irrigation: Irrigation on pervious area [L]
+            from_roof: Non-effective runoff from roof area [L]
+            from_pavement: Non-effective runoff from pavement area [L]
+            evaporation: Evaporation from pervious area [L]
+            to_vadose: Infiltration to vadose zone [L]
+            to_groundwater: Leakage to groundwater [L]
+            to_stormwater: Overflow from pervious interception [L]
         """
         data = self.pervious_data
-        precipitation = forcing['precipitation']
-        potential_evaporation = forcing['potential_evaporation']
-        irrigation = forcing.get('pervious_irrigation', 0.0) * data.irrigation_factor
+        precipitation = forcing['precipitation'] * data.area
+        potential_evaporation = forcing['potential_evaporation'] * data.area
+        irrigation = forcing.get('pervious_irrigation', 0.0) * data.irrigation_factor * data.area
 
         if data.area == 0:
             return
 
         # Calculate inflows
         irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
-        roof_inflow = data.flows.get_flow('from_roof') / data.area
-        pavement_inflow = data.flows.get_flow('from_pavement') / data.area
+        roof_inflow = data.flows.get_flow('from_roof')
+        pavement_inflow = data.flows.get_flow('from_pavement')
         total_inflow = precipitation + irrigation + roof_inflow + pavement_inflow
 
         # Calculate current storage
         current_storage = max(0.0, data.storage.previous + total_inflow)
 
-        # Calculate infiltration capacity using linked vadose moisture
+        # Calculate infiltration capacity using linked vadose moisture [mm/d]
         infiltration_capacity = min(
             self.time_step * data.infiltration_capacity,
             self.moisture_root_capacity - data.vadose_moisture.previous +
@@ -98,9 +99,9 @@ class PerviousClass:
         )
 
         # Calculate time factor and resulting fluxes
-        time_factor = min(1.0, current_storage / (potential_evaporation + infiltration_capacity))
+        time_factor = min(1.0, current_storage / (potential_evaporation + infiltration_capacity * data.area))
         evaporation = time_factor * potential_evaporation
-        infiltration = time_factor * infiltration_capacity
+        infiltration = time_factor * infiltration_capacity * data.area
 
         # Calculate final storage and overflow
         data.storage.amount = min(data.storage.capacity,
@@ -108,9 +109,9 @@ class PerviousClass:
         overflow = max(0.0, total_inflow - evaporation - infiltration - data.storage.change)
 
         # Update flows
-        data.flows.set_flow('precipitation', precipitation * data.area)
-        data.flows.set_flow('irrigation', irrigation * data.area)
-        data.flows.set_flow('evaporation', evaporation * data.area)
-        data.flows.set_flow('to_vadose', infiltration * data.area)
-        data.flows.set_flow('to_stormwater', overflow * data.area)
-        data.flows.set_flow('to_groundwater', irrigation_leakage * data.area)
+        data.flows.set_flow('precipitation', precipitation)
+        data.flows.set_flow('irrigation', irrigation)
+        data.flows.set_flow('evaporation', evaporation)
+        data.flows.set_flow('to_vadose', infiltration)
+        data.flows.set_flow('to_stormwater', overflow)
+        data.flows.set_flow('to_groundwater', irrigation_leakage)

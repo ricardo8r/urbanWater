@@ -16,13 +16,15 @@ class RoofClass:
             params (Dict[str, float]): System parameters
                 area: Roof area [m^2]
                 effective_outflow: Area connected with gutter [%]
+                storage capacity: Roof storage capacity [L]
                 roof_initial_storage: Roof initial storage (t=0) [mm]
                 leakage_rate: Leakage to groundwater [%]
                 time_step: Time step [day]
         """
         self.roof_data = roof_data
-        self.roof_data.area = params['roof']['area']
-        self.roof_data.storage.capacity = params['roof']['max_storage']
+        self.roof_data.area = abs(params['roof']['area'])  #TODO
+        self.roof_data.storage.capacity = (params['roof']['max_storage'] *
+                                           params['roof']['area'])
         self.roof_data.effective_outflow = (1.0 if  params['pervious']['area'] == 0
                                             else params['roof']['effective_area'] / 100)
         self.leakage_rate = params['groundwater']['leakage_rate'] / 100
@@ -30,22 +32,23 @@ class RoofClass:
 
     def solve(self, forcing: pd.Series) -> None:
         """
-        Args: 
+        Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
                 precipitation: Precipitation [mm]
                 potential_evaporation: Potential evaporation [mm]
                 irrigation: Irrigation on roof (default: 0) [mm]
-        Data:
-            storage: Roof interception storage after total ouflows (t+1) [mm]
-        Flows:
-            evaporation: Evaporation from interception storage in roof [mm]
-            effective_runoff: Effective impervious surface runoff (Rain tank and sewer) [mm]
-            non_effective_runoff: Non effective runoff (pavement and pervious)
+
+        Updates roof_data with:
+            storage: Roof interception storage volume after total outflows (t+1) [L]
+        Updates flows with:
+            to_raintank: Effective impervious surface runoff [L]
+            to_pervious: Non-effective runoff [L]
+            to_groundwater: Irrigation leakage [L]
         """
         data = self.roof_data
-        precipitation = forcing['precipitation']
-        potential_evaporation = forcing['potential_evaporation']
-        irrigation = forcing.get('roof_irrigation', 0.0)
+        precipitation = forcing['precipitation'] * data.area
+        potential_evaporation = forcing['potential_evaporation'] * data.area
+        irrigation = forcing.get('roof_irrigation', 0.0) * data.area
 
         if data.area == 0:
             return
@@ -62,9 +65,9 @@ class RoofClass:
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
         # Update flows using setters
-        data.flows.set_flow('precipitation', precipitation * data.area)
-        data.flows.set_flow('irrigation', irrigation * data.area)
-        data.flows.set_flow('evaporation', evaporation * data.area)
-        data.flows.set_flow('to_raintank', effective_runoff * data.area)
-        data.flows.set_flow('to_pervious', non_effective_runoff * data.area)
-        data.flows.set_flow('to_groundwater', irrigation_leakage * data.area)
+        data.flows.set_flow('precipitation', precipitation)
+        data.flows.set_flow('irrigation', irrigation)
+        data.flows.set_flow('evaporation', evaporation)
+        data.flows.set_flow('to_raintank', effective_runoff)
+        data.flows.set_flow('to_pervious', non_effective_runoff)
+        data.flows.set_flow('to_groundwater', irrigation_leakage)

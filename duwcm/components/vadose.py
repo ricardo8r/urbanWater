@@ -31,7 +31,6 @@ class VadoseClass:
         """
         self.vadose_data = vadose_data
         self.vadose_data.area = params['vadose']['area']
-        self.vadose_data.moisture.capacity = 1e6 #TODO
         self.time_step = params['general']['time_step']
         soil_type = params['soil']['soil_type']
         crop_type = params['soil']['crop_type']
@@ -55,9 +54,9 @@ class VadoseClass:
         Updates vadose_data with:
             moisture: Moisture content of root zone (t+1) [mm]
         Updates flows with:
-            from_pervious: Infiltration from pervious area [mm*m^2]
-            transpiration: Transpiration from vadose zone [mm*m^2]
-            to_groundwater: Percolation to groundwater [mm*m^2]
+            from_pervious: Infiltration from pervious area [L]
+            transpiration: Transpiration from vadose zone [L]
+            to_groundwater: Percolation to groundwater [L]
         """
         data = self.vadose_data
         reference_evaporation = forcing['potential_evaporation']

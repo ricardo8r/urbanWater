@@ -9,6 +9,7 @@ from .export_geodata import export_geodata
 from .generate_plots import generate_plots
 from .generate_maps import generate_maps
 from .generate_chord import generate_chord
+from .generate_sankey import generate_sankey, generate_flow_network
 from .checker import check_cell, check_all, generate_report
 
 __all__ = [
@@ -23,6 +24,8 @@ __all__ = [
     "generate_plots",
     "generate_maps",
     "generate_chord",
+    "generate_sankey",
+    "generate_flow_network",
     "check_cell",
     "check_all",
     "generate_report"

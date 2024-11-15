@@ -18,7 +18,8 @@ class WastewaterClass:
         """
         self.wastewater_data = wastewater_data
         self.wastewater_data.area = params['wastewater']['area']
-        self.wastewater_data.storage.capacity = params['wastewater']['capacity']
+        self.wastewater_data.storage.capacity = (params['wastewater']['capacity'] *
+                                                 params['wastewater']['area'])
         self.groundwater_area = params['groundwater']['area']
 
     def solve(self, forcing: pd.Series) -> None:

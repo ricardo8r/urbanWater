@@ -10,10 +10,10 @@ logger = logging.getLogger(__name__)
 def check_cell(urban_data: UrbanWaterData) -> Dict[str, Dict]:
     """
     Run comprehensive checks on a single cell's water balance.
-    
+
     Args:
         urban_data (UrbanWaterData): Data for a single urban cell
-        
+
     Returns:
         Dict[str, Dict]: Dictionary containing validation results for:
             - Flow connections

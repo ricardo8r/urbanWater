@@ -26,7 +26,7 @@ class Storage:
 class RoofData:
     """Roof component"""
     flows: RoofFlows = field(default_factory=RoofFlows)
-    storage: Storage = field(default_factory=Storage)
+    storage: Storage = field(default_factory=Storage, metadata={'unit': 'L'})
     area: float = field(default=0, metadata={'unit': 'm^2'})
     effective_outflow: float = field(default=0.0, metadata={'unit': '%'})
 
@@ -34,7 +34,7 @@ class RoofData:
 class RainTankData:
     """Rain tank component"""
     flows: RainTankFlows = field(default_factory=RainTankFlows)
-    storage: Storage = field(default_factory=Storage)
+    storage: Storage = field(default_factory=Storage, metadata={'unit': 'L'})
     area: float = field(default=0, metadata={'unit': 'm^2'})
     is_open: bool = field(default=False)
     install_ratio: float = field(default=0.0, metadata={'unit': '%'})
@@ -45,7 +45,7 @@ class RainTankData:
 class PavementData:
     """Pavement component"""
     flows: PavementFlows = field(default_factory=PavementFlows)
-    storage: Storage = field(default_factory=Storage)
+    storage: Storage = field(default_factory=Storage, metadata={'unit': 'L'})
     area: float = field(default=0, metadata={'unit': 'm^2'})
     effective_outflow: float = field(default=0.0, metadata={'unit': '%'})
     infiltration_capacity: float = field(default=0.0, metadata={'unit': 'mm/d'})
@@ -54,30 +54,30 @@ class PavementData:
 class PerviousData:
     """Pervious surface component"""
     flows: PerviousFlows = field(default_factory=PerviousFlows)
-    storage: Storage = field(default_factory=Storage)
+    storage: Storage = field(default_factory=Storage, metadata={'unit': 'L'})
     area: float = field(default=0, metadata={'unit': 'm^2'})
     infiltration_capacity: float = field(default=0, metadata={'unit': 'mm/d'})
     irrigation_factor: float = field(default=0, metadata={'unit': '-'})
-    vadose_moisture: Storage = field(default_factory=Storage)
+    vadose_moisture: Storage = field(default_factory=lambda: Storage(capacity=float('inf')))
 
 @dataclass
 class VadoseData:
     """Vadose zone component"""
     flows: VadoseFlows = field(default_factory=VadoseFlows)
-    moisture: Storage = field(default_factory=Storage)
+    moisture: Storage = field(default_factory=lambda: Storage(capacity=float('inf')))
     area: float = field(default=0, metadata={'unit': 'm^2'})
     equilibrium_moisture: float = field(default=0)
     transpiration_threshold: float = field(default=0)
     transpiration_factor: float = field(default=0)
     max_capillary: float = field(default=0)
-    groundwater_level: Storage = field(default_factory=Storage)
+    groundwater_level: Storage = field(default_factory=lambda: Storage(capacity=float('inf')))
 
 @dataclass
 class GroundwaterData:
     """Groundwater component"""
     flows: GroundwaterFlows = field(default_factory=GroundwaterFlows)
-    water_level: Storage = field(default_factory=Storage)
-    surface_water_level: Storage = field(default_factory=Storage)
+    water_level: Storage = field(default_factory=lambda: Storage(capacity=float('inf')))
+    surface_water_level: Storage = field(default_factory=lambda: Storage(capacity=float('inf')))
     area: float = field(default=0, metadata={'unit': 'm^2'})
     leakage_rate: float = field(default=0.0, metadata={'unit': '%'})
     seepage_model: float = field(default=0.0, metadata={'unit': '-'})
@@ -91,7 +91,7 @@ class GroundwaterData:
 class StormwaterData:
     """Stormwater component"""
     flows: StormwaterFlows = field(default_factory=StormwaterFlows)
-    storage: Storage = field(default_factory=Storage)
+    storage: Storage = field(default_factory=Storage, metadata={'unit': 'L'})
     area: float = field(default=0, metadata={'unit': 'm^2'})
     is_open: bool = field(default=False)
     first_flush: float = field(default=0, metadata={'unit': 'L'})
@@ -99,21 +99,20 @@ class StormwaterData:
 @dataclass
 class WastewaterData:
     """Wastewater component"""
-    cell_id: int = field(default=0)
     flows: WastewaterFlows = field(default_factory=WastewaterFlows)
-    storage: Storage = field(default_factory=Storage)
+    storage: Storage = field(default_factory=Storage, metadata={'unit': 'L'})
     area: float = field(default=0, metadata={'unit': 'm^2'})
 
 @dataclass
 class DemandData:
     """Water demand component"""
     flows: DemandFlows = field(default_factory=DemandFlows)
-    rt_storage: Storage = field(default_factory=Storage)  # Changed to Storage type
-    rt_water_balance: float = field(default=0, metadata={'unit': 'L'})  # Rain tank water balance
-    rt_domestic_demand: float = field(default=0, metadata={'unit': 'L'})  # Rain tank domestic demand
-    rt_toilet_demand: float = field(default=0, metadata={'unit': 'L'})  # Rain tank toilet demand
-    rt_irrigation_demand: float = field(default=0, metadata={'unit': 'L'})  # Rain tank irrigation demand
-    wws_storage: float = field(default=0, metadata={'unit': 'L'})  # Wastewater storage
+    rt_storage: Storage = field(default_factory=Storage)
+    rt_water_balance: float = field(default=0, metadata={'unit': 'L'})
+    rt_domestic_demand: float = field(default=0, metadata={'unit': 'L'})
+    rt_toilet_demand: float = field(default=0, metadata={'unit': 'L'})
+    rt_irrigation_demand: float = field(default=0, metadata={'unit': 'L'})
+    wws_storage: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
 class ExternalData:

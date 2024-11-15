@@ -10,9 +10,8 @@ from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
 from duwcm.summary import print_summary
-from duwcm.functions import (load_config, check_all, check_cell,
-                             generate_report, export_geodata, generate_plots,
-                             generate_maps, generate_chord)
+from duwcm.functions import (load_config, check_all, generate_report, export_geodata,
+                             generate_plots, generate_maps, generate_chord, generate_sankey, generate_flow_network)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -143,12 +142,21 @@ def main() -> None:
             logger.info("Maps saved to %s", output_dir)
 
             # Generate chord diagrams
-            output_dir = Path(config.output.output_directory) / 'chord'
+            output_dir = Path(config.output.output_directory) / 'flows'
             generate_chord(
                 results=results,
                 output_dir=output_dir
             )
             logger.info("Chord diagrams saved to %s", output_dir)
+
+            # Generate sankey diagrams
+            output_dir = Path(config.output.output_directory) / 'flows'
+            #generate_sankey(
+            #    results=results,
+            #    output_dir=output_dir
+            #)
+            generate_flow_network(results, output_dir)
+            logger.info("Sankey diagrams saved to %s", output_dir)
 
         if args.gis:
             output_dir = Path(config.output.output_directory) / 'gis'
@@ -169,7 +177,7 @@ def main() -> None:
         # Check results and save water balance
         if args.check:
             check_results(model, config)
-            print_summary(results)
+            #print_summary(results)
 
 
     except Exception as e:
