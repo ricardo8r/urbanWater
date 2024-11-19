@@ -10,8 +10,9 @@ from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
 from duwcm.summary import print_summary
-from duwcm.functions import (load_config, check_all, generate_report, export_geodata,
-                             generate_plots, generate_maps, generate_chord, generate_sankey, generate_flow_network)
+from duwcm.functions import (load_config, check_all, generate_report,
+                             export_geodata, generate_plots, generate_maps,
+                             generate_chord, generate_alluvial, generate_graph)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -151,12 +152,16 @@ def main() -> None:
 
             # Generate sankey diagrams
             output_dir = Path(config.output.output_directory) / 'flows'
-            #generate_sankey(
-            #    results=results,
-            #    output_dir=output_dir
-            #)
-            generate_flow_network(results, output_dir)
-            logger.info("Sankey diagrams saved to %s", output_dir)
+            generate_alluvial(
+                results=results,
+                output_dir=output_dir
+            )
+            logger.info("Alluvial diagrams saved to %s", output_dir)
+            generate_graph(
+                results=results,
+                output_dir=output_dir
+            )
+            logger.info("Network diagrams saved to %s", output_dir)
 
         if args.gis:
             output_dir = Path(config.output.output_directory) / 'gis'

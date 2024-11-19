@@ -8,6 +8,7 @@ import holoviews as hv
 from holoviews import opts, dim
 
 from duwcm.data_structures import UrbanWaterData
+from duwcm.components import calculate_flow_matrix
 
 def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFrame) -> go.Figure:
     """Create interactive plot of aggregated results with dropdown menu."""
@@ -256,7 +257,7 @@ def create_flow_visualization(results: Dict[str, pd.DataFrame],
              UrbanWaterData.COMPONENTS +
              ['seepage', 'baseflow', 'evaporation'])
 
-    flow_matrix = _calculate_flow_matrix(results, nodes)
+    flow_matrix = calculate_flow_matrix(results, nodes)
 
     if viz_type == 'sankey':
         return _create_sankey_diagram(flow_matrix)
@@ -270,68 +271,6 @@ def _get_polygon_coordinates(polygon):
     if polygon.geom_type == 'MultiPolygon':
         return [list(geom.exterior.coords) for geom in polygon.geoms]
     return []
-
-def _calculate_flow_matrix(results: Dict[str, pd.DataFrame], nodes: List[str]) -> pd.DataFrame:
-    """Calculate flow matrix between components."""
-    flow_matrix = pd.DataFrame(0, index=nodes, columns=nodes, dtype=float)
-
-    # Process component connections
-    for (src_comp, source_flow), (trg_comp, target_flow) in UrbanWaterData.FLOW_CONNECTIONS.items():
-        if src_comp in UrbanWaterData.COMPONENTS and trg_comp in UrbanWaterData.COMPONENTS:
-            flow_value = results[src_comp][source_flow].sum() * 0.001
-            if flow_value > 0:
-                flow_matrix.loc[src_comp, trg_comp] = float(flow_value)
-
-    # Add precipitation flows
-    for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
-        if comp in results:
-            flow_value = results[comp]['precipitation'].sum() * 0.001
-            if flow_value > 0:
-                flow_matrix.loc['precipitation', comp] = float(flow_value)
-
-    # Add irrigation flows
-    for comp in ['roof', 'pavement', 'pervious']:
-        if comp in results:
-            flow_value = results[comp]['irrigation'].sum() * 0.001
-            if flow_value > 0:
-                flow_matrix.loc['irrigation', comp] = float(flow_value)
-
-    # Add evaporation flows
-    for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
-        if comp in results:
-            flow_value = results[comp]['evaporation'].sum() * 0.001
-            if flow_value > 0:
-                flow_matrix.loc[comp, 'evaporation'] = float(flow_value)
-
-    # Add transpiration
-    if 'vadose' in results:
-        flow_value = results['vadose']['transpiration'].sum() * 0.001
-        if flow_value > 0:
-            flow_matrix.loc['vadose', 'evaporation'] = float(flow_value)
-
-    # Add imported water flows
-    if 'demand' in results:
-        flow_value = results['demand']['imported_water'].sum() * 0.001
-        if flow_value > 0:
-            flow_matrix.loc['imported', 'demand'] = float(flow_value)
-
-    # Add baseflow and seepage
-    if 'groundwater' in results:
-        flow_value = results['groundwater']['seepage'].sum() * 0.001
-        if flow_value > 0:
-            flow_matrix.loc['groundwater', 'seepage'] = float(flow_value)
-        elif flow_value < 0:
-            flow_matrix.loc['seepage', 'groundwater'] = abs(float(flow_value))
-
-        flow_value = results['groundwater']['baseflow'].sum() * 0.001
-        if flow_value > 0:
-            flow_matrix.loc['groundwater', 'baseflow'] = float(flow_value)
-        elif flow_value < 0:
-            flow_matrix.loc['baseflow', 'groundwater'] = abs(float(flow_value))
-
-    # Remove empty rows/columns
-    non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
-    return flow_matrix.loc[non_zero_mask, non_zero_mask]
 
 def _create_sankey_diagram(flow_matrix: pd.DataFrame) -> go.Figure:
     """Create Sankey diagram from flow matrix."""

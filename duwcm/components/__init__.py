@@ -9,6 +9,7 @@ from .groundwater import GroundwaterClass
 from .stormwater import StormwaterClass
 from .wastewater import WastewaterClass
 from .demand import DemandClass
+from .flow_matrix import calculate_flow_matrix
 
 __all__ = [
     "RoofClass",
@@ -19,5 +20,6 @@ __all__ = [
     "GroundwaterClass",
     "StormwaterClass",
     "WastewaterClass",
-    "DemandClass"
+    "DemandClass",
+    "calculate_flow_matrix"
 ]
