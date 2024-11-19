@@ -23,45 +23,12 @@ def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
 
     # Process flow connections
     for (src_comp, source_flow), (trg_comp, target_flow) in UrbanWaterData.FLOW_CONNECTIONS.items():
-        try:
-            # Handle regular component flows
-            if src_comp in UrbanWaterData.COMPONENTS and trg_comp in UrbanWaterData.COMPONENTS:
-                flow_value = results[src_comp][source_flow].sum() * 0.001  # Convert to m³
-                if flow_value > 0:
-                    flow_values.loc[src_comp, trg_comp] = float(flow_value)
-                    flow_matrix.loc[src_comp, trg_comp] = float(np.log(flow_value + 1e-10) / np.log(10))
-                continue
-
-            # Handle flows with external components
-            if src_comp not in UrbanWaterData.COMPONENTS:  # External to component
-                flow_value = results[trg_comp][target_flow].sum() * 0.001
-                if flow_value > 0:
-                    flow_values.loc[src_comp, trg_comp] = float(flow_value)
-                    flow_matrix.loc[src_comp, trg_comp] = float(np.log(flow_value + 1e-10) / np.log(10))
-
-            elif trg_comp not in UrbanWaterData.COMPONENTS:  # Component to external
-                flow_name = source_flow
-                if source_flow == 'transpiration':
-                    flow_name = 'transpiration'
-                    trg_comp = 'evaporation'
-                elif source_flow == 'baseflow':
-                    flow_value = results[src_comp][source_flow].sum() * 0.001
-                    if flow_value > 0:
-                        flow_values.loc[src_comp, 'baseflow'] = float(flow_value)
-                        flow_matrix.loc[src_comp, 'baseflow'] = float(np.log(flow_value + 1e-10) / np.log(10))
-                    if flow_value < 0:
-                        flow_values.loc['baseflow', src_comp] = float(abs(flow_value))
-                        flow_matrix.loc['baseflow', src_comp] = float(np.log(abs(flow_value) + 1e-10) / np.log(10))
-                    continue
-
-                flow_value = results[src_comp][flow_name].sum() * 0.001
-                if flow_value > 0:
-                    flow_values.loc[src_comp, trg_comp] = float(flow_value)
-                    flow_matrix.loc[src_comp, trg_comp] = float(np.log(flow_value + 1e-10) / np.log(10))
-
-        except (KeyError, ValueError) as e:
-            print(f"Error processing {src_comp} -> {trg_comp}: {e}")
-            continue
+        # Handle regular component flows
+        if src_comp in UrbanWaterData.COMPONENTS and trg_comp in UrbanWaterData.COMPONENTS:
+            flow_value = results[src_comp][source_flow].sum() * 0.001  # Convert to m³
+            if flow_value > 0:
+                flow_values.loc[src_comp, trg_comp] = float(flow_value)
+                flow_matrix.loc[src_comp, trg_comp] = float(np.log(flow_value + 1e-10) / np.log(10))
 
     # Add precipitation flows
     for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
@@ -70,6 +37,14 @@ def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
             if flow_value > 0:
                 flow_values.loc['precipitation', comp] = float(flow_value)
                 flow_matrix.loc['precipitation', comp] = float(np.log(flow_value + 1e-10) / np.log(10))
+
+    # Add irrigation flows
+    for comp in ['roof', 'pavement', 'pervious']:
+        if comp in results:
+            flow_value = results[comp]['irrigation'].sum() * 0.001
+            if flow_value > 0:
+                flow_values.loc['irrigation', comp] = float(flow_value)
+                flow_matrix.loc['irrigation', comp] = float(np.log(flow_value + 1e-10) / np.log(10))
 
     # Add evaporation flows
     for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
@@ -99,6 +74,9 @@ def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         if flow_value > 0:
             flow_values.loc['groundwater', 'baseflow'] = float(flow_value)
             flow_matrix.loc['groundwater', 'baseflow'] = float(np.log(flow_value + 1e-10) / np.log(10))
+        if flow_value < 0:
+            flow_values.loc['baseflow', 'groundwater'] = float(np.abs(flow_value))
+            flow_matrix.loc['baseflow', 'groundwater'] = float(np.log(np.abs(flow_value) + 1e-10) / np.log(10))
 
     # Add deep seepage
     if 'groundwater' in results:
@@ -106,6 +84,9 @@ def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         if flow_value > 0:
             flow_values.loc['groundwater', 'seepage'] = float(flow_value)
             flow_matrix.loc['groundwater', 'seepage'] = float(np.log(flow_value + 1e-10) / np.log(10))
+        if flow_value < 0:
+            flow_values.loc['seepage', 'groundwater'] = float(np.abs(flow_value))
+            flow_matrix.loc['seepage', 'groundwater'] = float(np.log(np.abs(flow_value) + 1e-10) / np.log(10))
 
     # Remove rows and columns that sum to zero
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
