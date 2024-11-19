@@ -129,6 +129,7 @@ class GroundwaterClass:
         data.surface_water_level.amount = surface_water_level
 
         # Update flows
+        data.flows.set_flow('from_demand', indoor_use_leakage)
         data.flows.set_flow('seepage', seepage * data.area)
         data.flows.set_flow('baseflow', -baseflow * data.area)
         data.flows.set_flow('to_wastewater', -infiltration * data.area)

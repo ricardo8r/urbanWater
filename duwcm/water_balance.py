@@ -64,10 +64,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
 
     df_results = results_to_dataframes(results, results_agg)
 
-    total_area = sum(data.groundwater.area for data in model.data.values())
-    df_results['aggregated'].attrs['total_area'] = total_area
-    df_results['aggregated'].attrs['units'] = 'L'
-
     return df_results
 
 def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], forcing: pd.Series,
@@ -134,6 +130,9 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
     df_agg = pd.DataFrame(results_agg)
     df_agg = df_agg.set_index('date')
     dataframe_results['aggregated'] = df_agg
+
+    total_area = dataframe_results['groundwater']['area'].iloc[0].sum()
+    dataframe_results['aggregated'].attrs['total_area'] = total_area
 
     # Create local results
     local_results = _create_local_results(dataframe_results)

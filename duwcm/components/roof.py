@@ -66,7 +66,7 @@ class RoofClass:
 
         # Update flows using setters
         data.flows.set_flow('precipitation', precipitation)
-        data.flows.set_flow('irrigation', irrigation)
+        data.flows.set_flow('from_demand', irrigation)
         data.flows.set_flow('evaporation', evaporation)
         data.flows.set_flow('to_raintank', effective_runoff)
         data.flows.set_flow('to_pervious', non_effective_runoff)

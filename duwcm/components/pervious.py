@@ -110,7 +110,7 @@ class PerviousClass:
 
         # Update flows
         data.flows.set_flow('precipitation', precipitation)
-        data.flows.set_flow('irrigation', irrigation)
+        data.flows.set_flow('from_demand', irrigation)
         data.flows.set_flow('evaporation', evaporation)
         data.flows.set_flow('to_vadose', infiltration)
         data.flows.set_flow('to_stormwater', overflow)

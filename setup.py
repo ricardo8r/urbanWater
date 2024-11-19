@@ -29,9 +29,7 @@ setup(
     entry_points={
         "console_scripts": [
             "duwcm=duwcm.main:main",
-            "duwcm-plot-cells=duwcm.postprocess:plot_cells",
-            "duwcm-plot-global=duwcm.postprocess:plot_global",
-            "duwcm-check=duwcm.postprocess:check_water_balance",
+            "duwcm-plot=duwcm.postprocess:plot_all",
             "duwcm-point=duwcm.postprocess:save_specific_cell_results"
         ],
     },

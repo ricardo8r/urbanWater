@@ -10,9 +10,9 @@ from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
 from duwcm.summary import print_summary
-from duwcm.functions import (load_config, check_all, generate_report,
-                             export_geodata, generate_plots, generate_maps,
-                             generate_chord, generate_alluvial, generate_graph)
+from duwcm.functions import load_config, check_all, generate_report
+from duwcm.plots import (export_geodata, generate_plots, generate_maps,
+                         generate_chord, generate_alluvial, generate_graph)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -69,8 +69,7 @@ def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
 
     with pd.HDFStore(output_file, mode='w') as store:
         for module, df in results.items():
-            if module != 'local':
-                store.put(module, df, format='table', data_columns=True)
+            store.put(module, df, format='table', data_columns=True)
 
         # Save forcing data
         store.put('forcing', forcing_data, format='table', data_columns=True)

@@ -166,6 +166,9 @@ class UrbanWaterData:
         ('groundwater', 'to_wastewater'): ('wastewater', 'from_groundwater'),
         ('stormwater', 'to_wastewater'): ('wastewater', 'from_stormwater'),
         ('demand', 'to_wastewater'): ('wastewater', 'from_demand'),
+        ('demand', 'to_roof'): ('roof', 'from_demand'),
+        ('demand', 'to_pavement'): ('pavement', 'from_demand'),
+        ('demand', 'to_pervious'): ('pervious', 'from_demand'),
     }
 
     def __post_init__(self):

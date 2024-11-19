@@ -4,7 +4,7 @@
 from .main import run
 from .water_model import UrbanWaterModel
 from .water_balance import run_water_balance
-from .postprocess import plot_global, check_water_balance
+from .postprocess import plot_all
 
 # Import subpackages
 from . import functions
@@ -18,8 +18,7 @@ __all__ = [
     "run",
     "run_water_balance",
     "UrbanWaterModel",
-    "check_water_balance",
-    "plot_global",
+    "plot_all"
 ]
 
 # Package metadata

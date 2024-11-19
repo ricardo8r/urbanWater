@@ -63,12 +63,6 @@ class DemandClass:
         """
         self.demand_data = demand_data
 
-        # Initialize areas
-        self.roof_area = params['roof']['area']
-        self.pavement_area = params['pavement']['area']
-        self.pervious_area = params['pervious']['area']
-        self.groundwater_area = params['groundwater']['area']
-
         # Initialize wastewater storage parameters
         self.wastewater_area = params['reuse']['area'] * params['general']['number_houses']
         self.wastewater_capacity = params['reuse']['capacity'] * params['general']['number_houses']
@@ -119,14 +113,12 @@ class DemandClass:
                 imported_water: Required imported water [L] 
         """
         data = self.demand_data
-        roof_irrigation = forcing.get('roof_irrigation', 0.0)
-        pavement_irrigation = forcing.get('pavement_irrigation', 0.0)
-        pervious_irrigation = forcing.get('pervious_irrigation', 0.0) * self.irrigation_factor
 
-        # Calculate irrigation and leakage
-        total_irrigation = (roof_irrigation * self.roof_area +
-                           pavement_irrigation * self.pavement_area +
-                           pervious_irrigation * self.pervious_area)
+        roof_irrigation = data.flows.get_flow('to_roof')
+        pavement_irrigation = data.flows.get_flow('to_pavement')
+        pervious_irrigation = data.flows.get_flow('to_pervious')
+        indoor_use_leakage = data.flows.get_flow('to_groundwater')
+        total_irrigation = roof_irrigation + pavement_irrigation + pervious_irrigation
 
         # Use class's internal calculation methods
         ssg_irrigation, ssg_results = self._calculate_ssg(total_irrigation)
@@ -135,9 +127,8 @@ class DemandClass:
         rt_results = self._calculate_raintank(data.rt_storage, wws_toilet, wws_irrigation)
 
         # Calculate imported water including leakage
-        indoor_use_leakage = self.indoor_water_use * self.leakage_rate / (1 - self.leakage_rate) / self.groundwater_area
-        irrigation_leakage = total_irrigation * self.leakage_rate / (1 - self.leakage_rate) / self.groundwater_area
-        total_leakage = (irrigation_leakage + indoor_use_leakage) * self.groundwater_area
+        irrigation_leakage = total_irrigation * self.leakage_rate / (1 - self.leakage_rate)
+        total_leakage = irrigation_leakage + indoor_use_leakage
 
         imported_water = (rt_results.domestic_demand + rt_results.toilet_demand +
                          rt_results.irrigation_demand + total_leakage)

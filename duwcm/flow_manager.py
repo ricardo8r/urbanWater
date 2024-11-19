@@ -134,11 +134,11 @@ class RoofFlows(ComponentFlows):
     # Environmental flows
     precipitation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
-    irrigation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
     evaporation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
     # Component flows
+    from_demand: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
     to_raintank: Flow = field(
         default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
     to_pervious: Flow = field(
@@ -168,11 +168,11 @@ class PavementFlows(ComponentFlows):
     # Environmental flows
     precipitation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
-    irrigation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
     evaporation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
     # Component flows
+    from_demand: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
     from_raintank: Flow = field(
         default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
     to_pervious: Flow = field(
@@ -190,11 +190,11 @@ class PerviousFlows(ComponentFlows):
     # Environmental flows
     precipitation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
-    irrigation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
     evaporation: Flow = field(
         default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
     # Component flows
+    from_demand: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
     from_roof: Flow = field(
         default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
     from_pavement: Flow = field(
@@ -237,6 +237,8 @@ class GroundwaterFlows(ComponentFlows):
         default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.IN))
     from_vadose: Flow = field(
         default_factory=lambda: Flow(type=FlowType.PERCOLATION, direction=FlowDirection.IN))
+    from_demand: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.IN))
     to_wastewater: Flow = field(
         default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.OUT))
 
@@ -286,3 +288,11 @@ class DemandFlows(ComponentFlows):
     # Component flows
     to_wastewater: Flow = field(
         default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.OUT))
+    to_roof: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.OUT))
+    to_pavement: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.OUT))
+    to_pervious: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.OUT))
+    to_groundwater: Flow = field(
+        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.OUT))
