@@ -82,9 +82,6 @@ class UrbanWaterModel:
         # Calculate the order of cells
         self.cell_order = find_order(self.path, direction)
 
-        # Set initial conditions
-        self._set_storage()
-
     def _init_submodels(self) -> Dict[int, Dict[str, Any]]:
         """Initialize submodels for each grid cell."""
         self.classes = {}
@@ -122,18 +119,6 @@ class UrbanWaterModel:
                     self.data[cell_id].wastewater.flows.from_upstream.add_source(
                         self.data[up].wastewater.flows.to_downstream
                     )
-
-
-    def _set_storage(self):
-        for cell_id, params in self.params.items():
-            self.data[cell_id].groundwater.water_level.previous = params['groundwater']['initial_level']
-            self.data[cell_id].wastewater.storage.previous = params['wastewater']['initial_storage']
-            self.data[cell_id].raintank.storage.previous = params['raintank']['initial_storage']
-            self.data[cell_id].vadose.moisture.previous = params['vadose']['initial_moisture']
-            self.data[cell_id].stormwater.storage.previous = params['stormwater']['initial_storage']
-            self.data[cell_id].roof.storage.previous = 0
-            self.data[cell_id].pavement.storage.previous = 0
-            self.data[cell_id].pervious.storage.previous = 0
 
     def update_states(self):
         """Update previous state with current state."""

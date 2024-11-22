@@ -2,6 +2,9 @@ from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import RainTankData
 
+# Constants
+TO_METERS = 0.001
+
 class RainTankClass:
     """
     Calculates water balance for a rain tank.
@@ -15,25 +18,27 @@ class RainTankClass:
         Args:
             params (Dict[str, Dict[str, Any]]): System parameters
                 is_open: is the rain tank open?
-                area: Rain tank area [m2]
-                capacity: Rain tank capacity [L]
-                first_flush: Predefined first flush [L]
+                area: Rain tank area [m²]
+                capacity: Rain tank capacity [m³]
+                previous: Rain tank initial storage [m³]
+                first_flush: Predefined first flush [m³]
                 effective_outflow: Effective runoff from roof to pavement [%]
                 install_ratio: Houses with rain tank [%]
                 number_houses: Number of houses per cell []
-                roof_area: Roof area [m2]
         """
         self.raintank_data = raintank_data
         self.raintank_data.is_open = params['raintank']['is_open']
         self.raintank_data.install_ratio = params['raintank']['install_ratio'] / 100
         raintank_total_ratio = params['general']['number_houses'] * params['raintank']['install_ratio'] / 100
-        self.raintank_data.storage.capacity = params['raintank']['capacity'] * raintank_total_ratio
         self.raintank_data.area = params['raintank']['area'] * raintank_total_ratio
-        self.raintank_data.first_flush = params['raintank']['first_flush'] * raintank_total_ratio
+
+        self.raintank_data.storage.set_area(self.raintank_data.area)
+        self.raintank_data.storage.set_capacity(params['raintank']['capacity'] * raintank_total_ratio, 'L')
+        self.raintank_data.storage.set_previous(params['raintank']['initial_storage'], 'L')
+
+        self.raintank_data.first_flush = params['raintank']['first_flush'] * raintank_total_ratio * TO_METERS
         self.raintank_data.effective_outflow = (1.0 if  params['pavement']['area'] == 0
                                             else params['raintank']['effective_area'] / 100)
-
-        self.roof_area = params['roof']['area']
 
     def solve(self, forcing: pd.Series) -> None:
         """
@@ -43,27 +48,26 @@ class RainTankClass:
                 potential_evaporation: Potential evaporation [mm]
 
         Updates raintank_data with:
-            storage: Rain tank storage volume after all outflows (t+1) [L]
+            storage: Rain tank storage volume after all outflows (t+1) [m³]
         Updates flows with:
-            precipitation: Direct precipitation if tank is open [L]
-            from_roof: Effective runoff from roof area [L]
-            evaporation: Evaporation if tank is open [L]
-            to_stormwater: First flush and effective overflow to stormwater system [L]
-            to_pavement: Non-effective overflow to pavement [L]
+            precipitation: Direct precipitation if tank is open [m³]
+            from_roof: Effective runoff from roof area [m³]
+            evaporation: Evaporation if tank is open [m³]
+            to_stormwater: First flush and effective overflow to stormwater system [m³]
+            to_pavement: Non-effective overflow to pavement [m³]
 
         Notes:
-            - Unlike other components that use mm for storage, rain tank uses liters (L)
             - First flush is diverted to stormwater before storage
             - Overflow is split between stormwater and pavement based on effective_outflow ratio
             - Only installed tanks (based on install_ratio) receive roof runoff
         """
         data = self.raintank_data
-        precipitation = forcing['precipitation'] * data.area
-        potential_evaporation = forcing['potential_evaporation'] * data.area
+        precipitation = forcing['precipitation'] * TO_METERS * data.area
+        potential_evaporation = forcing['potential_evaporation'] * TO_METERS * data.area
 
         roof_inflow = data.flows.get_flow('from_roof')
 
-        if data.storage.capacity == 0:
+        if data.storage.get_capacity('m3') == 0:
             system_outflow = roof_inflow
             runoff_stormwater = data.effective_outflow * system_outflow
             runoff_pavement = system_outflow - runoff_stormwater
@@ -78,11 +82,11 @@ class RainTankClass:
         inflow = (roof_inflow * data.install_ratio - first_flush +
                             data.is_open * precipitation)
 
-        data.storage.amount = min(data.storage.capacity, max(0.0, data.storage.previous + inflow))
-        evaporation = data.is_open * min(potential_evaporation, data.storage.amount)
-        data.storage.amount -= evaporation
+        current_storage = min(data.storage.get_capacity('m3'), max(0.0, data.storage.get_previous('m3') + inflow))
+        evaporation = data.is_open * min(potential_evaporation, data.storage.get_amount('m3'))
+        data.storage.set_amount(current_storage - evaporation, 'm3')
 
-        overflow = max(0.0, inflow - evaporation - data.storage.change)
+        overflow = max(0.0, inflow - evaporation - data.storage.get_change('m3'))
         system_outflow = first_flush + overflow + roof_inflow * (1.0 - data.install_ratio)
 
         runoff_stormwater = data.effective_outflow * system_outflow

@@ -2,6 +2,9 @@ from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import StormwaterData
 
+# Constants
+TO_METERS = 0.001
+
 class StormwaterClass:
     """
     Simulates storm water storage dynamics.
@@ -14,17 +17,21 @@ class StormwaterClass:
         Args:
             params (Dict[str, Dict[str, Any]]): Stormwater storage parameters
                 is_open: is the stormwater storage open for precipitation and evaporation
-                area: Area of stormwater storage [m^2]
-                capacity: Stormwater storage capacity [L]
-                first_flush: Predefined first flush of stormwater storage [L]
+                area: Area of stormwater storage [m²]
+                capacity: Stormwater storage capacity [m³]
+                pervious: Stormwater initial storage [m³]
+                first_flush: Predefined first flush of stormwater storage [m³]
                 wastewater_runoff_ratio: Percentage of runoff that becomes inflow to wastewater system [%]
         """
         self.stormwater_data = stormwater_data
         self.stormwater_data.area = params['stormwater']['area']
         self.stormwater_data.is_open = params['stormwater']['is_open']
-        self.stormwater_data.storage.capacity = (params['stormwater']['capacity'] *
-                                                 params['stormwater']['area'])
-        self.stormwater_data.first_flush = params['stormwater']['first_flush']
+
+        self.stormwater_data.storage.set_area(self.stormwater_data.area)
+        self.stormwater_data.storage.set_capacity(params['stormwater']['capacity'], 'mm')
+        self.stormwater_data.storage.set_previous(params['stormwater']['initial_storage'], 'mm')
+
+        self.stormwater_data.first_flush = params['stormwater']['first_flush'] * TO_METERS
         self.wastewater_runoff_ratio = params['stormwater']['wastewater_runoff_per'] / 100
 
     def solve(self, forcing: pd.Series) -> None:
@@ -35,18 +42,20 @@ class StormwaterClass:
                 potential_evaporation: Potential evaporation of the time step [mm]
 
         Updates stormwater_data with:
-            storage: Storage volume at the end of the time step [L]
+            storage: Storage volume at the end of the time step [m³]
         Updates flows with:
-            from_raintank: Outflow from raintank [L]
-            from_pavement: Runoff from pavement [L]
-            from_pervious: Overflow from pervious [L]
-            from_upstream: Stormwater from upstream cells [L]
-            to_wastewater: Combined sewer inflow [L]
-            to_downstream: Stormwater discharge [L]
+            precipitation: Direct precipitation [m³]
+            evaporation: Evaporation [m³]
+            from_raintank: Outflow from raintank [m³]
+            from_pavement: Runoff from pavement [m³]
+            from_pervious: Overflow from pervious [m³]
+            from_upstream: Stormwater from upstream cells [m³]
+            to_wastewater: Combined sewer inflow [m³]
+            to_downstream: Stormwater discharge [m³]
         """
         data = self.stormwater_data
-        precipitation = forcing.get('precipitation', 0.0) * data.area
-        potential_evaporation = forcing.get('potential_evaporation', 0.0) * data.area
+        precipitation = forcing.get('precipitation', 0.0) * TO_METERS * data.area
+        potential_evaporation = forcing.get('potential_evaporation', 0.0) * TO_METERS * data.area
 
         # Calculate total runoff
         raintank_runoff = data.flows.get_flow('from_raintank')
@@ -57,7 +66,7 @@ class StormwaterClass:
         total_runoff = raintank_runoff + pavement_runoff + pervious_runoff + upstream_inflow
 
         # Handle zero capacity case
-        if data.storage.capacity == 0:
+        if data.storage.get_capacity('m3') == 0:
             combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
             runoff = total_runoff - combined_sewer_inflow
 
@@ -79,14 +88,14 @@ class StormwaterClass:
             inflow += precipitation
 
         # Calculate storage and evaporation
-        current_storage = min(data.storage.capacity, max(0.0, data.storage.previous + inflow))
+        current_storage = min(data.storage.get_capacity('m3'), max(0.0, data.storage.get_previous('m3') + inflow))
         evaporation = 0.0
         if data.is_open:
             evaporation = min(potential_evaporation, current_storage)
 
         # Calculate final storage and overflow
-        data.storage.amount = current_storage - evaporation
-        overflow = max(0.0, inflow - data.storage.change)
+        data.storage.set_amount(current_storage - evaporation, 'm3')
+        overflow = max(0.0, inflow - data.storage.get_change('m3'))
         runoff_sewer = first_flush + overflow
 
         # Update flows

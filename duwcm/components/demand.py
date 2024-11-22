@@ -124,17 +124,13 @@ class DemandClass:
         ssg_irrigation, ssg_results = self._calculate_ssg(total_irrigation)
         wws_irrigation, wws_toilet, wws_results = self._calculate_wws(ssg_results, ssg_irrigation,
                                                                       data.wws_storage)
-        rt_results = self._calculate_raintank(data.rt_storage, wws_toilet, wws_irrigation)
-
-        # Calculate imported water including leakage
-        irrigation_leakage = total_irrigation * self.leakage_rate / (1 - self.leakage_rate)
-        total_leakage = irrigation_leakage + indoor_use_leakage
+        rt_results = self._calculate_raintank(data.rt_storage.get_amount('L'), wws_toilet, wws_irrigation)
 
         imported_water = (rt_results.domestic_demand + rt_results.toilet_demand +
-                         rt_results.irrigation_demand + total_leakage)
+                         rt_results.irrigation_demand + indoor_use_leakage)
 
         # Update ReuseData state
-        data.rt_storage = rt_results.storage
+        data.rt_storage.set_amount(rt_results.storage, 'L')
         data.rt_water_balance = rt_results.water_balance
         data.wws_storage = wws_results.storage
         data.rt_domestic_demand = rt_results.domestic_demand

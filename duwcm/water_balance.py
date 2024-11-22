@@ -15,18 +15,28 @@ The simulation process includes:
 
 from typing import Dict, List
 from dataclasses import fields
-from collections import defaultdict
-import logging
-
-
 import pandas as pd
 from tqdm import tqdm
 
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
+from duwcm.checker import track_validation_results
 
-def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str, pd.DataFrame]:
-    """Run the full simulation for all timesteps."""
+def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool = False) -> Dict[str, pd.DataFrame]:
+    """
+    Run the full simulation for all timesteps with validation tracking.
+
+    Args:
+        model: UrbanWaterModel instance
+        forcing: DataFrame with forcing data
+
+    Returns:
+        Dict containing:
+            - Component results
+            - Aggregated results
+            - Local results
+            - Validation results for balance, flows, and storage
+    """
     num_timesteps = len(forcing)
 
     # Initialize results as dictionaries of lists
@@ -53,16 +63,42 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame) -> Dict[str
         'evaporation': 0
     })
 
+    # Initialize validation tracking if check is enabled
+    validation_tracking = None
+    if check:
+        validation_tracking = {
+            'balance': [],
+            'flows': [],
+            'storage': []
+        }
+        initial_validation = track_validation_results(model, initial_date)
+        for key, value in initial_validation.items():
+            validation_tracking[key].append(value)
+
     for t in tqdm(range(1, num_timesteps), desc="Water balance"):
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
+
+        # Solve timestep
         _solve_timestep(model, results, timestep_forcing, current_date)
         model.distribute_wastewater()
         model.distribute_stormwater()
         _aggregate_timestep(model, results_agg, current_date)
+
+        # Track validation for current timestep if enabled
+        if check:
+            timestep_validation = track_validation_results(model, current_date)
+            for key, value in timestep_validation.items():
+                validation_tracking[key].append(value)
+
         model.update_states()
 
     df_results = results_to_dataframes(results, results_agg)
+
+    # Process validation results if validation was enabled
+    if check and validation_tracking:
+        for key, checks in validation_tracking.items():
+            df_results[f'validation_{key}'] = pd.concat(checks)
 
     return df_results
 
@@ -76,6 +112,22 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], 
             component_class.solve(forcing)
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
+
+        if cell_id == 141 and current_date.strftime('%Y-%m-%d') == '2018-01-02':
+            print(f"\nDetailed balance check for cell 141:")
+            print(f"Storage_previous: {model.data[cell_id].groundwater.water_level.get_previous('m3'):.2f}")
+            print(f"Storage_current: {model.data[cell_id].groundwater.water_level.get_amount('m3'):.2f}")
+            print(f"Storage_change: {model.data[cell_id].groundwater.water_level.get_change('m3'):.2f}")
+            print(f"Storage_previous: {model.data[cell_id].groundwater.surface_water_level.get_previous('m3'):.2f}")
+            print(f"Storage_current: {model.data[cell_id].groundwater.surface_water_level.get_amount('m3'):.2f}")
+            print(f"Storage_change: {model.data[cell_id].groundwater.surface_water_level.get_change('m3'):.2f}")
+            print(f"Total inflow: {model.data[cell_id].groundwater.flows.get_total_inflow():.2f}")
+            print(f"Total outflow: {model.data[cell_id].groundwater.flows.get_total_outflow():.2f}")
+            groundwater_flows = model.data[cell_id].groundwater.flows
+            print("\nFlow directions:")
+            for name, flow in vars(groundwater_flows).items():
+                if hasattr(flow, 'direction'):
+                    print(f"{name}: {flow.direction} {flow.amount}")
 
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
@@ -153,7 +205,7 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
             if isinstance(attr_value, (int, float, bool, str)):
                 results[attr_name] = attr_value
             elif isinstance(attr_value, Storage):
-                results[attr_name] = attr_value.amount
+                results[attr_name] = attr_value.get_amount('m3')
 
     if hasattr(component, 'flows'):
         flows = component.flows

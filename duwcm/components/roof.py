@@ -2,6 +2,9 @@ from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import RoofData
 
+# Constants
+TO_METERS = 0.001
+
 class RoofClass:
     """
     Calculates water balance for a roof surface.
@@ -14,7 +17,7 @@ class RoofClass:
         """
         Args:
             params (Dict[str, float]): System parameters
-                area: Roof area [m^2]
+                area: Roof area [m²]
                 effective_outflow: Area connected with gutter [%]
                 storage capacity: Roof storage capacity [L]
                 roof_initial_storage: Roof initial storage (t=0) [mm]
@@ -23,8 +26,11 @@ class RoofClass:
         """
         self.roof_data = roof_data
         self.roof_data.area = abs(params['roof']['area'])  #TODO
-        self.roof_data.storage.capacity = (params['roof']['max_storage'] *
-                                           params['roof']['area'])
+
+        self.roof_data.storage.set_area(self.roof_data.area)
+        self.roof_data.storage.set_capacity(params['roof']['max_storage'], 'mm')
+        self.roof_data.storage.set_previous(0, 'mm')
+
         self.roof_data.effective_outflow = (1.0 if  params['pervious']['area'] == 0
                                             else params['roof']['effective_area'] / 100)
         self.leakage_rate = params['groundwater']['leakage_rate'] / 100
@@ -39,34 +45,38 @@ class RoofClass:
                 irrigation: Irrigation on roof (default: 0) [mm]
 
         Updates roof_data with:
-            storage: Roof interception storage volume after total outflows (t+1) [L]
+            storage: Roof interception storage volume after total outflows (t+1) [m³]
         Updates flows with:
-            to_raintank: Effective impervious surface runoff [L]
-            to_pervious: Non-effective runoff [L]
-            to_groundwater: Irrigation leakage [L]
+            precipitation: Direct precipitation [m³]
+            irrigation: Irrigation [m³]
+            from_demand: Demanded water for irrigation + leakage [m³]
+            evaporation: Evaporation [m³]
+            to_raintank: Effective impervious surface runoff [m³]
+            to_pervious: Non-effective runoff [m³]
+            to_groundwater: Irrigation leakage [m³]
         """
         data = self.roof_data
-        precipitation = forcing['precipitation'] * data.area
-        potential_evaporation = forcing['potential_evaporation'] * data.area
-        irrigation = forcing.get('roof_irrigation', 0.0) * data.area
+        precipitation = forcing['precipitation'] * TO_METERS * data.area
+        potential_evaporation = forcing['potential_evaporation'] * TO_METERS * data.area
+        irrigation = forcing.get('roof_irrigation', 0.0) * TO_METERS * data.area
 
         if data.area == 0:
             return
 
         irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
         total_inflow = precipitation + irrigation
-        current_storage = min(data.storage.capacity, max(0.0, data.storage.previous + total_inflow))
+        current_storage = min(data.storage.get_capacity('m3'), max(0.0, data.storage.get_previous('m3') + total_inflow))
         evaporation = min(potential_evaporation, current_storage)
 
-        data.storage.amount = current_storage - evaporation
+        data.storage.set_amount(current_storage - evaporation, 'm3')
 
-        excess_water = total_inflow - evaporation - data.storage.change
+        excess_water = total_inflow - evaporation - data.storage.get_change('m3')
         effective_runoff = data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
         # Update flows using setters
         data.flows.set_flow('precipitation', precipitation)
-        data.flows.set_flow('from_demand', irrigation)
+        data.flows.set_flow('from_demand', irrigation + irrigation_leakage)
         data.flows.set_flow('evaporation', evaporation)
         data.flows.set_flow('to_raintank', effective_runoff)
         data.flows.set_flow('to_pervious', non_effective_runoff)
