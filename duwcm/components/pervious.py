@@ -41,7 +41,7 @@ class PerviousClass:
         self.pervious_data.storage.set_capacity(params['pervious']['max_storage'], 'mm')
         self.pervious_data.storage.set_previous(0, 'mm')
 
-        self.pervious_data.infiltration_capacity = params['pervious']['infiltration_capacity'] * TO_METERS
+        self.pervious_data.infiltration_capacity = params['pervious']['infiltration_capacity']
         self.pervious_data.irrigation_factor = params['irrigation']['pervious']
 
         self.roof_area = params['roof']['area']
@@ -99,12 +99,12 @@ class PerviousClass:
             self.moisture_root_capacity - data.vadose_moisture.get_previous('mm') +
             min(self.moisture_root_capacity - data.vadose_moisture.get_previous('mm'),
                 self.time_step * self.saturated_permeability)
-        )
+        ) * TO_METERS * data.area
 
         # Calculate time factor and resulting fluxes
-        time_factor = min(1.0, current_storage / (potential_evaporation + infiltration_capacity * data.area))
+        time_factor = min(1.0, current_storage / (potential_evaporation + infiltration_capacity))
         evaporation = time_factor * potential_evaporation
-        infiltration = time_factor * infiltration_capacity * data.area
+        infiltration = time_factor * infiltration_capacity
 
         # Calculate final storage and overflow
         data.storage.set_amount(min(data.storage.get_capacity('m3'),
