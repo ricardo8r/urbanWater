@@ -363,14 +363,14 @@ class UrbanWaterData:
                     # Check if storage exceeds capacity
                     if attr_value.get_amount() > attr_value.get_capacity():
                         comp_issues.append(
-                            f"{attr_name}: Storage ({attr_value.amount:.3f}) exceeds "
-                            f"capacity ({attr_value.capacity:.3f})"
+                            f"{attr_name}: Storage ({attr_value.get_amount('m3'):.3f}) exceeds "
+                            f"capacity ({attr_value.get_capacity('m3'):.3f})"
                         )
 
                     # Check for negative storage
                     if attr_value.get_amount() < 0:
                         comp_issues.append(
-                            f"{attr_name}: Negative storage: {attr_value.amount:.3f}"
+                            f"{attr_name}: Negative storage: {attr_value.get_amount('m3'):.3f}"
                         )
 
             if comp_issues:

@@ -142,13 +142,11 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
         'stormwater': ('BuPu', flow_paths),
         'wastewater': ('PuRd', flow_paths),
         'baseflow': ('Blues', None),
-        'deep_seepage': ('PuBuGn', None),
-        'moisture': ('Purples', None),
-        'groundwater': ('Oranges', None)
+        'deep_seepage': ('PuBuGn', None)
     }
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
-        data = local_results[variable_name].groupby(level='cell').sum() *0.001  # Convert to m^3/yr
+        data = local_results[variable_name].groupby(level='cell').sum()
         output_path = output_dir / f'{variable_name}_map.png'
         plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
                       data, variable_name, output_path, cmap, flow_paths=paths)

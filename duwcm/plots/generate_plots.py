@@ -46,10 +46,10 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'],
         'PotentialEvaporation': forcing['potential_evaporation'],
-        'Evapotranspiration': (results['evaporation'] + results['transpiration']) * 0.001 / total_area,
-        'Stormwater': results['stormwater'] * 0.001,
-        'Wastewater': results['wastewater'] * 0.001,
-        'Baseflow': results['baseflow'] * 0.001
+        'Evapotranspiration': (results['evaporation'] + results['transpiration']) / total_area,
+        'Stormwater': results['stormwater'],
+        'Wastewater': results['wastewater'],
+        'Baseflow': results['baseflow']
     })
 
     plot_configs = [
@@ -116,5 +116,5 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
 
         # Save the figure
         base_filename = output_dir / config.lower()
-        plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
+        plt.savefig(f"{base_filename}.png", format='png', dpi=300, bbox_inches='tight')
         plt.close(fig)

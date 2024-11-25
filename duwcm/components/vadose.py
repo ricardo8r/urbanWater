@@ -35,7 +35,7 @@ class VadoseClass:
         self.vadose_data.area = params['vadose']['area']
 
         self.vadose_data.moisture.set_area(self.vadose_data.area)
-        self.vadose_data.moisture.set_previous = (params['vadose']['initial_moisture'], 'mm')
+        self.vadose_data.moisture.set_previous(params['vadose']['initial_moisture'], 'mm')
 
         self.time_step = params['general']['time_step']
         soil_type = params['soil']['soil_type']
@@ -71,7 +71,7 @@ class VadoseClass:
             return
 
         # Get infiltration from pervious area through flows
-        pervious_infiltration = data.flows.get_flow('from_pervious') / data.area
+        pervious_infiltration = data.flows.get_flow('from_pervious') / data.area / TO_METERS
 
         # Calculate transpiration
         data.transpiration_threshold = self._transpiration_threshold(reference_evaporation)
@@ -83,15 +83,15 @@ class VadoseClass:
                             data.moisture.get_previous('mm') + pervious_infiltration)
 
         # Calculate soil moisture dynamics
-        equilibrium_moisture, data.max_capillary = self._soil_properties(data.groundwater_level.get_previous('m'))
+        data.equilibrium_moisture, data.max_capillary = self._soil_properties(data.groundwater_level.get_previous('m'))
         current_moisture = data.moisture.get_previous('mm') + pervious_infiltration - transpiration
 
         # Calculate percolation
-        if current_moisture > equilibrium_moisture:
-            percolation = min(current_moisture - equilibrium_moisture,
+        if current_moisture > data.equilibrium_moisture:
+            percolation = min(current_moisture - data.equilibrium_moisture,
                               self.time_step * self.saturated_conductivity)
         else:
-            percolation = -1 * min(equilibrium_moisture - current_moisture,
+            percolation = -1 * min(data.equilibrium_moisture - current_moisture,
                                    self.time_step * data.max_capillary)
 
         # Update final moisture

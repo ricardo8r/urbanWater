@@ -113,22 +113,6 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], 
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
 
-        if cell_id == 141 and current_date.strftime('%Y-%m-%d') == '2018-01-02':
-            print(f"\nDetailed balance check for cell 141:")
-            print(f"Storage_previous: {model.data[cell_id].groundwater.water_level.get_previous('m3'):.2f}")
-            print(f"Storage_current: {model.data[cell_id].groundwater.water_level.get_amount('m3'):.2f}")
-            print(f"Storage_change: {model.data[cell_id].groundwater.water_level.get_change('m3'):.2f}")
-            print(f"Storage_previous: {model.data[cell_id].groundwater.surface_water_level.get_previous('m3'):.2f}")
-            print(f"Storage_current: {model.data[cell_id].groundwater.surface_water_level.get_amount('m3'):.2f}")
-            print(f"Storage_change: {model.data[cell_id].groundwater.surface_water_level.get_change('m3'):.2f}")
-            print(f"Total inflow: {model.data[cell_id].groundwater.flows.get_total_inflow():.2f}")
-            print(f"Total outflow: {model.data[cell_id].groundwater.flows.get_total_outflow():.2f}")
-            groundwater_flows = model.data[cell_id].groundwater.flows
-            print("\nFlow directions:")
-            for name, flow in vars(groundwater_flows).items():
-                if hasattr(flow, 'direction'):
-                    print(f"{name}: {flow.direction} {flow.amount}")
-
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
     aggregated = {
@@ -145,20 +129,19 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     for cell_id, data in model.data.items():
         # Aggregate end-point flows
         if model.path.loc[cell_id, 'down'] == 0:
-            aggregated['stormwater'] += data.stormwater.flows.to_downstream.get_flow()
-            aggregated['wastewater'] += data.wastewater.flows.to_downstream.get_flow()
+            aggregated['stormwater'] += data.stormwater.flows.to_downstream.amount
+            aggregated['wastewater'] += data.wastewater.flows.to_downstream.amount
 
-        # Aggregate other flows using get_flow() instead of direct amount access
-        aggregated['baseflow'] += data.groundwater.flows.baseflow.get_flow()
-        aggregated['total_seepage'] += data.groundwater.flows.seepage.get_flow()
-        aggregated['imported_water'] += data.demand.flows.imported_water.get_flow()
-        aggregated['transpiration'] += data.vadose.flows.transpiration.get_flow()
+        aggregated['baseflow'] += data.groundwater.flows.baseflow.amount
+        aggregated['total_seepage'] += data.groundwater.flows.seepage.amount
+        aggregated['imported_water'] += data.demand.flows.imported_water.amount
+        aggregated['transpiration'] += data.vadose.flows.transpiration.amount
         aggregated['evaporation'] += (
-            data.roof.flows.evaporation.get_flow() +
-            data.pavement.flows.evaporation.get_flow() +
-            data.pervious.flows.evaporation.get_flow() +
-            data.raintank.flows.evaporation.get_flow() +
-            data.stormwater.flows.evaporation.get_flow()
+            data.roof.flows.evaporation.amount +
+            data.pavement.flows.evaporation.amount +
+            data.pervious.flows.evaporation.amount +
+            data.raintank.flows.evaporation.amount +
+            data.stormwater.flows.evaporation.amount
         )
 
     #aggregated['imported_water'] -= sum(model.current[w].wastewater.use for w in model.wastewater_cells)
@@ -243,10 +226,14 @@ def _create_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
         if component in dataframe_results and flow in dataframe_results[component].columns:
             results_dict[col_name] = dataframe_results[component][flow]
 
-    results_dict['groundwater'] = -1 * (
-        dataframe_results['groundwater']['water_level'] +
-        dataframe_results['groundwater']['surface_water_level']
-    )
+    results_dict['groundwater'] = (
+        dataframe_results['groundwater']['surface_water_level'] -
+        dataframe_results['groundwater']['water_level']
+    ) / dataframe_results['groundwater']['area']
+
+    # Convert moisture (m3 to mm)
+    if 'moisture' in results_dict:
+        results_dict['moisture'] = (results_dict['moisture'] / dataframe_results['vadose']['area']) * 1000
 
     # Calculate evapotranspiration by summing all components
     evap_sum = None

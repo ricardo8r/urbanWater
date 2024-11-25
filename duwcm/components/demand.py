@@ -3,6 +3,9 @@ from dataclasses import dataclass
 import pandas as pd
 from duwcm.data_structures import DemandData
 
+# Constants
+TO_METERS = 0.001
+
 @dataclass
 class GraywaterData:
     """
@@ -138,8 +141,8 @@ class DemandClass:
         data.rt_irrigation_demand = rt_results.irrigation_demand
 
         # Update flows
-        data.flows.set_flow('imported_water', imported_water)
-        data.flows.set_flow('to_wastewater', wws_results.spillover)
+        data.flows.set_flow('imported_water', imported_water * TO_METERS)
+        data.flows.set_flow('to_wastewater', wws_results.spillover * TO_METERS)
 
     def _calculate_ssg(self, total_irrigation: float) -> (float, GraywaterData):
         """
