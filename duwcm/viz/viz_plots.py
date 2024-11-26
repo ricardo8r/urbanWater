@@ -10,10 +10,10 @@ def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFr
         'Precipitation': forcing['precipitation'],
         #'Potential Evaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (aggregated_results['evaporation'] +
-                               aggregated_results['transpiration']) * 0.001 / total_area,
-        'Stormwater': aggregated_results['stormwater'] * 0.001,
-        'Baseflow': aggregated_results['baseflow'] * 0.001,
-        'Wastewater': aggregated_results['wastewater'] * 0.001
+                               aggregated_results['transpiration']) / total_area,
+        'Stormwater': aggregated_results['stormwater'],
+        'Baseflow': aggregated_results['baseflow'],
+        'Wastewater': aggregated_results['wastewater']
     })
 
     colors = {

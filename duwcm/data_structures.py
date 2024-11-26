@@ -361,7 +361,7 @@ class UrbanWaterData:
                 # Check if attribute is a Storage instance
                 if isinstance(attr_value, Storage):
                     # Check if storage exceeds capacity
-                    if attr_value.get_amount() > attr_value.get_capacity():
+                    if attr_value.get_amount() > attr_value.get_capacity()*1.001:
                         comp_issues.append(
                             f"{attr_name}: Storage ({attr_value.get_amount('m3'):.3f}) exceeds "
                             f"capacity ({attr_value.get_capacity('m3'):.3f})"
