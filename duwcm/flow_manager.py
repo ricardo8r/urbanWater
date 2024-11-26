@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Union
+from typing import List, Union, Optional
 from enum import Enum, auto, IntEnum
 
 class FlowType(Enum):
@@ -23,13 +23,52 @@ class FlowDirection(IntEnum):
 @dataclass
 class Flow:
     """Base class for a flow"""
-    amount: float = 0.0
-    type: FlowType = None
-    direction: FlowDirection = None
+    _amount: float = field(default=0.0)
+    _type: FlowType = field(default=None)
+    _direction: FlowDirection = field(default=None)
+    linked_flow: Optional['Flow'] = field(default=None, repr=False)
 
-    def get_flow(self):
+    @property
+    def amount(self) -> float:
         """Get the flow amount"""
-        return self.amount
+        return self._amount
+
+    @amount.setter
+    def amount(self, value: float) -> None:
+        """Set the flow amount and sync with linked flow"""
+        self._amount = value
+        if self.linked_flow is not None:
+            self.linked_flow.set_amount_no_sync(value)
+
+    def set_amount_no_sync(self, value: float) -> None:
+        """Internal method to set amount without triggering sync"""
+        self._amount = value
+
+    @property
+    def type(self) -> FlowType:
+        """Get the flow type"""
+        return self._type
+
+    @type.setter
+    def type(self, value: FlowType) -> None:
+        """Set the flow type"""
+        self._type = value
+
+    @property
+    def direction(self) -> FlowDirection:
+        """Get the flow direction"""
+        return self._direction
+
+    @direction.setter
+    def direction(self, value: FlowDirection) -> None:
+        """Set the flow direction"""
+        self._direction = value
+
+    def link(self, other_flow: 'Flow') -> None:
+        """Link this flow to another flow for automatic synchronization"""
+        self.linked_flow = other_flow
+        other_flow.linked_flow = self
+
 
 @dataclass
 class MultiSourceFlow:
@@ -45,10 +84,6 @@ class MultiSourceFlow:
         # Update amounts from sources before summing
         self._amounts = [source.amount for source in self._sources]
         return sum(self._amounts)
-
-    def get_flow(self) -> float:
-        """Get the flow amount"""
-        return self.amount
 
     def add_source(self, source: Union[Flow, float]):
         """
@@ -88,21 +123,19 @@ class ComponentFlows:
             return 0.0
 
         flow = getattr(self, name)
-        # Handle both regular Flow and MultiSourceFlow
-        if isinstance(flow, (Flow, MultiSourceFlow)):
-            return flow.get_flow()
-        return 0.0
+        return flow.amount
 
-    def set_flow(self, name: str, amount: float) -> None:
+    def set_flow(self, name: str, value: float) -> None:
         """Set flow amount by name"""
         if not hasattr(self, name):
             raise ValueError(f"Invalid flow name: {name}")
 
         flow = getattr(self, name)
         if isinstance(flow, MultiSourceFlow):
-            raise AttributeError(f"Cannot set amount directly for MultiSourceFlow '{name}'. Use add_source/remove_source instead.")
+            raise AttributeError(f"Cannot set amount directly for MultiSourceFlow '{name}'. \
+                                 Use add_source/remove_source instead.")
         if isinstance(flow, Flow):
-            flow.amount = amount
+            flow.amount = value
         else:
             raise ValueError(f"Invalid flow type for {name}")
 
@@ -133,166 +166,166 @@ class RoofFlows(ComponentFlows):
     """Roof component flows"""
     # Environmental flows
     precipitation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
     evaporation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
     # Component flows
     from_demand: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.IN, None))
     to_raintank: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
     to_pervious: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
 
 @dataclass
 class RainTankFlows(ComponentFlows):
     """Raintank component flows"""
     # Environmental flows
     precipitation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
     evaporation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
     # Component flows
     from_roof: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     to_pavement: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
     to_stormwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
 
 @dataclass
 class PavementFlows(ComponentFlows):
     """Pavement component flows"""
     # Environmental flows
     precipitation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
     evaporation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
     # Component flows
     from_demand: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.IN, None))
     from_raintank: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     to_pervious: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
     to_groundwater_infiltration: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.OUT, None))
     to_groundwater_leakage: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
     to_stormwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
 
 @dataclass
 class PerviousFlows(ComponentFlows):
     """Pervious flows"""
     # Environmental flows
     precipitation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
     evaporation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
     # Component flows
     from_demand: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.IN, None))
     from_roof: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     from_pavement: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     to_vadose: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.OUT, None))
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
     to_stormwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
 
 @dataclass
 class VadoseFlows(ComponentFlows):
     """Vadose zone flows"""
     # Environmental flows
     transpiration: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.TRANSPIRATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.TRANSPIRATION, FlowDirection.OUT, None))
     # Component flows
     from_pervious: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.IN, None))
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PERCOLATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.PERCOLATION, FlowDirection.OUT, None))
 
 @dataclass
 class GroundwaterFlows(ComponentFlows):
     """Groundwater flows"""
     # Environmental flows
     seepage: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.SEEPAGE, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.SEEPAGE, FlowDirection.OUT, None))
     baseflow: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.BASEFLOW, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.BASEFLOW, FlowDirection.OUT, None))
     # Component flows
     from_roof: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
     from_pavement_infiltration: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.IN, None))
     from_pavement_leakage: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
     from_pervious: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
     from_vadose: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PERCOLATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.PERCOLATION, FlowDirection.IN, None))
     from_demand: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
     to_wastewater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.OUT, None))
 
 @dataclass
 class StormwaterFlows(ComponentFlows):
     """Stormwater flows"""
     # Environmental flows
     precipitation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.PRECIPITATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
     evaporation: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.EVAPORATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
     # Component flows
     from_raintank: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     from_pavement: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     from_pervious: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
     from_upstream: MultiSourceFlow = field(
-        default_factory=lambda: MultiSourceFlow(type=FlowType.RUNOFF, direction=FlowDirection.IN))
+        default_factory=lambda: MultiSourceFlow(FlowType.RUNOFF, FlowDirection.IN, [], []))
     to_downstream: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.RUNOFF, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
     to_wastewater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
 
 @dataclass
 class WastewaterFlows(ComponentFlows):
     """Wastewater flows"""
     # Component flows
     from_groundwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.INFILTRATION, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.IN, None))
     from_stormwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.IN, None))
     from_demand: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.IN, None))
     from_upstream: MultiSourceFlow = field(
-        default_factory=lambda: MultiSourceFlow(type=FlowType.WASTEWATER, direction=FlowDirection.IN))
+        default_factory=lambda: MultiSourceFlow(FlowType.WASTEWATER, FlowDirection.IN, [], []))
     to_downstream: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
 
 @dataclass
 class DemandFlows(ComponentFlows):
     """Demand water flows"""
     # Environmental flows
     imported_water: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IMPORTED_WATER, direction=FlowDirection.IN))
+        default_factory=lambda: Flow(0.0, FlowType.IMPORTED_WATER, FlowDirection.IN, None))
     # Component flows
     to_wastewater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.WASTEWATER, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
     to_roof: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.OUT, None))
     to_pavement: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.OUT, None))
     to_pervious: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.IRRIGATION, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.OUT, None))
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(type=FlowType.LEAKAGE, direction=FlowDirection.OUT))
+        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))

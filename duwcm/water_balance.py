@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
+from duwcm.flow_manager import Flow, MultiSourceFlow
 from duwcm.checker import track_validation_results
 
 def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool = False) -> Dict[str, pd.DataFrame]:
@@ -193,9 +194,7 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
     if hasattr(component, 'flows'):
         flows = component.flows
         for flow_name, flow in vars(flows).items():
-            if hasattr(flow, 'get_flow'):  # Check if it's a Flow or MultiSourceFlow object
-                flow_value = flow.get_flow()
-                results[flow_name] = flow_value
+            results[flow_name] = flow.amount
 
     return results
 

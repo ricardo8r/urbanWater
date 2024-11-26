@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Any, Union, Optional
 from duwcm.flow_manager import (
+    Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, PavementFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
     WastewaterFlows, DemandFlows
@@ -297,21 +298,8 @@ class UrbanWaterData:
             source_flow_obj = getattr(source.flows, source_flow)
             target_flow_obj = getattr(target.flows, target_flow)
 
-            # Create references for two-way sync
-            source_ref = source_flow_obj
-            target_ref = target_flow_obj
-
-            # Sync both get_flow and set_flow for both objects
-            def make_get_flow(ref):
-                return lambda: ref.amount
-
-            def make_set_flow(ref):
-                return lambda value: setattr(ref, 'amount', value)
-
-            source_flow_obj.get_flow = make_get_flow(source_ref)
-            source_flow_obj.set_flow = make_set_flow(target_ref)
-            target_flow_obj.get_flow = make_get_flow(source_ref)
-            target_flow_obj.set_flow = make_set_flow(source_ref)
+            # Link the flows
+            source_flow_obj.link(target_flow_obj)
 
         # Link shared variables between components
         self.pervious.vadose_moisture = self.vadose.moisture
@@ -322,10 +310,9 @@ class UrbanWaterData:
         """Validate flows between components"""
         issues = {
             'unlinked': [],    # Flows that should reference the same object but don't
-            'mismatched': []  # Flows that have different amounts
+            'mismatched': []   # Flows that have different amounts
         }
 
-        # Check component links and amounts
         for (source_comp, source_flow), (target_comp, target_flow) in self.FLOW_CONNECTIONS.items():
             source = getattr(self, source_comp)
             target = getattr(self, target_comp)
@@ -333,18 +320,43 @@ class UrbanWaterData:
             source_attr = getattr(source.flows, source_flow)
             target_attr = getattr(target.flows, target_flow)
 
-            # Check if flows are properly linked
-            if source_attr is not target_attr:
-                issues['unlinked'].append(
-                    f"{source_comp}.{source_flow} -> {target_comp}.{target_flow}"
-                )
+            # Validate MultiSourceFlow connections
+            if isinstance(source_attr, MultiSourceFlow):
+                if not isinstance(target_attr, MultiSourceFlow):
+                    issues['unlinked'].append(
+                        f"{source_comp}.{source_flow} -> {target_comp}.{target_flow} (type mismatch)"
+                    )
+                    continue
 
-            # Check if amounts match
-            elif abs(source_attr.amount - target_attr.amount) > 1e-10:
-                issues['mismatched'].append(
-                    f"{source_comp}.{source_flow}({source_attr.amount:.3f}) ≠ "
-                    f"{target_comp}.{target_flow}({target_attr.amount:.3f})"
-                )
+                # Both are MultiSourceFlow, check their linkage
+                if target_attr not in source_attr.linked_sources:
+                    issues['unlinked'].append(
+                        f"{source_comp}.{source_flow} -> {target_comp}.{target_flow}"
+                    )
+                elif abs(source_attr.amount - target_attr.amount) > 1e-10:
+                    issues['mismatched'].append(
+                        f"{source_comp}.{source_flow}({source_attr.amount:.3f}) ≠ "
+                        f"{target_comp}.{target_flow}({target_attr.amount:.3f})"
+                    )
+
+            # Validate regular Flow connections
+            elif isinstance(source_attr, Flow):
+                if not isinstance(target_attr, Flow):
+                    issues['unlinked'].append(
+                        f"{source_comp}.{source_flow} -> {target_comp}.{target_flow} (type mismatch)"
+                    )
+                    continue
+
+                # Both are Flow, check their linkage
+                if source_attr.linked_flow is not target_attr:
+                    issues['unlinked'].append(
+                        f"{source_comp}.{source_flow} -> {target_comp}.{target_flow}"
+                    )
+                elif abs(source_attr.amount - target_attr.amount) > 1e-10:
+                    issues['mismatched'].append(
+                        f"{source_comp}.{source_flow}({source_attr.amount:.3f}) ≠ "
+                        f"{target_comp}.{target_flow}({target_attr.amount:.3f})"
+                    )
 
         return issues
 
