@@ -23,6 +23,7 @@ class WastewaterClass:
         self.wastewater_data = wastewater_data
         self.wastewater_data.area = params['wastewater']['area']
 
+        self.wastewater_data.flows.set_areas(self.wastewater_data.area)
         self.wastewater_data.storage.set_area(self.wastewater_data.area)
         self.wastewater_data.storage.set_capacity(params['wastewater']['capacity'], 'L')
         self.wastewater_data.storage.set_previous(params['wastewater']['initial_storage'], 'L')
@@ -43,13 +44,13 @@ class WastewaterClass:
             to_downstream: Wastewater sewer discharge [m³]
         """
         data = self.wastewater_data
-        total_inflow = (data.flows.get_flow('from_reuse') +
-                        data.flows.get_flow('from_groundwater') +
-                        data.flows.get_flow('from_stormwater') +
-                        data.flows.get_flow('from_upstream'))
+        total_inflow = (data.flows.get_flow('from_reuse', 'm3') +
+                        data.flows.get_flow('from_groundwater', 'm3') +
+                        data.flows.get_flow('from_stormwater', 'm3') +
+                        data.flows.get_flow('from_upstream', 'm3'))
 
         if data.storage.get_capacity('m3') == 0:
-            data.flows.set_flow('to_downstream', total_inflow)
+            data.flows.set_flow('to_downstream', total_inflow, 'm3')
             return
 
         # Calculate storage and discharge
@@ -58,4 +59,4 @@ class WastewaterClass:
         discharge = max(0.0, total_inflow - data.storage.get_change('m3'))
 
         # Update flows
-        data.flows.set_flow('to_downstream', discharge)
+        data.flows.set_flow('to_downstream', discharge, 'm3')

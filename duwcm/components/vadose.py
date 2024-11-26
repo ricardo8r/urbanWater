@@ -34,6 +34,7 @@ class VadoseClass:
         self.vadose_data = vadose_data
         self.vadose_data.area = params['vadose']['area']
 
+        self.vadose_data.flows.set_areas(self.vadose_data.area)
         self.vadose_data.moisture.set_area(self.vadose_data.area)
         self.vadose_data.moisture.set_previous(params['vadose']['initial_moisture'], 'mm')
 
@@ -65,26 +66,29 @@ class VadoseClass:
             to_groundwater: Percolation to groundwater [m³]
         """
         data = self.vadose_data
-        reference_evaporation = forcing['potential_evaporation']
 
         if data.area == 0:
             return
 
         # Get infiltration from pervious area through flows
-        pervious_infiltration = data.flows.get_flow('from_pervious') / data.area / TO_METERS
+        pervious_infiltration = data.flows.get_flow('from_pervious', 'mm')
 
         # Calculate transpiration
+        reference_evaporation = forcing['potential_evaporation']
         data.transpiration_threshold = self._transpiration_threshold(reference_evaporation)
         data.transpiration_factor = self._transpiration_factor(pervious_infiltration,
                                                                data.transpiration_threshold,
                                                                data.moisture.get_previous('mm')
                                                                )
-        transpiration = min(data.transpiration_factor * reference_evaporation,
-                            data.moisture.get_previous('mm') + pervious_infiltration)
+        data.flows.set_flow('transpiration', min(data.transpiration_factor * reference_evaporation,
+                                                 data.moisture.get_previous('mm') + pervious_infiltration),
+                            'mm')
 
         # Calculate soil moisture dynamics
         data.equilibrium_moisture, data.max_capillary = self._soil_properties(data.groundwater_level.get_previous('m'))
-        current_moisture = data.moisture.get_previous('mm') + pervious_infiltration - transpiration
+        current_moisture = (data.moisture.get_previous('mm') +
+                            pervious_infiltration -
+                            data.flows.get_flow('transpiration', 'mm'))
 
         # Calculate percolation
         if current_moisture > data.equilibrium_moisture:
@@ -94,13 +98,9 @@ class VadoseClass:
             percolation = -1 * min(data.equilibrium_moisture - current_moisture,
                                    self.time_step * data.max_capillary)
 
-        # Update final moisture
         #infiltration = np.sqrt(current_moisture - percolation) * self.infiltration_recession
         data.moisture.set_amount(current_moisture - percolation, 'mm') #- infiltration
-
-        # Update flows
-        data.flows.set_flow('transpiration', transpiration * data.area * TO_METERS)
-        data.flows.set_flow('to_groundwater', percolation * data.area * TO_METERS)
+        data.flows.set_flow('to_groundwater', percolation, 'mm')
 
     def _transpiration_threshold(self, reference_evaporation: float) -> float:
         if reference_evaporation < MIN_REFERENCE_EVAPORATION:

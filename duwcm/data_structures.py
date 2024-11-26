@@ -40,9 +40,9 @@ class StorageUnit(Enum):
             case StorageUnit.LITER:
                 value_m3 = value * TO_METER
             case StorageUnit.MILLIMETER:
-                value_m3 = value * area * TO_METER if area else ValueError("Area needed for mm")
+                value_m3 = value * area * TO_METER
             case StorageUnit.METER:
-                value_m3 = value * area if area else ValueError("Area needed for m")
+                value_m3 = value * area
 
         # Convert from m³
         match to_unit:
@@ -51,9 +51,9 @@ class StorageUnit(Enum):
             case StorageUnit.LITER:
                 return value_m3 * TO_MM
             case StorageUnit.MILLIMETER:
-                return value_m3 * TO_MM / area if area else ValueError("Area needed for mm")
+                return value_m3 * TO_MM / area
             case StorageUnit.METER:
-                return value_m3 / area if area else ValueError("Area needed for m")
+                return value_m3 / area
 
 @dataclass
 class Storage:
@@ -233,6 +233,7 @@ class WastewaterData:
 class DemandData:
     """Water demand component"""
     flows: DemandFlows = field(default_factory=DemandFlows)
+    area: float = field(default=0, metadata={'unit': 'm^2'})
     rt_storage: Storage = field(default_factory=lambda: Storage(
         _default_unit=StorageUnit.CUBIC_METER,
         _capacity=0.0

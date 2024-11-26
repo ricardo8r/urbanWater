@@ -2,9 +2,6 @@ from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import RoofData
 
-# Constants
-TO_METERS = 0.001
-
 class RoofClass:
     """
     Calculates water balance for a roof surface.
@@ -19,7 +16,7 @@ class RoofClass:
             params (Dict[str, float]): System parameters
                 area: Roof area [m²]
                 effective_outflow: Area connected with gutter [%]
-                storage capacity: Roof storage capacity [L]
+                storage capacity: Roof storage capacity [mm]
                 roof_initial_storage: Roof initial storage (t=0) [mm]
                 leakage_rate: Leakage to groundwater [%]
                 time_step: Time step [day]
@@ -27,6 +24,7 @@ class RoofClass:
         self.roof_data = roof_data
         self.roof_data.area = abs(params['roof']['area'])  #TODO
 
+        self.roof_data.flows.set_areas(self.roof_data.area)
         self.roof_data.storage.set_area(self.roof_data.area)
         self.roof_data.storage.set_capacity(params['roof']['max_storage'], 'mm')
         self.roof_data.storage.set_previous(0, 'mm')
@@ -56,28 +54,28 @@ class RoofClass:
             to_groundwater: Irrigation leakage [m³]
         """
         data = self.roof_data
-        precipitation = forcing['precipitation'] * TO_METERS * data.area
-        potential_evaporation = forcing['potential_evaporation'] * TO_METERS * data.area
-        irrigation = forcing.get('roof_irrigation', 0.0) * TO_METERS * data.area
 
         if data.area == 0:
             return
 
-        irrigation_leakage = irrigation * self.leakage_rate / (1 - self.leakage_rate)
-        total_inflow = precipitation + irrigation
+        data.flows.set_flow('precipitation', forcing['precipitation'], 'mm')
+        data.flows.set_flow('from_demand', forcing.get('roof_irrigation', 0.0), 'mm')
+
+        total_inflow = data.flows.get_flow('precipitation', 'm3') + data.flows.get_flow('from_demand', 'm3')
         current_storage = min(data.storage.get_capacity('m3'), max(0.0, data.storage.get_previous('m3') + total_inflow))
-        evaporation = min(potential_evaporation, current_storage)
 
-        data.storage.set_amount(current_storage - evaporation, 'm3')
+        data.flows.set_flow('evaporation', forcing['potential_evaporation'], 'mm')
+        data.flows.set_flow('evaporation', min(data.flows.get_flow('evaporation', 'm3'), current_storage), 'm3')
 
-        excess_water = total_inflow - evaporation - data.storage.get_change('m3')
+        data.storage.set_amount(current_storage - data.flows.get_flow('evaporation', 'm3'), 'm3')
+
+        excess_water = total_inflow - data.flows.get_flow('evaporation', 'm3') - data.storage.get_change('m3')
         effective_runoff = data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
-        # Update flows using setters
-        data.flows.set_flow('precipitation', precipitation)
-        data.flows.set_flow('from_demand', irrigation + irrigation_leakage)
-        data.flows.set_flow('evaporation', evaporation)
-        data.flows.set_flow('to_raintank', effective_runoff)
-        data.flows.set_flow('to_pervious', non_effective_runoff)
-        data.flows.set_flow('to_groundwater', irrigation_leakage)
+        data.flows.set_flow('to_raintank', effective_runoff, 'm3')
+        data.flows.set_flow('to_pervious', non_effective_runoff, 'm3')
+        data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'm3') *
+                            self.leakage_rate / (1 - self.leakage_rate), 'm3')
+        data.flows.set_flow('from_demand', data.flows.get_flow('from_demand', 'm3') /
+                            (1 - self.leakage_rate), 'm3')

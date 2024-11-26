@@ -5,7 +5,6 @@ from duwcm.data_structures import GroundwaterData
 from duwcm.functions import soil_selector, gw_levels
 
 # Constants
-TO_METERS = 0.001
 MAX_SOIL_DEPTH = 10.0
 MAX_SOIL_INDEX = 29
 PIPE_DEPTH = 3.0
@@ -41,7 +40,7 @@ class GroundwaterClass:
         self.groundwater_data.area = params['groundwater']['area']
         self.groundwater_data.storage_coefficient = 0
 
-        self.groundwater_data.storage_coefficient = 0
+        self.groundwater_data.flows.set_areas(self.groundwater_data.area)
         self.groundwater_data.water_level.set_area(self.groundwater_data.area)
         self.groundwater_data.surface_water_level.set_area(self.groundwater_data.area)
         self.groundwater_data.water_level.set_previous(params['groundwater']['initial_level'], 'm')
@@ -85,18 +84,18 @@ class GroundwaterClass:
         open_water_level = forcing.get('open_water_level', 0.0)
 
         # Calculate total inflow
-        irrigation_leakage = (data.flows.get_flow('from_roof') +
-                              data.flows.get_flow('from_pavement_leakage') +
-                              data.flows.get_flow('from_pervious'))
+        irrigation_leakage = (data.flows.get_flow('from_roof', 'mm') +
+                              data.flows.get_flow('from_pavement_leakage', 'mm') +
+                              data.flows.get_flow('from_pervious', 'mm'))
 
-        indoor_use_leakage = (self.indoor_water_use * data.leakage_rate /
-                              (1 - data.leakage_rate))
-        leakage = irrigation_leakage / TO_METERS + indoor_use_leakage
+        data.flows.set_flow('from_demand', self.indoor_water_use * data.leakage_rate /
+                            (1 - data.leakage_rate), 'L')
+        leakage = irrigation_leakage + data.flows.get_flow('from_demand', 'mm')
 
-        vadose_percolation = data.flows.get_flow('from_vadose') / TO_METERS
-        pavement_infiltration = data.flows.get_flow('from_pavement_infiltration') / TO_METERS
+        vadose_percolation = data.flows.get_flow('from_vadose', 'mm')
+        pavement_infiltration = data.flows.get_flow('from_pavement_infiltration', 'mm')
 
-        inflow = (leakage + vadose_percolation + pavement_infiltration) / data.area
+        inflow = leakage + vadose_percolation + pavement_infiltration
 
         # Calculate storage coefficient
         data.storage_coefficient = self._storage_coefficient(data.water_level.get_previous('m'))
@@ -127,10 +126,9 @@ class GroundwaterClass:
         data.surface_water_level.set_amount(surface_water_level, 'm')
 
         # Update flows
-        data.flows.set_flow('from_demand', indoor_use_leakage * TO_METERS)
-        data.flows.set_flow('seepage', seepage * data.area * TO_METERS)
-        data.flows.set_flow('baseflow', -baseflow * data.area * TO_METERS)
-        data.flows.set_flow('to_wastewater', -infiltration * data.area * TO_METERS)
+        data.flows.set_flow('seepage', seepage, 'mm')
+        data.flows.set_flow('baseflow', -baseflow, 'mm')
+        data.flows.set_flow('to_wastewater', -infiltration, 'mm')
 
     def _storage_coefficient(self, initial_level: float) -> float:
         gw_up, gw_low, id_up, id_low = gw_levels(initial_level)

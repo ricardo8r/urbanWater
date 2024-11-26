@@ -67,7 +67,8 @@ class DemandClass:
         self.demand_data = demand_data
 
         # Initialize wastewater storage parameters
-        self.wastewater_area = params['reuse']['area'] * params['general']['number_houses']
+        self.demand_data.area = 1#params['reuse']['area'] * params['general']['number_houses']
+        self.demand_data.flows.set_areas(self.demand_data.area)
         self.wastewater_capacity = params['reuse']['capacity'] * params['general']['number_houses']
 
         # Initialize other parameters
@@ -141,8 +142,8 @@ class DemandClass:
         data.rt_irrigation_demand = rt_results.irrigation_demand
 
         # Update flows
-        data.flows.set_flow('imported_water', imported_water * TO_METERS)
-        data.flows.set_flow('to_wastewater', wws_results.spillover * TO_METERS)
+        data.flows.set_flow('imported_water', imported_water, 'L')
+        data.flows.set_flow('to_wastewater', wws_results.spillover, 'L')
 
     def _calculate_ssg(self, total_irrigation: float) -> (float, GraywaterData):
         """

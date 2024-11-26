@@ -139,10 +139,10 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
     variables_to_plot = {
         'evapotranspiration': ('Greens', None),
         'imported_water': ('YlOrRd', None),
-        'stormwater': ('BuPu', flow_paths),
-        'wastewater': ('PuRd', flow_paths),
         'baseflow': ('Blues', None),
-        'deep_seepage': ('PuBuGn', None)
+        'deep_seepage': ('PuBuGn', None),
+        'stormwater': ('BuPu', flow_paths),
+        'wastewater': ('PuRd', flow_paths)
     }
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
