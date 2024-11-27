@@ -71,6 +71,7 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
              color='C6', label='Potential Evaporation')
     ax1.plot(index, plot_data['Evapotranspiration'], color='C4', linewidth=lw, label='Evapotranspiration')
     ax1.set_ylabel(r"Precipitation & Evapotranspiration [mm/day]")
+    ax1.invert_yaxis()
 
     plt.tight_layout()
 
@@ -91,11 +92,12 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
         ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
         ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
 
-        ax1.fill_between(index, 0, plot_data['Precipitation'],
-                                facecolor='C0', alpha=0.8, label='Precipitation')
+        ax1.fill_between(index, 0, plot_data['Precipitation'], color='C0',
+                         alpha=0.5,linewidth=0.1, label='Precipitation')
         ax1.plot(index, plot_data['Evapotranspiration'], linestyle='--', linewidth=lw,
                  color='C4', label='Evapotranspiration')
         ax1.set_ylabel(r"Precipitation & Evapotranspiration [mm/day]")
+        ax1.invert_yaxis()
 
         ax2 = ax1.twinx()
         config_color = color_cycle[(i+1) % len(color_cycle)]

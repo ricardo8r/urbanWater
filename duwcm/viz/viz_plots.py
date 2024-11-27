@@ -8,7 +8,7 @@ def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFr
 
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'],
-        #'Potential Evaporation': forcing['potential_evaporation'],
+        'Potential Evaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (aggregated_results['evaporation'] +
                                aggregated_results['transpiration']) / total_area,
         'Stormwater': aggregated_results['stormwater'],
@@ -18,7 +18,7 @@ def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFr
 
     colors = {
         'Precipitation': 'lightblue',
-        #'Potential Evaporation': 'purple',
+        'Potential Evaporation': 'purple',
         'Evapotranspiration': 'green',
         'Stormwater': 'orange',
         'Baseflow': 'red',
@@ -48,7 +48,7 @@ def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFr
         ))
 
     fig.update_layout(
-        yaxis={"title": "Precipitation & Evapotranspiration [mm/day]"},
+        yaxis={"title": "Precipitation & Evapotranspiration [mm/day]", "autorange": "reversed"},
         yaxis2={"title": "Flow [m³/day]", "overlaying": "y", "side": "right"},
         height=600,
         hovermode='x unified',

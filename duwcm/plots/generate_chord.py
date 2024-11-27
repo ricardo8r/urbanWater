@@ -13,7 +13,7 @@ def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
 
     nodes = (['imported', 'precipitation', 'irrigation'] +
              UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation'])
+             ['seepage', 'baseflow', 'evaporation', 'runoff'])
     flow_matrix = calculate_flow_matrix(results, nodes)
     flow_matrix[flow_matrix != 0] = np.log10(flow_matrix[flow_matrix != 0]) + 1e-10
 

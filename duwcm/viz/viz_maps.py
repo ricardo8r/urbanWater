@@ -65,30 +65,33 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path) -> go
 
     return fig
 
-def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str],
-                      time_series_data: pd.DataFrame) -> go.Figure:
-    """Create interactive map with time slider and variable selector."""
+def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str], time_series_data: pd.DataFrame) -> go.Figure:
     gdf_wgs84 = gdf.to_crs(epsg=4326)
     bounds = gdf_wgs84.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
     monthly_data = time_series_data.groupby(pd.Grouper(freq='ME')).mean()
-    global_min = {var: monthly_data[var].min().min() for var in variables}
-    global_max = {var: monthly_data[var].max().max() for var in variables}
+    
+    # Calculate absolute global min/max across ALL variables
+    global_min = monthly_data[variables].min().min()  # Min across all variables
+    global_max = monthly_data[variables].max().max()  # Max across all variables
+    var_min = {var: monthly_data[var].min().min() for var in variables}
+    var_max = {var: monthly_data[var].max().max() for var in variables}
 
     fig = go.Figure()
 
+    # Create traces for each variable
     for variable in variables:
         fig.add_trace(go.Choroplethmapbox(
             geojson=gdf_wgs84.__geo_interface__,
             locations=gdf_wgs84.index,
             z=monthly_data.loc[monthly_data.index[0], variable],
-            zmin=global_min[variable],
-            zmax=global_max[variable],
+            zmin=var_min[variable],
+            zmax=var_max[variable],
             colorscale="Viridis",
             marker_opacity=0.7,
             marker_line_width=0,
-            colorbar_title_text=f"{variable.replace('_', ' ').capitalize()} [ML/yr]",
+            colorbar_title_text=f"{variable.replace('_', ' ').capitalize()} [m³/yr]",
             colorbar_title_side="right",
             colorbar_thickness=20,
             colorbar_title_font={"size": 12},
@@ -96,44 +99,71 @@ def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str],
             name=variable
         ))
 
-    # Add slider and dropdown
-    sliders = [{
-        'active': 0,
-        'currentvalue': {"prefix": "Month: ", "offset": 20},
-        'pad': {"b": 10, "t": 50},
-        'len': 0.875,
-        'x': 0.0625,
-        'xanchor': "left",
-        'y': 0,
-        'yanchor': "top",
-        'steps': [{
-            'method': 'update',
-            'args': [{'z': [monthly_data.loc[month_end, var] for var in variables]}],
-            'label': month_end.strftime('%Y-%m')
-        } for month_end in monthly_data.index]
-    }]
+    # Create variable buttons that preserve the current zmin/zmax setting
+    var_buttons = []
+    for i, variable in enumerate(variables):
+        var_buttons.append({
+            'args': [{"visible": [i == j for j in range(len(variables))],
+                     "colorbar_title_text": f"{variable.replace('_', ' ').capitalize()} [m³/yr]"}],
+            'label': variable.replace('_', ' ').capitalize(),
+            'method': "update"
+        })
 
-    dropdown_buttons = [{
-        'args': [{"visible": [i == j for j in range(len(variables))],
-                 "colorbar_title_text": f"{variable.replace('_', ' ').capitalize()} [ML/yr]"}],
-        'label': variable.replace('_', ' ').capitalize(),
-        'method': "update"
-    } for i, variable in enumerate(variables)]
+    # Scale buttons now need to handle all variables
+    scale_buttons = [
+        {
+            'args': [{"zmin": [var_min[var] for var in variables],
+                     "zmax": [var_max[var] for var in variables]}],
+            'label': "Local Scale",
+            'method': "restyle"
+        },
+        {
+            'args': [{"zmin": [global_min for _ in variables],
+                     "zmax": [global_max for _ in variables]}],
+            'label': "Global Scale",
+            'method': "restyle"
+        }
+    ]
 
+    # Update layout
     fig.update_layout(
         mapbox_style="carto-positron",
         mapbox={"center": {"lat": center_lat, "lon": center_lon}, "zoom": 11},
-        updatemenus=[{
-            'buttons': dropdown_buttons,
-            'direction': "down",
-            'pad': {"r": 10, "t": 10},
-            'showactive': True,
-            'x': 0.1,
+        updatemenus=[
+            {
+                'buttons': var_buttons,
+                'direction': "down",
+                'showactive': True,
+                'x': 0.1,
+                'y': 1.1,
+                'xanchor': "left",
+                'yanchor': "top"
+            },
+            {
+                'buttons': scale_buttons,
+                'direction': "down",
+                'showactive': True,
+                'x': 0.3,
+                'y': 1.1,
+                'xanchor': "left",
+                'yanchor': "top"
+            }
+        ],
+        sliders=[{
+            'active': 0,
+            'currentvalue': {"prefix": "Month: ", "offset": 20},
+            'pad': {"b": 10, "t": 50},
+            'len': 0.875,
+            'x': 0.0625,
             'xanchor': "left",
-            'y': 1.1,
-            'yanchor': "top"
+            'y': 0,
+            'yanchor': "top",
+            'steps': [{
+                'method': 'update',
+                'args': [{'z': [monthly_data.loc[month_end, var] for var in variables]}],
+                'label': month_end.strftime('%Y-%m')
+            } for month_end in monthly_data.index]
         }],
-        sliders=sliders,
         margin={"r":0, "t":45, "l":0, "b":120},
         height=700
     )

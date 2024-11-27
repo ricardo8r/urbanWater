@@ -30,13 +30,14 @@ def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         'evaporation': (1, 0.8),
         'transpiration': (1, 0.6),
         'baseflow': (1, 0.4),
-        'seepage': (1, 0.2)
+        'seepage': (1, 0.2),
+        'runoff': (0.75,0.8)
     }
 
     # Get nodes and calculate flow matrix using utils function
     nodes = (['imported', 'precipitation', 'irrigation'] +
              UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation'])
+             ['seepage', 'baseflow', 'evaporation', 'runoff'])
 
     flow_matrix = calculate_flow_matrix(results, nodes)
 

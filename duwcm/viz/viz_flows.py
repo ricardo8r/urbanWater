@@ -13,7 +13,7 @@ def create_flow_visualization(results: Dict[str, pd.DataFrame],
     """Create flow visualization (Sankey or Chord) of water flows between components."""
     nodes = (['imported', 'precipitation', 'irrigation'] +
              UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation'])
+             ['seepage', 'baseflow', 'evaporation', 'runoff'])
 
     flow_matrix = calculate_flow_matrix(results, nodes)
 

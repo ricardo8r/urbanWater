@@ -83,7 +83,7 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
         gdf_feature.plot(ax=ax, color=color, edgecolor=edgecolor, alpha=0.8, linewidth=1)
 
     # Plot data
-    if variable_name in ['stormwater', 'wastewater']:
+    if variable_name in ['stormwater_runoff', 'wastewater_discharge']:
         sm = plot_linear(ax, gdf_geometry, flow_paths, variable_name, cmap)
     else:
         values = gdf_geometry[variable_name].dropna()
@@ -141,8 +141,8 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
         'imported_water': ('YlOrRd', None),
         'baseflow': ('Blues', None),
         'deep_seepage': ('PuBuGn', None),
-        'stormwater': ('BuPu', flow_paths),
-        'wastewater': ('PuRd', flow_paths)
+        'stormwater_runoff': ('BuPu', flow_paths),
+        'wastewater_discharge': ('PuRd', flow_paths)
     }
 
     for variable_name, (cmap, paths) in variables_to_plot.items():

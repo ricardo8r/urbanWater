@@ -194,7 +194,7 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
     if hasattr(component, 'flows'):
         flows = component.flows
         for flow_name, flow in vars(flows).items():
-            results[flow_name] = flow.amount
+            results[flow_name] = flow.get_amount('m3')
 
     return results
 
@@ -202,11 +202,10 @@ def _create_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
     """Create DataFrame of selected local results."""
     selected = {
         'imported_water': ('demand', 'imported_water'),
-        'stormwater': ('stormwater', 'to_downstream'),
-        'wastewater': ('wastewater', 'to_downstream'),
+        'stormwater_runoff': ('stormwater', 'to_downstream'),
+        'wastewater_discharge': ('wastewater', 'to_downstream'),
         'baseflow': ('groundwater', 'baseflow'),
-        'deep_seepage': ('groundwater', 'seepage'),
-        'moisture': ('vadose', 'moisture')
+        'deep_seepage': ('groundwater', 'seepage')
     }
 
     evaporation_components = [
@@ -224,15 +223,6 @@ def _create_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
     for col_name, (component, flow) in selected.items():
         if component in dataframe_results and flow in dataframe_results[component].columns:
             results_dict[col_name] = dataframe_results[component][flow]
-
-    results_dict['groundwater'] = (
-        dataframe_results['groundwater']['surface_water_level'] -
-        dataframe_results['groundwater']['water_level']
-    ) / dataframe_results['groundwater']['area']
-
-    # Convert moisture (m3 to mm)
-    if 'moisture' in results_dict:
-        results_dict['moisture'] = (results_dict['moisture'] / dataframe_results['vadose']['area']) * 1000
 
     # Calculate evapotranspiration by summing all components
     evap_sum = None

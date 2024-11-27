@@ -13,7 +13,7 @@ def generate_alluvial(results: Dict[str, pd.DataFrame], output_dir: Path) -> Non
     # Get nodes and calculate flow matrix
     nodes = (['imported', 'precipitation', 'irrigation'] +
              UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation'])
+             ['seepage', 'baseflow', 'evaporation', 'runoff'])
 
     flow_matrix = calculate_flow_matrix(results, nodes)
 
