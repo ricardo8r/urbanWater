@@ -189,6 +189,7 @@ class VadoseData:
 @dataclass
 class GroundwaterData:
     """Groundwater component"""
+    cell_id: float = field(default=0)
     flows: GroundwaterFlows = field(default_factory=GroundwaterFlows)
     water_level: Storage = field(default_factory=lambda: Storage(
         _default_unit=StorageUnit.METER,
@@ -394,33 +395,43 @@ class UrbanWaterData:
     def validate_water_balance(self) -> Dict[str, Dict[str, float]]:
         balance_results = {}
 
+        # Define which linked storages belong to which component
+        linked_storage_map = {
+            'pervious': {'vadose_moisture': 'vadose'},  # Skip in pervious
+            'vadose': {'groundwater_level': 'groundwater'},  # Skip in vadose
+            'demand': {'rt_storage': 'raintank'}  # Skip in demand
+        }
+
         for comp_name in self.COMPONENTS:
             component = getattr(self, comp_name)
             flows = component.flows
 
-            # Calculate inflows and outflows
-            total_inflow = flows.get_total_inflow()
-            total_outflow = flows.get_total_outflow()
-
-            # Calculate total storage change across all Storage instances
             storage_changes = {}
             total_storage_change = 0
 
+            # Get linked storages to skip for this component
+            skip_storages = linked_storage_map.get(comp_name, {})
+
             for attr_name, attr_value in vars(component).items():
                 if isinstance(attr_value, Storage):
+                    # Skip if this is a linked storage that belongs to another component
+                    if attr_name in skip_storages:
+                        continue
+
                     change = attr_value.get_change('m3')
                     storage_changes[attr_name] = change
                     total_storage_change += change
 
-            # Calculate overall balance
-            balance = total_inflow - total_outflow - total_storage_change
+            # Calculate inflows and outflows
+            total_inflow = flows.get_total_inflow()
+            total_outflow = flows.get_total_outflow()
 
             balance_results[comp_name] = {
                 'inflow': total_inflow,
                 'outflow': total_outflow,
                 'storage_changes': storage_changes,
                 'total_storage_change': total_storage_change,
-                'balance': balance
+                'balance': total_inflow - total_outflow - total_storage_change
             }
 
         return balance_results

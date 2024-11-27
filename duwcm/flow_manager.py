@@ -224,24 +224,18 @@ class ComponentFlows:
 
     def get_total_inflow(self, unit: Optional[WaterUnit] = None) -> float:
         """Calculate total inflow in specified unit (defaults to m³)"""
-        total = sum(self.get_flow(name)
-                   for name, flow in vars(self).items()
-                   if isinstance(flow, (Flow, MultiSourceFlow))
-                   and flow.direction == FlowDirection.IN)
-
-        if unit:
-            return WaterUnit.convert(total, WaterUnit.CUBIC_METER, unit, None)
+        total = 0.0
+        for name, flow in vars(self).items():
+            if isinstance(flow, (Flow, MultiSourceFlow)) and flow.direction == FlowDirection.IN:
+                total += flow.get_amount(unit) if unit else flow.amount
         return total
 
     def get_total_outflow(self, unit: Optional[WaterUnit] = None) -> float:
         """Calculate total outflow in specified unit (defaults to m³)"""
-        total = sum(self.get_flow(name)
-                   for name, flow in vars(self).items()
-                   if isinstance(flow, (Flow, MultiSourceFlow))
-                   and flow.direction == FlowDirection.OUT)
-
-        if unit:
-            return WaterUnit.convert(total, WaterUnit.CUBIC_METER, unit, None)
+        total = 0.0
+        for name, flow in vars(self).items():
+            if isinstance(flow, (Flow, MultiSourceFlow)) and flow.direction == FlowDirection.OUT:
+                total += flow.get_amount(unit) if unit else flow.amount
         return total
 
 @dataclass
