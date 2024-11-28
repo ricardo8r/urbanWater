@@ -118,11 +118,11 @@ class GroundwaterClass:
                    (effective_previous_head - water_level))
 
         # Update water levels
-        water_level = max(0, effective_previous_head -
-                          (inflow - seepage - infiltration - baseflow) / (data.storage_coefficient))
-        surface_water_level = min(0, effective_previous_head -
-                                  (inflow - seepage - infiltration - baseflow) /
-                                  (data.storage_coefficient)) * data.storage_coefficient
+        water_level = max(0, effective_previous_head)# -
+                          #(inflow - seepage - infiltration - baseflow) / (data.storage_coefficient))
+        surface_water_level = min(0, effective_previous_head  * data.storage_coefficient)#-
+                                  #(inflow - seepage - infiltration - baseflow) /
+                                  #(data.storage_coefficient)) * data.storage_coefficient
 
         data.water_level.set_amount(water_level, 'm')
         data.surface_water_level.set_amount(surface_water_level, 'm')

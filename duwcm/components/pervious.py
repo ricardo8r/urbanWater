@@ -1,6 +1,5 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-import numpy as np
 from duwcm.data_structures import PerviousData
 from duwcm.functions import soil_selector
 
@@ -96,13 +95,13 @@ class PerviousClass:
         # Calculate infiltration capacity using linked vadose moisture
         available_space = max(0, self.moisture_root_capacity - data.vadose_moisture.get_previous('mm'))
         max_percolation = self.time_step * self.saturated_permeability
-        infiltration_capacity = min(self.time_step * data.infiltration_capacity,
-                                    available_space + min(available_space, max_percolation))
+        data.infiltration_capacity = min(self.time_step * self.infiltration_capacity, available_space +
+                                    min(available_space, max_percolation))
 
         # Calculate time factor and resulting fluxes
         data.flows.set_flow('evaporation', forcing['potential_evaporation'], 'mm')
-        denominator = data.flows.get_flow('evaporation', 'L') + infiltration_capacity * data.area
-        time_factor = 1.0 if denominator <= 0 else min(1.0, current_storage / denominator)
+        denominator = data.flows.get_flow('evaporation', 'L') + data.infiltration_capacity * data.area
+        time_factor = 0.0 if denominator <= 0 else min(1.0, current_storage / denominator)
 
         data.flows.set_flow('evaporation', time_factor * data.flows.get_flow('evaporation', 'L'), 'L')
         data.flows.set_flow('to_vadose', time_factor * data.infiltration_capacity, 'mm')
@@ -115,7 +114,7 @@ class PerviousClass:
                                     ),
                                 'L')
 
-        overflow = max(0.0, total_inflow - 
+        overflow = max(0.0, total_inflow -
                        data.flows.get_flow('evaporation', 'L') -
                        data.flows.get_flow('to_vadose', 'L') -
                        data.storage.get_change('L'))
