@@ -72,9 +72,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
             'flows': [],
             'storage': []
         }
-        initial_validation = track_validation_results(model, initial_date)
-        for key, value in initial_validation.items():
-            validation_tracking[key].append(value)
 
     for t in tqdm(range(1, num_timesteps), desc="Water balance"):
         current_date = forcing.index[t]
@@ -113,6 +110,25 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], 
             component_class.solve(forcing)
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
+
+#        if cell_id == 33:  # Debug for specific cell
+#            groundwater = cell_data.groundwater
+#            print("\nAfter solving:")
+#            flows = groundwater.flows
+#            for attr_name, attr_value in vars(flows).items():
+#                if isinstance(attr_value, (Flow, MultiSourceFlow)):
+#                    print(f"  {attr_name}: {flows.get_flow(attr_name):.6f}")
+#
+#            # Print balance validation just for wastewater
+#            validation = cell_data.validate_water_balance(include_components = {'groundwater'})
+#            if 'groundwater' in validation:
+#                print("\nDemand Balance Validation:")
+#                values = validation['groundwater']
+#                print(f"  Inflow: {values['inflow']:.6f}")
+#                print(f"  Outflow: {values['outflow']:.6f}")
+#                print(f"  Storage change: {values['total_storage_change']:.6f}")
+#                print(f"  Balance: {values['balance']:.6f}")
+#                input('*')
 
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""

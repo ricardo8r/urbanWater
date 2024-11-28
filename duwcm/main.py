@@ -121,7 +121,7 @@ def check_results(results: Dict[str, pd.DataFrame], config: Dynaconf) -> None:
             logger.warning("Found %d significant balance errors", len(significant_issues))
 
             # Get worst issues by absolute error
-            worst_indices = abs(significant_issues['balance_error_percent']).nlargest(3).index
+            worst_indices = abs(significant_issues['balance_error_percent']).nlargest(15).index
             worst_issues = significant_issues.loc[worst_indices]
 
             for _, issue in worst_issues.iterrows():

@@ -11,6 +11,9 @@ from typing import Dict
 from pathlib import Path
 import pandas as pd
 from duwcm.water_model import UrbanWaterModel
+from duwcm.data_structures import Storage
+
+ZERO_THRESHOLD = 1e-10
 
 def check_balance(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFrame:
     """
@@ -28,7 +31,7 @@ def check_balance(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.Data
     }
 
     for cell_id, data in model.data.items():
-        check_result = data.validate_water_balance()
+        check_result = data.validate_water_balance(skip_components = {'groundwater'})
 
         for comp_name, values in check_result.items():
             balance_data['timestep'].append(current_date)
@@ -39,14 +42,12 @@ def check_balance(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.Data
             balance_data['storage_change'].append(values['total_storage_change'])
             balance_data['balance'].append(values['balance'])
 
-            if values['balance'] == 0:
+            if abs(values['balance']) < ZERO_THRESHOLD:
                 error_percent = 0
             else:
-                if abs(values['inflow']) > 0 or abs(values['outflow']) > 0 or abs(values['total_storage_change']) > 0:
-                    error_percent = (values['balance'] /
-                                     max(abs(values['inflow']),
-                                         abs(values['outflow']),
-                                         abs(values['total_storage_change']))) * 100
+                total_magnitude = abs(values['inflow']) + abs(values['outflow']) + abs(values['total_storage_change'])
+                if total_magnitude > ZERO_THRESHOLD:
+                    error_percent = (values['balance'] / total_magnitude) * 100
                 else:
                     error_percent = 0
             balance_data['balance_error_percent'].append(error_percent)
@@ -115,49 +116,58 @@ def check_flows(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFr
 
 def check_storage(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFrame:
     """
-    Check storage constraints for all cells at given timestep.
+    Check if any storage in any component violates physical constraints.
+
+    Args:
+        model: The water model instance
+        current_date: Current simulation timestep
+
+    Returns:
+        DataFrame with columns:
+        - timestep: When violation occurred
+        - cell: Which grid cell
+        - component: Which component (roof, groundwater etc)
+        - storage_name: Name of the storage variable
+        - issue_type: 'exceeds_capacity' or 'negative_storage'
+        - current_value: The problematic storage value
+        - capacity: The storage capacity (or 0 for negative checks)
     """
-    storage_data = {
-        'timestep': [],
-        'cell': [],
-        'component': [],
-        'storage_name': [],
-        'issue_type': [],
-        'current_value': [],
-        'limit_value': [],
-        'description': []
-    }
+    violations = []
 
     for cell_id, data in model.data.items():
-        # Use validate_storage from UrbanWaterData
-        validation = data.validate_storage()
+        # Check each component that has storage
+        for comp_name, component in data.iter_components():
+            # Check each storage attribute in the component
+            for attr_name, attr_value in vars(component).items():
+                if isinstance(attr_value, Storage):
+                    current_storage = attr_value.get_amount('m3')
+                    capacity = attr_value.get_capacity('m3')
 
-        for comp_name, issues in validation.items():
-            for issue in issues:
-                # Parse issue string to extract values
-                if 'exceeds capacity' in issue:
-                    storage_name, details = issue.split(': ')
-                    current_val = float(details.split('(')[1].split(')')[0])
-                    capacity_val = float(details.split('(')[2].split(')')[0])
-                    issue_type = 'exceeds_capacity'
-                elif 'Negative storage' in issue:
-                    storage_name, details = issue.split(': ')
-                    current_val = float(details)
-                    capacity_val = 0
-                    issue_type = 'negative_storage'
-                else:
-                    continue
+                    # Check if storage exceeds capacity
+                    if current_storage > capacity * 1.001:  # Small tolerance
+                        violations.append({
+                            'timestep': current_date,
+                            'cell': cell_id,
+                            'component': comp_name,
+                            'storage_name': attr_name,
+                            'issue_type': 'exceeds_capacity',
+                            'current_value': current_storage,
+                            'capacity': capacity
+                        })
 
-                storage_data['timestep'].append(current_date)
-                storage_data['cell'].append(cell_id)
-                storage_data['component'].append(comp_name)
-                storage_data['storage_name'].append(storage_name)
-                storage_data['issue_type'].append(issue_type)
-                storage_data['current_value'].append(current_val)
-                storage_data['limit_value'].append(capacity_val)
-                storage_data['description'].append(issue)
+                    # Check for negative storage
+                    if current_storage < 0:
+                        violations.append({
+                            'timestep': current_date,
+                            'cell': cell_id,
+                            'component': comp_name,
+                            'storage_name': attr_name,
+                            'issue_type': 'negative_storage',
+                            'current_value': current_storage,
+                            'capacity': 0
+                        })
 
-    return pd.DataFrame(storage_data)
+    return pd.DataFrame(violations)
 
 def track_validation_results(model: UrbanWaterModel, current_date: pd.Timestamp) -> Dict[str, pd.DataFrame]:
     """

@@ -392,39 +392,53 @@ class UrbanWaterData:
 
         return issues
 
-    def validate_water_balance(self) -> Dict[str, Dict[str, float]]:
+    def validate_water_balance(self, include_components: Optional[List[str]] = None,
+                         skip_components: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
+        """
+        Validate water balance for selected components.
+
+        Args:
+            include_components: List of component names to include in validation. If None, validate all except skipped.
+            skip_components: List of component names to skip in validation. If None, skip none.
+
+        Returns:
+            Dict with validation results for each component
+        """
         balance_results = {}
 
-        # Define which linked storages belong to which component
-        linked_storage_map = {
-            'pervious': {'vadose_moisture': 'vadose'},  # Skip in pervious
-            'vadose': {'groundwater_level': 'groundwater'},  # Skip in vadose
-            'demand': {'rt_storage': 'raintank'}  # Skip in demand
-        }
+        # Determine which components to validate
+        components_to_validate = set(self.COMPONENTS)
+        if include_components is not None:
+            components_to_validate = set(include_components)
+        if skip_components is not None:
+            components_to_validate -= set(skip_components)
 
-        for comp_name in self.COMPONENTS:
+        for comp_name in components_to_validate:
             component = getattr(self, comp_name)
             flows = component.flows
 
+            # Calculate storage changes
             storage_changes = {}
             total_storage_change = 0
 
             # Get linked storages to skip for this component
-            skip_storages = linked_storage_map.get(comp_name, {})
+            skip_storages = {
+                'pervious': {'vadose_moisture'},
+                'vadose': {'groundwater_level'},
+                'demand': {'rt_storage'}
+            }.get(comp_name, set())
 
             for attr_name, attr_value in vars(component).items():
-                if isinstance(attr_value, Storage):
-                    # Skip if this is a linked storage that belongs to another component
-                    if attr_name in skip_storages:
-                        continue
-
+                if isinstance(attr_value, Storage) and attr_name not in skip_storages:
                     change = attr_value.get_change('m3')
                     storage_changes[attr_name] = change
                     total_storage_change += change
 
-            # Calculate inflows and outflows
-            total_inflow = flows.get_total_inflow()
-            total_outflow = flows.get_total_outflow()
+            # Calculate inflows and outflows using the flow's get_amount method
+            total_inflow = sum(flow.get_amount('m3') for flow in vars(flows).values()
+                             if hasattr(flow, 'direction') and flow.direction == 1)
+            total_outflow = sum(flow.get_amount('m3') for flow in vars(flows).values()
+                              if hasattr(flow, 'direction') and flow.direction == 2)
 
             balance_results[comp_name] = {
                 'inflow': total_inflow,

@@ -118,10 +118,10 @@ class DemandClass:
         """
         data = self.demand_data
 
-        roof_irrigation = data.flows.get_flow('to_roof')
-        pavement_irrigation = data.flows.get_flow('to_pavement')
-        pervious_irrigation = data.flows.get_flow('to_pervious')
-        indoor_use_leakage = data.flows.get_flow('to_groundwater')
+        roof_irrigation = data.flows.get_flow('to_roof', 'L')
+        pavement_irrigation = data.flows.get_flow('to_pavement', 'L')
+        pervious_irrigation = data.flows.get_flow('to_pervious', 'L')
+        indoor_use_leakage = data.flows.get_flow('to_groundwater', 'L')
         total_irrigation = roof_irrigation + pavement_irrigation + pervious_irrigation
 
         # Use class's internal calculation methods

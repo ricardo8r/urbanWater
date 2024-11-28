@@ -1,5 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
+import numpy as np
 from duwcm.data_structures import PerviousData
 from duwcm.functions import soil_selector
 
@@ -41,7 +42,7 @@ class PerviousClass:
         self.pervious_data.storage.set_capacity(params['pervious']['max_storage'], 'mm')
         self.pervious_data.storage.set_previous(0, 'mm')
 
-        self.pervious_data.infiltration_capacity = params['pervious']['infiltration_capacity']
+        self.infiltration_capacity = params['pervious']['infiltration_capacity']
         self.pervious_data.irrigation_factor = params['irrigation']['pervious']
 
         self.time_step = params['general']['time_step']
@@ -93,19 +94,18 @@ class PerviousClass:
         current_storage = max(0.0, data.storage.get_previous('L') + total_inflow)
 
         # Calculate infiltration capacity using linked vadose moisture
-        infiltration_capacity = min(
-            self.time_step * data.infiltration_capacity,
-            self.moisture_root_capacity - data.vadose_moisture.get_previous('mm') +
-            min(self.moisture_root_capacity - data.vadose_moisture.get_previous('mm'),
-                self.time_step * self.saturated_permeability)
-        )
+        available_space = max(0, self.moisture_root_capacity - data.vadose_moisture.get_previous('mm'))
+        max_percolation = self.time_step * self.saturated_permeability
+        infiltration_capacity = min(self.time_step * data.infiltration_capacity,
+                                    available_space + min(available_space, max_percolation))
 
         # Calculate time factor and resulting fluxes
         data.flows.set_flow('evaporation', forcing['potential_evaporation'], 'mm')
-        time_factor = min(1.0, current_storage / (data.flows.get_flow('evaporation', 'L') +
-                                                  infiltration_capacity * data.area))
+        denominator = data.flows.get_flow('evaporation', 'L') + infiltration_capacity * data.area
+        time_factor = 1.0 if denominator <= 0 else min(1.0, current_storage / denominator)
+
         data.flows.set_flow('evaporation', time_factor * data.flows.get_flow('evaporation', 'L'), 'L')
-        data.flows.set_flow('to_vadose', time_factor * infiltration_capacity, 'mm')
+        data.flows.set_flow('to_vadose', time_factor * data.infiltration_capacity, 'mm')
 
         # Calculate final storage and overflow
         data.storage.set_amount(min(data.storage.get_capacity('L'),

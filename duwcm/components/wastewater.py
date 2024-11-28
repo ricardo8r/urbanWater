@@ -44,7 +44,7 @@ class WastewaterClass:
             to_downstream: Wastewater sewer discharge [m³]
         """
         data = self.wastewater_data
-        total_inflow = (data.flows.get_flow('from_reuse', 'm3') +
+        total_inflow = (data.flows.get_flow('from_demand', 'm3') +
                         data.flows.get_flow('from_groundwater', 'm3') +
                         data.flows.get_flow('from_stormwater', 'm3') +
                         data.flows.get_flow('from_upstream', 'm3'))
