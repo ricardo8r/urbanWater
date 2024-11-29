@@ -6,6 +6,7 @@ from .generate_maps import generate_maps
 from .generate_chord import generate_chord
 from .generate_alluvial import generate_alluvial
 from .generate_graph import generate_graph
+from .plot_all import plot_all
 
 __all__ = [
     "export_geodata",
@@ -13,5 +14,6 @@ __all__ = [
     "generate_maps",
     "generate_chord",
     "generate_alluvial",
-    "generate_graph"
+    "generate_graph",
+    "plot_all"
 ]

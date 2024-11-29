@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import networkx as nx
 
 from duwcm.data_structures import UrbanWaterData
-from duwcm.functions import calculate_flow_matrix
+from duwcm.postprocess import calculate_flow_matrix
 
 def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
     """Generate a directed graph showing water flows between components."""

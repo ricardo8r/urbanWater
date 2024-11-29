@@ -6,7 +6,7 @@ import holoviews as hv
 from holoviews import opts, dim
 
 from duwcm.data_structures import UrbanWaterData
-from duwcm.functions import calculate_flow_matrix
+from duwcm.postprocess import calculate_flow_matrix
 
 def create_flow_visualization(results: Dict[str, pd.DataFrame],
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:

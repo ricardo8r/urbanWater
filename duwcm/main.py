@@ -239,7 +239,7 @@ def main() -> None:
                 background_shapefile=background_shapefile,
                 feature_shapefiles=feature_shapefiles,
                 geometry_geopackage=geo_file,
-                local_results=results['local'],
+                results=results,
                 output_dir=output_dir,
                 flow_paths=flow_paths
             )

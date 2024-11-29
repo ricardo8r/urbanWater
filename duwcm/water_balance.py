@@ -35,7 +35,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
         Dict containing:
             - Component results
             - Aggregated results
-            - Local results
             - Validation results for balance, flows, and storage
     """
     num_timesteps = len(forcing)
@@ -111,25 +110,6 @@ def _solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], 
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
 
-#        if cell_id == 33:  # Debug for specific cell
-#            groundwater = cell_data.groundwater
-#            print("\nAfter solving:")
-#            flows = groundwater.flows
-#            for attr_name, attr_value in vars(flows).items():
-#                if isinstance(attr_value, (Flow, MultiSourceFlow)):
-#                    print(f"  {attr_name}: {flows.get_flow(attr_name):.6f}")
-#
-#            # Print balance validation just for wastewater
-#            validation = cell_data.validate_water_balance(include_components = {'groundwater'})
-#            if 'groundwater' in validation:
-#                print("\nDemand Balance Validation:")
-#                values = validation['groundwater']
-#                print(f"  Inflow: {values['inflow']:.6f}")
-#                print(f"  Outflow: {values['outflow']:.6f}")
-#                print(f"  Storage change: {values['total_storage_change']:.6f}")
-#                print(f"  Balance: {values['balance']:.6f}")
-#                input('*')
-
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
     aggregated = {
@@ -146,20 +126,37 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     for cell_id, data in model.data.items():
         # Aggregate end-point flows
         if model.path.loc[cell_id, 'down'] == 0:
-            aggregated['stormwater'] += data.stormwater.flows.to_downstream.amount
-            aggregated['wastewater'] += data.wastewater.flows.to_downstream.amount
+            aggregated['stormwater'] += data.stormwater.flows.to_downstream.get_amount('m3')
+            aggregated['wastewater'] += data.wastewater.flows.to_downstream.get_amount('m3')
 
-        aggregated['baseflow'] += data.groundwater.flows.baseflow.amount
-        aggregated['total_seepage'] += data.groundwater.flows.seepage.amount
-        aggregated['imported_water'] += data.demand.flows.imported_water.amount
-        aggregated['transpiration'] += data.vadose.flows.transpiration.amount
-        aggregated['evaporation'] += (
-            data.roof.flows.evaporation.amount +
-            data.pavement.flows.evaporation.amount +
-            data.pervious.flows.evaporation.amount +
-            data.raintank.flows.evaporation.amount +
-            data.stormwater.flows.evaporation.amount
-        )
+        aggregated['baseflow'] += data.groundwater.flows.baseflow.get_amount('m3')
+        aggregated['total_seepage'] += data.groundwater.flows.seepage.get_amount('m3')
+        aggregated['imported_water'] += data.demand.flows.imported_water.get_amount('m3')
+
+    total_transpiration_area = sum(data.vadose.area for cell_id, data in model.data.items())
+
+    total_transpiration_m3 = sum(
+        data.vadose.flows.get_flow('transpiration', 'L')
+        for cell_id, data in model.data.items()
+    )
+    aggregated['transpiration'] = total_transpiration_m3 / total_transpiration_area
+
+    total_evap_area = sum(
+        data.roof.area + data.pavement.area + data.pervious.area +
+        data.raintank.area + data.stormwater.area
+        for cell_id, data in model.data.items()
+    )
+
+    total_evap_m3 = sum(
+        (data.roof.flows.get_flow('evaporation', 'L') +
+         data.pavement.flows.get_flow('evaporation', 'L') +
+         data.pervious.flows.get_flow('evaporation', 'L') +
+         data.raintank.flows.get_flow('evaporation', 'L') +
+         data.stormwater.flows.get_flow('evaporation', 'L'))
+        for cell_id, data in model.data.items()
+    )
+
+    aggregated['evaporation'] = total_evap_m3 / total_evap_area
 
     #aggregated['imported_water'] -= sum(model.current[w].wastewater.use for w in model.wastewater_cells)
     #aggregated['imported_water'] -= sum(model.current[s].stormwater.use for s in model.stormwater_cells)
@@ -186,10 +183,6 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
     total_area = dataframe_results['groundwater']['area'].iloc[0].sum()
     dataframe_results['aggregated'].attrs['total_area'] = total_area
 
-    # Create local results
-    local_results = _create_local_results(dataframe_results)
-    dataframe_results['local'] = local_results
-
     return dataframe_results
 
 def _collect_component_results(cell_id: int, date: pd.Timestamp, component: object) -> dict:
@@ -213,43 +206,3 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
             results[flow_name] = flow.get_amount('m3')
 
     return results
-
-def _create_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-    """Create DataFrame of selected local results."""
-    selected = {
-        'imported_water': ('demand', 'imported_water'),
-        'stormwater_runoff': ('stormwater', 'to_downstream'),
-        'wastewater_discharge': ('wastewater', 'to_downstream'),
-        'baseflow': ('groundwater', 'baseflow'),
-        'deep_seepage': ('groundwater', 'seepage')
-    }
-
-    evaporation_components = [
-        ('roof', 'evaporation'),
-        ('pavement', 'evaporation'),
-        ('pervious', 'evaporation'),
-        ('raintank', 'evaporation'),
-        ('stormwater', 'evaporation'),
-        ('vadose', 'transpiration')
-    ]
-
-    results_dict = {}
-
-    # Process regular flows
-    for col_name, (component, flow) in selected.items():
-        if component in dataframe_results and flow in dataframe_results[component].columns:
-            results_dict[col_name] = dataframe_results[component][flow]
-
-    # Calculate evapotranspiration by summing all components
-    evap_sum = None
-    for component, flow in evaporation_components:
-        if component in dataframe_results and flow in dataframe_results[component].columns:
-            if evap_sum is None:
-                evap_sum = dataframe_results[component][flow].copy()
-            else:
-                evap_sum += dataframe_results[component][flow]
-
-    if evap_sum is not None:
-        results_dict['evapotranspiration'] = evap_sum
-
-    return pd.DataFrame(results_dict)

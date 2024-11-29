@@ -4,6 +4,8 @@ import pandas as pd
 import geopandas as gpd
 import plotly.graph_objects as go
 
+from duwcm.postprocess import extract_local_results
+
 def create_map_base(geometry_geopackage: Path, background_shapefile: Path) -> go.Figure:
     """Create base map with hexagonal grid and background."""
     gdf_geometry = gpd.read_file(geometry_geopackage)
@@ -70,8 +72,9 @@ def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str], time_series_
     bounds = gdf_wgs84.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
-    monthly_data = time_series_data.groupby(pd.Grouper(freq='ME')).mean()
-    
+    local_results = extract_local_results(time_series_data)
+    monthly_data = local_results.groupby(pd.Grouper(freq='ME')).mean()
+
     # Calculate absolute global min/max across ALL variables
     global_min = monthly_data[variables].min().min()  # Min across all variables
     global_max = monthly_data[variables].max().max()  # Max across all variables

@@ -83,14 +83,13 @@ class PerviousClass:
         data.flows.set_flow('from_demand', forcing.get('pervious_irrigation', 0.0) * data.irrigation_factor, 'mm')
 
         # Calculate inflows
-        roof_inflow = data.flows.get_flow('from_roof', 'L')
-        pavement_inflow = data.flows.get_flow('from_pavement', 'L')
-        total_inflow = (data.flows.get_flow('precipitation', 'L') +
-                        data.flows.get_flow('from_demand', 'L') +
-                        roof_inflow + pavement_inflow)
+        total_inflow = (data.flows.get_flow('precipitation', 'mm') +
+                        data.flows.get_flow('from_demand', 'mm') +
+                        data.flows.get_flow('from_roof', 'mm') +
+                        data.flows.get_flow('from_pavement', 'mm'))
 
         # Calculate current storage
-        current_storage = max(0.0, data.storage.get_previous('L') + total_inflow)
+        current_storage = max(0.0, data.storage.get_previous('mm') + total_inflow)
 
         # Calculate infiltration capacity using linked vadose moisture
         available_space = max(0, self.moisture_root_capacity - data.vadose_moisture.get_previous('mm'))
@@ -100,27 +99,27 @@ class PerviousClass:
 
         # Calculate time factor and resulting fluxes
         data.flows.set_flow('evaporation', forcing['potential_evaporation'], 'mm')
-        denominator = data.flows.get_flow('evaporation', 'L') + data.infiltration_capacity * data.area
+        denominator = data.flows.get_flow('evaporation', 'mm') + data.infiltration_capacity
         time_factor = 0.0 if denominator <= 0 else min(1.0, current_storage / denominator)
 
-        data.flows.set_flow('evaporation', time_factor * data.flows.get_flow('evaporation', 'L'), 'L')
+        data.flows.set_flow('evaporation', time_factor * data.flows.get_flow('evaporation', 'mm'), 'mm')
         data.flows.set_flow('to_vadose', time_factor * data.infiltration_capacity, 'mm')
 
         # Calculate final storage and overflow
-        data.storage.set_amount(min(data.storage.get_capacity('L'),
+        data.storage.set_amount(min(data.storage.get_capacity('mm'),
                                     max(0.0, current_storage -
-                                        data.flows.get_flow('evaporation', 'L') -
-                                        data.flows.get_flow('to_vadose', 'L'))
+                                        data.flows.get_flow('evaporation', 'mm') -
+                                        data.flows.get_flow('to_vadose', 'mm'))
                                     ),
-                                'L')
+                                'mm')
 
         overflow = max(0.0, total_inflow -
-                       data.flows.get_flow('evaporation', 'L') -
-                       data.flows.get_flow('to_vadose', 'L') -
-                       data.storage.get_change('L'))
+                       data.flows.get_flow('evaporation', 'mm') -
+                       data.flows.get_flow('to_vadose', 'mm') -
+                       data.storage.get_change('mm'))
 
-        data.flows.set_flow('to_stormwater', overflow, 'L')
-        data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'L') *
-                            self.leakage_rate / (1 - self.leakage_rate), 'L')
-        data.flows.set_flow('from_demand', data.flows.get_flow('from_demand', 'L') /
-                            (1 - self.leakage_rate), 'L')
+        data.flows.set_flow('to_stormwater', overflow, 'mm')
+        data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'mm') *
+                            self.leakage_rate / (1 - self.leakage_rate), 'mm')
+        data.flows.set_flow('from_demand', data.flows.get_flow('from_demand', 'mm') /
+                            (1 - self.leakage_rate), 'mm')

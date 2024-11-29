@@ -2,11 +2,14 @@ from typing import Dict, List, Any, Optional
 from pathlib import Path
 import numpy as np
 import pandas as pd
+
 import geopandas as gpd
 import matplotlib.pyplot as plt
-from matplotlib.ticker import ScalarFormatter, LogFormatter, FuncFormatter
+
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
+
+from duwcm.postprocess import extract_local_results
 
 def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.DataFrame,
                 variable_name: str, cmap: str) -> Optional[plt.cm.ScalarMappable]:
@@ -132,7 +135,7 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     plt.close()
 
 def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], geometry_geopackage: Path,
-                  local_results: pd.DataFrame, output_dir: Path, flow_paths: pd.DataFrame) -> None:
+                  results: Dict[str, pd.DataFrame], output_dir: Path, flow_paths: pd.DataFrame) -> None:
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -144,6 +147,9 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
         'stormwater_runoff': ('BuPu', flow_paths),
         'wastewater_discharge': ('PuRd', flow_paths)
     }
+
+
+    local_results = extract_local_results(results)
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
         data = local_results[variable_name].groupby(level='cell').sum()

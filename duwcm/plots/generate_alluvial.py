@@ -4,7 +4,7 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from duwcm.data_structures import UrbanWaterData
-from duwcm.functions import calculate_flow_matrix
+from duwcm.postprocess import calculate_flow_matrix
 
 def generate_alluvial(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
     """Generate an alluvial diagram showing water flows between components."""

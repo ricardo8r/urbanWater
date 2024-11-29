@@ -4,13 +4,12 @@ import plotly.graph_objects as go
 
 def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFrame) -> go.Figure:
     """Create interactive plot with legend toggles for each data series."""
-    total_area = aggregated_results.attrs['total_area']
 
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'],
         'Potential Evaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (aggregated_results['evaporation'] +
-                               aggregated_results['transpiration']) / total_area,
+                               aggregated_results['transpiration']),
         'Stormwater': aggregated_results['stormwater'],
         'Baseflow': aggregated_results['baseflow'],
         'Wastewater': aggregated_results['wastewater']

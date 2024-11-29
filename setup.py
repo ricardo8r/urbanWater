@@ -29,8 +29,8 @@ setup(
     entry_points={
         "console_scripts": [
             "duwcm=duwcm.main:main",
-            "duwcm-plot=duwcm.postprocess:plot_all",
-            "duwcm-point=duwcm.postprocess:save_specific_cell_results"
+            "duwcm-plot=duwcm.plots:plot_all",
+            "duwcm-point=duwcm.postprocess:save_cell"
         ],
     },
 )

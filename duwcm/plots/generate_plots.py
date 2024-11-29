@@ -40,13 +40,11 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    total_area = results.attrs['total_area']
-
     results.index = forcing.index
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'],
         'PotentialEvaporation': forcing['potential_evaporation'],
-        'Evapotranspiration': (results['evaporation'] + results['transpiration']) / total_area,
+        'Evapotranspiration': (results['evaporation'] + results['transpiration']),
         'Stormwater': results['stormwater'],
         'Wastewater': results['wastewater'],
         'Baseflow': results['baseflow']
