@@ -67,7 +67,7 @@ class DemandClass:
         self.demand_data = demand_data
 
         # Initialize wastewater storage parameters
-        self.demand_data.area = 1#params['reuse']['area'] * params['general']['number_houses']
+        self.demand_data.area = params['reuse']['area'] * params['general']['number_houses']
         self.demand_data.flows.set_areas(self.demand_data.area)
         self.wastewater_capacity = params['reuse']['capacity'] * params['general']['number_houses']
 

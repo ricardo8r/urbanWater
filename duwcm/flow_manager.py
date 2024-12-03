@@ -74,6 +74,7 @@ class Flow:
     _type: FlowType = field(default=None)
     _direction: FlowDirection = field(default=None)
     _area: Optional[float] = field(default=None)
+    _volume_only: bool = field(default=False)
     linked_flow: Optional['Flow'] = field(default=None, repr=False)
 
     @property
@@ -108,12 +109,18 @@ class Flow:
         """Set the flow direction"""
         self._direction = value
 
-    def get_amount(self, unit: WaterUnit) -> float:
+    def get_amount(self, unit: str) -> float:
         """Get flow amount in specified unit"""
+        unit = WaterUnit(unit)
+        if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+            raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
+        if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
+            return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit)
         return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, self._area)
 
-    def set_amount(self, value: float, unit: WaterUnit) -> None:
+    def set_amount(self, value: float, unit: str) -> None:
         """Set flow amount from specified unit"""
+        unit = WaterUnit(unit)
         self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, self._area)
         if self.linked_flow is not None:
             self.linked_flow.set_amount_no_sync(self._amount)
@@ -124,7 +131,14 @@ class Flow:
 
     def set_area(self, area: float) -> None:
         """Set the area used for unit conversions"""
-        self._area = area
+        if self._volume_only:
+            self._area = 1
+        else:
+            self._area = area
+
+    def set_volume_only(self, volume_only: bool = True):
+        """Restrict flow to volume units only (m3 and L)"""
+        self._volume_only = volume_only
 
     def link(self, other_flow: 'Flow') -> None:
         """Link this flow to another flow for automatic synchronization"""
@@ -138,14 +152,20 @@ class MultiSourceFlow:
     direction: FlowDirection = None
     _sources: List[Flow] = field(default_factory=list)
     _area: Optional[float] = field(default=None)
+    _volume_only: bool = field(default=False)
 
     @property
     def amount(self) -> float:
         """Calculate total flow in m³ by summing all source amounts"""
         return sum(source.amount for source in self._sources)
 
-    def get_amount(self, unit: WaterUnit) -> float:
+    def get_amount(self, unit: str) -> float:
         """Get total flow in specified unit"""
+        unit = WaterUnit(unit)
+        if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+            raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
+        if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
+            return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit)
         return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit, self._area)
 
     def add_source(self, source: Flow) -> None:
@@ -161,7 +181,14 @@ class MultiSourceFlow:
 
     def set_area(self, area: float) -> None:
         """Set area for unit conversions"""
-        self._area = area
+        if self._volume_only:
+            self._area = 1
+        else:
+            self._area = area
+
+    def set_volume_only(self, volume_only: bool = True):
+        """Restrict flow to volume units only (m3 and L)"""
+        self._volume_only = volume_only
 
     def reset_flows(self) -> None:
         """Reset flows - called during model updates"""
@@ -394,7 +421,7 @@ class DemandFlows(ComponentFlows):
     """Demand water flows"""
     # Environmental flows
     imported_water: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IMPORTED_WATER, FlowDirection.IN, None))
+        default_factory=lambda: Flow(0.0, FlowType.IMPORTED_WATER, FlowDirection.IN, 1.0, True))
     # Component flows
     to_wastewater: Flow = field(
         default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
