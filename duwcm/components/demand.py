@@ -79,8 +79,26 @@ class DemandClass:
         self.irrigation_factor = params['irrigation']['pervious']
 
         # Initialize demand patterns
-        self.setdemand = demand_settings * self.indoor_water_use / 100
-        self.setreuse = reuse_settings
+        self.setdemand = pd.Series({
+            'K': demand_settings.kitchen,
+            'B': demand_settings.bathroom,
+            'T': demand_settings.toilet,
+            'L': demand_settings.laundry
+        }) * self.indoor_water_use / 100
+
+        self.setreuse = pd.Series({
+            'KforSSG': reuse_settings.kitchen_to_graywater,
+            'BforSSG': reuse_settings.bathroom_to_graywater,
+            'LforSSG': reuse_settings.laundry_to_graywater,
+            'RTforK': reuse_settings.kitchen_to_raintank,
+            'RTforB': reuse_settings.bathroom_to_raintank,
+            'RTforL': reuse_settings.laundry_to_raintank,
+            'WWSforT': reuse_settings.wastewater_to_toilet,
+            'WWSforIR': reuse_settings.wastewater_to_irrigation,
+            'RTforT': reuse_settings.raintank_to_toilet,
+            'RTforIR': reuse_settings.raintank_to_irrigation
+        })
+
         self._initialize_demands()
 
     def _initialize_demands(self):
@@ -88,18 +106,18 @@ class DemandClass:
         ssg_suply: Subsurface graywater irrigation suply [L]:
         raintank_suply: Max supply from rain tank [L]
         """
-        self.ssg_supply = (self.setreuse.KforSSG * self.setdemand['K'].values[0] +
-                           self.setreuse.BforSSG * self.setdemand['B'].values[0] +
-                           self.setreuse.LforSSG * self.setdemand['L'].values[0])
+        self.ssg_supply = (self.setreuse.KforSSG * self.setdemand['K'] +
+                           self.setreuse.BforSSG * self.setdemand['B'] +
+                           self.setreuse.LforSSG * self.setdemand['L'])
 
-        self.raintank_supply = (self.setreuse.RTforK * self.setdemand['K'].values[0] +
-                                 self.setreuse.RTforB * self.setdemand['B'].values[0] +
-                                 self.setreuse.RTforL * self.setdemand['L'].values[0])
+        self.raintank_supply = (self.setreuse.RTforK * self.setdemand['K'] +
+                                self.setreuse.RTforB * self.setdemand['B'] +
+                                self.setreuse.RTforL * self.setdemand['L'])
 
-        self.kitchen_demand = self.setdemand['K'].values[0]
-        self.bathroom_demand = self.setdemand['B'].values[0]
-        self.laundry_demand = self.setdemand['L'].values[0]
-        self.toilet_demand = self.setdemand['T'].values[0]
+        self.kitchen_demand = self.setdemand['K']
+        self.bathroom_demand = self.setdemand['B']
+        self.laundry_demand = self.setdemand['L']
+        self.toilet_demand = self.setdemand['T']
 
     def solve(self, forcing: pd.Series) -> None:
         """

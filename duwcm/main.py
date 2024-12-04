@@ -207,7 +207,7 @@ def check_results(results: Dict[str, pd.DataFrame], config: Dynaconf) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Urban Water Model")
-    parser.add_argument("--config", required=True, help="Path to the configuration file (YAML, TOML, or JSON)")
+    parser.add_argument("--config", required=True, help="Path to the configuration files (YAML, TOML, or JSON)")
     parser.add_argument("--env", default="default", help="Environment to use within the config file")
     parser.add_argument("--plot", action="store_true", help="Generate plots and map plots")
     parser.add_argument("--gis", action="store_true", help="Generate map plots")

@@ -78,8 +78,8 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
 
         # Solve timestep
         _solve_timestep(model, results, timestep_forcing, current_date)
-        model.distribute_wastewater()
-        model.distribute_stormwater()
+        #model.distribute_wastewater()
+        #model.distribute_stormwater()
         _aggregate_timestep(model, results_agg, current_date)
 
         # Track validation for current timestep if enabled

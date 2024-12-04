@@ -89,8 +89,7 @@ class UrbanWaterModel:
 
         for cell_id, cell_params in self.params.items():
             self.data[cell_id] = UrbanWaterData()
-            reuse_index = 1 if self.reuse_settings.shape[1] == 1 else cell_id
-
+            #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else cell_id
             cell_submodels = {
                 'roof': roof.RoofClass(cell_params, self.data[cell_id].roof),
                 'raintank': raintank.RainTankClass(cell_params, self.data[cell_id].raintank),
@@ -101,7 +100,7 @@ class UrbanWaterModel:
                 'groundwater': groundwater.GroundwaterClass(cell_params, self.soil_data, self.et_data,
                                                             self.data[cell_id].groundwater),
                 'stormwater': stormwater.StormwaterClass(cell_params, self.data[cell_id].stormwater),
-                'demand': demand.DemandClass(cell_params, self.demand_settings, self.reuse_settings[reuse_index],
+                'demand': demand.DemandClass(cell_params, self.demand_settings, self.reuse_settings,
                                           self.data[cell_id].demand),
                 'wastewater': wastewater.WastewaterClass(cell_params, self.data[cell_id].wastewater)
             }
@@ -131,20 +130,20 @@ class UrbanWaterModel:
             available_cells = list(self.cell_order)
             while self.data[w].wastewater.storage.amount > 0 and available_cells:
                 select = np.random.choice(available_cells)
-                reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
-                setreuse = self.reuse_settings[reuse_index]
+                #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
+                setreuse = self.reuse_settings
 
                 # Toilet use
                 wws_toilet_use = min(
                     self.data[w].wastewater.storage.amount,
-                    self.data[select].demand.rt_toilet_demand * setreuse.cWWSforT
+                    self.data[select].demand.rt_toilet_demand * setreuse.central_ww_to_toilet
                 )
                 self.data[select].demand.rt_toilet_demand -= wws_toilet_use
 
                 # Irrigation use
                 wws_irrigation_use = min(
                     self.data[w].wastewater.storage.amount - wws_toilet_use,
-                    self.data[select].demand.rt_irrigation_demand * setreuse.cWWSforIR
+                    self.data[select].demand.rt_irrigation_demand * setreuse.central_ww_to_irrigation
                 )
                 self.data[select].demand.rt_irrigation_demand -= wws_irrigation_use
 
@@ -161,20 +160,20 @@ class UrbanWaterModel:
             available_cells = list(self.cell_order)
             while self.data[s].stormwater.storage.amount > 0 and available_cells:
                 select = np.random.choice(available_cells)
-                reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
-                setreuse = self.reuse_settings[reuse_index]
+                #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
+                setreuse = self.reuse_settings
 
                 # Toilet use
                 sws_toilet_use = min(
                     self.data[s].stormwater.storage.amount,
-                    self.data[select].demand.rt_toilet_demand * setreuse.SWSforT
+                    self.data[select].demand.rt_toilet_demand * setreuse.stormwater_to_toilet
                 )
                 self.data[select].demand.rt_toilet_demand -= sws_toilet_use
 
                 # Irrigation use
                 sws_irrigation_use = min(
                     self.data[s].stormwater.storage.amount - sws_toilet_use,
-                    self.data[select].demand.rt_irrigation_demand * setreuse.SWSforIR
+                    self.data[select].demand.rt_irrigation_demand * setreuse.stormwater_to_irrigation
                 )
                 self.data[select].demand.rt_irrigation_demand -= sws_irrigation_use
 
