@@ -67,13 +67,14 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path) -> go
 
     return fig
 
-def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str], time_series_data: pd.DataFrame) -> go.Figure:
+def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str],
+                       time_series_data: pd.DataFrame) -> go.Figure:
+    """Create interactive map with time slider and variable selector."""
     gdf_wgs84 = gdf.to_crs(epsg=4326)
     bounds = gdf_wgs84.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
-    local_results = extract_local_results(time_series_data)
-    monthly_data = local_results.groupby(pd.Grouper(freq='ME')).mean()
+    monthly_data = time_series_data.groupby(pd.Grouper(freq='ME')).mean()
 
     # Calculate absolute global min/max across ALL variables
     global_min = monthly_data[variables].min().min()  # Min across all variables
