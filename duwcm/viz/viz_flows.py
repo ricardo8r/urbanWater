@@ -6,7 +6,7 @@ import holoviews as hv
 from holoviews import opts, dim
 
 from duwcm.data_structures import UrbanWaterData
-from duwcm.postprocess import calculate_flow_matrix
+from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
 def create_flow_visualization(results: Dict[str, pd.DataFrame],
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:
@@ -21,6 +21,18 @@ def create_flow_visualization(results: Dict[str, pd.DataFrame],
         return _create_sankey_diagram(flow_matrix)
     if viz_type == 'chord':
         return _create_chord_diagram(flow_matrix)
+
+def create_reuse_visualization(results: Dict[str, pd.DataFrame],
+                            viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:
+    """Create flow visualization (Sankey or Chord) of water flows for demand/reuse."""
+
+    flow_matrix = calculate_reuse_flow_matrix(results)
+
+    if viz_type == 'sankey':
+        return _create_sankey_diagram(flow_matrix)
+    if viz_type == 'chord':
+        return _create_chord_diagram(flow_matrix)
+
 
 def _create_sankey_diagram(flow_matrix: pd.DataFrame) -> go.Figure:
     """Create Sankey diagram from flow matrix."""

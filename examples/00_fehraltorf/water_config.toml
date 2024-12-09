@@ -20,15 +20,15 @@ wastewater_inflow = 80               # Percentage runoff to wastewater
 deep_resistance = 1000000            # Deep aquifer resistance in days
 
 [default.reuse]
-kitchen_to_graywater = 0             # Percentage of kitchen greywater for local reuse
-bathroom_to_graywater = 0            # Percentage of bathroom greywater for local reuse  
-laundry_to_graywater = 0             # Percentage of laundry greywater for local reuse
+kitchen_to_graywater = 15             # Percentage of kitchen greywater for local reuse
+bathroom_to_graywater = 25            # Percentage of bathroom greywater for local reuse  
+laundry_to_graywater = 15             # Percentage of laundry greywater for local reuse
 wastewater_to_irrigation = 0         # Percentage of wastewater for irrigation
 wastewater_to_toilet = 0             # Percentage of wastewater for toilet flushing
-kitchen_to_raintank = 25             # Percentage of kitchen water to raintank
-bathroom_to_raintank = 25            # Percentage of bathroom water to raintank
-laundry_to_raintank = 25             # Percentage of laundry water to raintank
-raintank_to_toilet = 0               # Percentage of raintank water for toilet
+raintank_to_kitchen = 25             # Percentage of kitchen water to raintank
+raintank_to_bathroom = 25            # Percentage of bathroom water to raintank
+raintank_to_laundry = 25             # Percentage of laundry water to raintank
+raintank_to_toilet = 25               # Percentage of raintank water for toilet
 raintank_to_irrigation = 0           # Percentage of raintank water for irrigation
 central_ww_to_toilet = 10            # Percentage of centralized wastewater for toilet
 central_ww_to_irrigation = 10        # Percentage of centralized wastewater for irrigation

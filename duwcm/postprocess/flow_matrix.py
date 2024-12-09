@@ -86,26 +86,26 @@ def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFram
         return pd.DataFrame()
 
     demand = results['demand']
-    sources = ['Potable Water', 'Rainwater', 'Treated WW', 'Greywater']
-    uses = ['Kitchen', 'Shower', 'Laundry', 'Toilet', 'Irrigation', 'Wastewater']
+    sources = ['Potable Water', 'Rainwater', 'Treated WW', 'Graywater']
+    uses = ['Kitchen', 'Bathroom', 'Laundry', 'Toilet', 'Irrigation', 'Wastewater']
 
     nodes = sources + uses
     flow_matrix = pd.DataFrame(0, index=nodes, columns=nodes, dtype=float)
 
     # Get total demand for each use
     total_kitchen = demand['po_to_kitchen'].sum() + demand['rt_to_kitchen'].sum()
-    total_shower = demand['po_to_shower'].sum() + demand['rt_to_shower'].sum()
+    total_bathroom = demand['po_to_bathroom'].sum() + demand['rt_to_bathroom'].sum()
     total_laundry = demand['po_to_laundry'].sum() + demand['rt_to_laundry'].sum()
 
     # Source to end use flows
     flow_matrix.loc['Potable Water', 'Kitchen'] = demand['po_to_kitchen'].sum()
-    flow_matrix.loc['Potable Water', 'Shower'] = demand['po_to_shower'].sum()
+    flow_matrix.loc['Potable Water', 'Bathroom'] = demand['po_to_bathroom'].sum()
     flow_matrix.loc['Potable Water', 'Laundry'] = demand['po_to_laundry'].sum()
     flow_matrix.loc['Potable Water', 'Toilet'] = demand['po_to_toilet'].sum()
     flow_matrix.loc['Potable Water', 'Irrigation'] = demand['po_to_irrigation'].sum()
 
     flow_matrix.loc['Rainwater', 'Kitchen'] = demand['rt_to_kitchen'].sum()
-    flow_matrix.loc['Rainwater', 'Shower'] = demand['rt_to_shower'].sum()
+    flow_matrix.loc['Rainwater', 'Bathroom'] = demand['rt_to_bathroom'].sum()
     flow_matrix.loc['Rainwater', 'Laundry'] = demand['rt_to_laundry'].sum()
     flow_matrix.loc['Rainwater', 'Toilet'] = demand['rt_to_toilet'].sum()
     flow_matrix.loc['Rainwater', 'Irrigation'] = demand['rt_to_irrigation'].sum()
@@ -115,18 +115,18 @@ def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFram
     flow_matrix.loc['Wastewater', 'Treated'] = (demand['wws_to_irrigation'].sum() +
                                                 demand['wws_to_toilet'].sum())
 
-    # Greywater generation and use
-    flow_matrix.loc['Kitchen', 'Greywater'] = demand['kitchen_to_greywater'].sum()
-    flow_matrix.loc['Shower', 'Greywater'] = demand['shower_to_greywater'].sum()
-    flow_matrix.loc['Laundry', 'Greywater'] = demand['laundry_to_greywater'].sum()
+    # Graywater generation and use
+    flow_matrix.loc['Kitchen', 'Graywater'] = demand['kitchen_to_graywater'].sum()
+    flow_matrix.loc['Bathroom', 'Graywater'] = demand['bathroom_to_graywater'].sum()
+    flow_matrix.loc['Laundry', 'Graywater'] = demand['laundry_to_graywater'].sum()
 
-    flow_matrix.loc['Greywater', 'Irrigation'] = demand['greywater_to_irrigation'].sum()
-    flow_matrix.loc['Greywater', 'Wastewater'] = demand['greywater_to_wastewater'].sum()
+    flow_matrix.loc['Graywater', 'Irrigation'] = demand['graywater_to_irrigation'].sum()
+    flow_matrix.loc['Graywater', 'Wastewater'] = demand['graywater_to_wastewater'].sum()
 
-    # Flows to wastewater - everything that doesn't go to greywater
-    flow_matrix.loc['Kitchen', 'Wastewater'] = total_kitchen - demand['kitchen_to_greywater'].sum()
-    flow_matrix.loc['Shower', 'Wastewater'] = total_shower - demand['shower_to_greywater'].sum()
-    flow_matrix.loc['Laundry', 'Wastewater'] = total_laundry - demand['laundry_to_greywater'].sum()
+    # Flows to wastewater - everything that doesn't go to graywater
+    flow_matrix.loc['Kitchen', 'Wastewater'] = total_kitchen - demand['kitchen_to_graywater'].sum()
+    flow_matrix.loc['Bathroom', 'Wastewater'] = total_bathroom - demand['bathroom_to_graywater'].sum()
+    flow_matrix.loc['Laundry', 'Wastewater'] = total_laundry - demand['laundry_to_graywater'].sum()
     flow_matrix.loc['Toilet', 'Wastewater'] = (demand['po_to_toilet'].sum() +
                                               demand['rt_to_toilet'].sum() +
                                               demand['wws_to_toilet'].sum())

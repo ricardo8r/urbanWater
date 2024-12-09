@@ -22,7 +22,7 @@ class WaterQuality(Enum):
     POTABLE = auto()      # Drinking water quality
     RAINWATER = auto()    # Direct precipitation collection
     STORMWATER = auto()   # Surface runoff collection
-    GREYWATER = auto()    # Lightly contaminated wastewater
+    GRAYWATER = auto()    # Lightly contaminated wastewater
     BLACKWATER = auto()   # Heavily contaminated wastewater
     TREATED = auto()      # Treated water (various levels possible)
     RAW = auto()          # Untreated water (groundwater, surface water)
@@ -973,52 +973,52 @@ class DemandInternalFlows(ComponentFlows):
     Internal demand flows tracking detailed water use paths and quality transformations.
 
     Tracks pathways by water quality level (lowest to highest):
-    - Greywater (GW): Lightly contaminated domestic wastewater
+    - Graywater (GW): Lightly contaminated domestic wastewater
     - Non-potable (NP): Treated to non-drinking standards
     - Stormwater (SW): Collected urban runoff
     - Rainwater (RW): Direct precipitation collection
     - Potable (PO): Treated to drinking standards
     """
-    # Greywater generation and use
-    kitchen_to_greywater: Flow = field(
+    # Graywater generation and use
+    kitchen_to_graywater: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
-            _quality=WaterQuality.GREYWATER,
+            _quality=WaterQuality.GRAYWATER,
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.OUT,
             _volume_only=True
         ))
 
-    shower_to_greywater: Flow = field(
+    bathroom_to_graywater: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
-            _quality=WaterQuality.GREYWATER,
+            _quality=WaterQuality.GRAYWATER,
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.OUT,
             _volume_only=True
         ))
 
-    laundry_to_greywater: Flow = field(
+    laundry_to_graywater: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
-            _quality=WaterQuality.GREYWATER,
+            _quality=WaterQuality.GRAYWATER,
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.OUT,
             _volume_only=True
         ))
 
-    greywater_to_irrigation: Flow = field(
+    graywater_to_irrigation: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
-            _quality=WaterQuality.GREYWATER,
+            _quality=WaterQuality.GRAYWATER,
             _use=WaterUse.IRRIGATION,
             _direction=FlowDirection.OUT,
             _volume_only=True
         ))
-    greywater_to_wastewater: Flow = field(
+    graywater_to_wastewater: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
-            _quality=WaterQuality.GREYWATER,
+            _quality=WaterQuality.GRAYWATER,
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.OUT,
             _volume_only=True
@@ -1053,7 +1053,7 @@ class DemandInternalFlows(ComponentFlows):
             _volume_only=True
         ))
 
-    rt_to_shower: Flow = field(
+    rt_to_bathroom: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
             _quality=WaterQuality.RAINWATER,
@@ -1146,7 +1146,7 @@ class DemandInternalFlows(ComponentFlows):
             _volume_only=True
         ))
 
-    po_to_shower: Flow = field(
+    po_to_bathroom: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
             _quality=WaterQuality.POTABLE,
