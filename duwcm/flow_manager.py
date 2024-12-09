@@ -1,23 +1,40 @@
 from dataclasses import dataclass, field
-from typing import List, Union, Optional
+from typing import Dict, List, Union, Optional
 from enum import Enum, auto, IntEnum
+from collections import defaultdict
 
 TO_METER = 0.001
 TO_MM = 1000
 
-class FlowType(Enum):
+class FlowProcess(Enum):
+    """Physical processes affecting water movement"""
     PRECIPITATION = auto()
     EVAPORATION = auto()
     TRANSPIRATION = auto()
-    RUNOFF = auto()
     INFILTRATION = auto()
-    LEAKAGE = auto()
     PERCOLATION = auto()
-    BASEFLOW = auto()
+    RUNOFF = auto()
     SEEPAGE = auto()
-    IRRIGATION = auto()
-    IMPORTED_WATER = auto()
-    WASTEWATER = auto()
+    BASEFLOW = auto()
+
+class WaterQuality(Enum):
+    """Water quality/source classifications"""
+    POTABLE = auto()      # Drinking water quality
+    RAINWATER = auto()    # Direct precipitation collection
+    STORMWATER = auto()   # Surface runoff collection
+    GREYWATER = auto()    # Lightly contaminated wastewater
+    BLACKWATER = auto()   # Heavily contaminated wastewater
+    TREATED = auto()      # Treated water (various levels possible)
+    RAW = auto()          # Untreated water (groundwater, surface water)
+
+class WaterUse(Enum):
+    """End use classifications"""
+    DOMESTIC = auto()     # Indoor residential use
+    IRRIGATION = auto()   # Landscape/agricultural irrigation
+    INDUSTRIAL = auto()   # Industrial/commercial processes
+    ENVIRONMENTAL = auto() # Environmental flows/requirements
+    LEAKAGE = auto()      # System losses
+    OVERFLOW = auto()     # Excess discharge
 
 class FlowDirection(IntEnum):
     IN = 1
@@ -71,7 +88,9 @@ class WaterUnit(Enum):
 class Flow:
     """Base class for a flow with amounts in m³"""
     _amount: float = field(default=0.0)
-    _type: FlowType = field(default=None)
+    _process: FlowProcess = field(default=None)
+    _quality: WaterQuality = field(default=None)
+    _use: WaterUse = field(default=None)
     _direction: FlowDirection = field(default=None)
     _area: Optional[float] = field(default=None)
     _volume_only: bool = field(default=False)
@@ -90,14 +109,34 @@ class Flow:
             self.linked_flow.set_amount_no_sync(self._amount)
 
     @property
-    def type(self) -> FlowType:
+    def process(self) -> FlowProcess:
         """Get the flow type"""
-        return self._type
+        return self._process
 
-    @type.setter
-    def type(self, value: FlowType) -> None:
+    @process.setter
+    def process(self, value: FlowProcess) -> None:
         """Set the flow type"""
-        self._type = value
+        self._process = value
+
+    @property
+    def quality(self) -> WaterQuality:
+        """Get the flow type"""
+        return self._quality
+
+    @quality.setter
+    def quality(self, value: WaterQuality) -> None:
+        """Set the flow type"""
+        self._quality = value
+
+    @property
+    def use(self) -> WaterUse:
+        """Get the flow type"""
+        return self._use
+
+    @use.setter
+    def use(self, value: WaterUse) -> None:
+        """Set the flow type"""
+        self._use = value
 
     @property
     def direction(self) -> FlowDirection:
@@ -115,13 +154,18 @@ class Flow:
         if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
             raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
         if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
-            return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit)
+            return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, 1)
         return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, self._area)
 
     def set_amount(self, value: float, unit: str) -> None:
         """Set flow amount from specified unit"""
         unit = WaterUnit(unit)
-        self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, self._area)
+        if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+            raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
+        if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
+            self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, 1)
+        else:
+            self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, self._area)
         if self.linked_flow is not None:
             self.linked_flow.set_amount_no_sync(self._amount)
 
@@ -131,10 +175,7 @@ class Flow:
 
     def set_area(self, area: float) -> None:
         """Set the area used for unit conversions"""
-        if self._volume_only:
-            self._area = 1
-        else:
-            self._area = area
+        self._area = area
 
     def set_volume_only(self, volume_only: bool = True):
         """Restrict flow to volume units only (m3 and L)"""
@@ -148,11 +189,14 @@ class Flow:
 @dataclass
 class MultiSourceFlow:
     """Flow that can accumulate from multiple sources. All amounts in m³."""
-    type: FlowType = None
-    direction: FlowDirection = None
     _sources: List[Flow] = field(default_factory=list)
     _area: Optional[float] = field(default=None)
     _volume_only: bool = field(default=False)
+
+    _process: FlowProcess = field(default=None)
+    _quality: WaterQuality = field(default=None)
+    _use: WaterUse = field(default=None)
+    _direction: FlowDirection = None
 
     @property
     def amount(self) -> float:
@@ -165,7 +209,7 @@ class MultiSourceFlow:
         if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
             raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
         if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
-            return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit)
+            return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit, 1)
         return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit, self._area)
 
     def add_source(self, source: Flow) -> None:
@@ -181,10 +225,7 @@ class MultiSourceFlow:
 
     def set_area(self, area: float) -> None:
         """Set area for unit conversions"""
-        if self._volume_only:
-            self._area = 1
-        else:
-            self._area = area
+        self._area = area
 
     def set_volume_only(self, volume_only: bool = True):
         """Restrict flow to volume units only (m3 and L)"""
@@ -194,6 +235,22 @@ class MultiSourceFlow:
         """Reset flows - called during model updates"""
         for source in self._sources:
             source.amount = 0.0
+
+    def get_amounts_by_quality(self) -> Dict[WaterQuality, float]:
+        """Get breakdown of total flow by water quality"""
+        quality_amounts = defaultdict(float)
+        for source in self._sources:
+            if source.quality:
+                quality_amounts[source.quality] += source.amount
+        return dict(quality_amounts)
+
+    def get_amounts_by_use(self) -> Dict[WaterUse, float]:
+        """Get breakdown of total flow by end use"""
+        use_amounts = defaultdict(float)
+        for source in self._sources:
+            if source.use:
+                use_amounts[source.use] += source.amount
+        return dict(use_amounts)
 
 @dataclass
 class ComponentFlows:
@@ -267,169 +324,860 @@ class ComponentFlows:
 
 @dataclass
 class RoofFlows(ComponentFlows):
-    """Roof component flows"""
-    # Environmental flows
+    """
+    Roof component flows tracking water movement on roof surfaces.
+
+    Tracks:
+    - Direct precipitation input
+    - Irrigation application 
+    - Evaporation loss
+    - Runoff to raintanks (effective)
+    - Runoff to pervious areas (non-effective)
+    - Leakage to groundwater
+    """
+    # Environmental inputs
     precipitation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PRECIPITATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
     evaporation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Irrigation inputs
     from_demand: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.IN
+        ))
+
+    # Runoff outputs
     to_raintank: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
     to_pervious: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Losses
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class RainTankFlows(ComponentFlows):
-    """Raintank component flows"""
-    # Environmental flows
+    """
+    Raintank component flows tracking water storage and distribution.
+
+    Tracks:
+    - Direct precipitation (if tank is open)
+    - Roof runoff collection
+    - Evaporation loss (if tank is open)
+    - Overflow distribution to pavement and stormwater
+    """
+    # Environmental inputs/outputs (for open tanks)
     precipitation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PRECIPITATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
     evaporation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Collection inputs
     from_roof: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.IN
+        ))
+
+    # Distribution/overflow outputs
     to_pavement: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
     to_stormwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Supply outputs (linked to demand)
+    to_demand: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class PavementFlows(ComponentFlows):
-    """Pavement component flows"""
-    # Environmental flows
+    """
+    Pavement component flows tracking water movement on impervious surfaces.
+
+    Tracks:
+    - Direct precipitation input
+    - Irrigation application
+    - Raintank overflow input
+    - Evaporation loss
+    - Surface runoff distribution
+    - Infiltration and leakage to groundwater
+    """
+    # Environmental inputs/outputs
     precipitation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PRECIPITATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
     evaporation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Managed inputs
     from_demand: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.IN
+        ))
+
     from_raintank: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
+    # Surface runoff outputs
     to_pervious: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
-    to_groundwater_infiltration: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.OUT, None))
-    to_groundwater_leakage: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
     to_stormwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Groundwater interactions
+    to_groundwater_infiltration: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    to_groundwater_leakage: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class PerviousFlows(ComponentFlows):
-    """Pervious flows"""
-    # Environmental flows
+    """
+    Pervious component flows tracking water movement on permeable surfaces.
+
+    Tracks:
+    - Direct precipitation input
+    - Irrigation application
+    - Runoff inputs from impervious surfaces
+    - Evaporation loss
+    - Infiltration to vadose zone
+    - Surface runoff to stormwater
+    - Leakage to groundwater
+    """
+    # Environmental inputs/outputs
     precipitation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PRECIPITATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
     evaporation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Managed inputs
     from_demand: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.IN
+        ))
+
+    # Surface runoff inputs
     from_roof: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
     from_pavement: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
+    # Subsurface outputs
     to_vadose: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Surface outputs
     to_stormwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class VadoseFlows(ComponentFlows):
-    """Vadose zone flows"""
-    # Environmental flows
+    """
+    Vadose zone component flows tracking water movement in unsaturated soil.
+
+    Tracks:
+    - Infiltration from pervious surfaces
+    - Transpiration loss through vegetation
+    - Percolation to groundwater
+    """
+    # Environmental outputs
     transpiration: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.TRANSPIRATION, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.TRANSPIRATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Subsurface inputs
     from_pervious: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.RAW,  # Mixed quality from surface inputs
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
+    # Subsurface outputs
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PERCOLATION, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PERCOLATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class GroundwaterFlows(ComponentFlows):
-    """Groundwater flows"""
-    # Environmental flows
+    """
+    Groundwater component flows tracking water movement in saturated zone.
+
+    Tracks:
+    - Natural inflows from vadose zone percolation
+    - Infiltration from surfaces (pavement)
+    - Leakage inputs from infrastructure
+    - Baseflow to surface water
+    - Deep seepage losses
+    - Infiltration to wastewater system
+    """
+    # Natural environmental outputs
     seepage: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.SEEPAGE, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.SEEPAGE,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
     baseflow: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.BASEFLOW, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.BASEFLOW,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Infrastructure leakage inputs
     from_roof: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
-    from_pavement_infiltration: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.IN, None))
-    from_pavement_leakage: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
-    from_pervious: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
-    from_vadose: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PERCOLATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.IN
+        ))
+
     from_demand: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.IN
+        ))
+
+    # Surface infiltration inputs
+    from_pavement_infiltration: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
+    from_pavement_leakage: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.IN
+        ))
+
+    from_pervious: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.IN
+        ))
+
+    # Natural subsurface inputs
+    from_vadose: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PERCOLATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
+    # Infrastructure interaction outputs
     to_wastewater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class StormwaterFlows(ComponentFlows):
-    """Stormwater flows"""
-    # Environmental flows
+    """
+    Stormwater component flows tracking urban drainage system.
+
+    Tracks:
+    - Direct precipitation on open facilities
+    - Surface runoff collection from urban surfaces
+    - Evaporation from open facilities
+    - Upstream drainage inputs
+    - Downstream discharge
+    - Combined sewer inputs to wastewater
+    """
+    # Environmental inputs/outputs (for open facilities)
     precipitation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.PRECIPITATION, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PRECIPITATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
     evaporation: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.EVAPORATION, FlowDirection.OUT, None))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Surface runoff inputs
     from_raintank: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
     from_pavement: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
     from_pervious: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
+    # Network flows
     from_upstream: MultiSourceFlow = field(
-        default_factory=lambda: MultiSourceFlow(FlowType.RUNOFF, FlowDirection.IN, [], []))
+        default_factory=lambda: MultiSourceFlow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
     to_downstream: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.RUNOFF, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Combined sewer output
     to_wastewater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
 
 @dataclass
 class WastewaterFlows(ComponentFlows):
-    """Wastewater flows"""
-    # Component flows
-    from_groundwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.INFILTRATION, FlowDirection.IN, None))
-    from_stormwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.IN, None))
+    """
+    Wastewater component flows tracking sewage collection and transport.
+
+    Tracks:
+    - Domestic wastewater inputs
+    - Groundwater infiltration
+    - Combined sewer inputs from stormwater
+    - Upstream collection inputs
+    - Downstream transport
+    """
+    # Collection system inputs
     from_demand: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.IN, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.BLACKWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.IN
+        ))
+
+    # Infrastructure interaction
+    from_groundwater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.RAW,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.IN
+        ))
+
+    # Combined sewer inputs
+    from_stormwater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
+    # Network flows
     from_upstream: MultiSourceFlow = field(
-        default_factory=lambda: MultiSourceFlow(FlowType.WASTEWATER, FlowDirection.IN, [], []))
+        default_factory=lambda: MultiSourceFlow(
+            _process=None,
+            _quality=WaterQuality.BLACKWATER,  # Mixed quality in reality
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.IN
+        ))
+
     to_downstream: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.BLACKWATER,  # Mixed quality in reality
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT
+        ))
+
+#    # Optional: Treatment outputs (if treatment occurs locally)
+#    to_reuse: Flow = field(
+#        default_factory=lambda: Flow(
+#            _process=None,
+#            _quality=WaterQuality.TREATED,
+#            _use=WaterUse.DOMESTIC,
+#            _direction=FlowDirection.OUT
+#        ))
 
 @dataclass
 class DemandFlows(ComponentFlows):
-    """Demand water flows"""
-    # Environmental flows
+    """
+    Demand component flows tracking water supply and distribution.
+
+    Tracks:
+    - Imported water supply
+    - Alternative water supplies (rainwater, treated)
+    - Distribution to end uses
+    - Wastewater generation
+    - System losses
+    """
+    # Primary supply
     imported_water: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IMPORTED_WATER, FlowDirection.IN, 1.0, True))
-    # Component flows
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.POTABLE,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.IN,
+            _volume_only=True
+        ))
+
+    # Alternative supplies
+    from_raintank: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.IN,
+            _volume_only=True
+        ))
+
+    # Distribution outputs
     to_wastewater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.WASTEWATER, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.BLACKWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # Irrigation outputs
     to_roof: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
     to_pavement: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
     to_pervious: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.IRRIGATION, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # System losses
     to_groundwater: Flow = field(
-        default_factory=lambda: Flow(0.0, FlowType.LEAKAGE, FlowDirection.OUT, None))
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.LEAKAGE,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+@dataclass
+class DemandInternalFlows(ComponentFlows):
+    """
+    Internal demand flows tracking detailed water use paths and quality transformations.
+
+    Tracks pathways by water quality level (lowest to highest):
+    - Greywater (GW): Lightly contaminated domestic wastewater
+    - Non-potable (NP): Treated to non-drinking standards
+    - Stormwater (SW): Collected urban runoff
+    - Rainwater (RW): Direct precipitation collection
+    - Potable (PO): Treated to drinking standards
+    """
+    # Greywater generation and use
+    kitchen_to_greywater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.GREYWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    shower_to_greywater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.GREYWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    laundry_to_greywater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.GREYWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    greywater_to_irrigation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.GREYWATER,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+    greywater_to_wastewater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.GREYWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # Treated wastewater use
+    wws_to_toilet: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    wws_to_irrigation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # Rainwater use
+    rt_to_kitchen: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    rt_to_shower: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    rt_to_laundry: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    rt_to_toilet: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    rt_to_irrigation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # Treated cluster wastewater use
+    cwws_to_toilet: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    cwws_to_irrigation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None, 
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    cwws_to_publicir: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # Stormwater use
+    sws_to_toilet: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    sws_to_irrigation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.STORMWATER,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    # Potable water use
+    po_to_kitchen: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.POTABLE,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    po_to_shower: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.POTABLE,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    po_to_laundry: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.POTABLE,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    po_to_toilet: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.POTABLE,
+            _use=WaterUse.DOMESTIC,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))
+
+    po_to_irrigation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.POTABLE,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.OUT,
+            _volume_only=True
+        ))

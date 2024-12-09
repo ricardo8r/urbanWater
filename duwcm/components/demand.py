@@ -1,123 +1,88 @@
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 import pandas as pd
+
 from duwcm.data_structures import DemandData
-
-# Constants
-TO_METERS = 0.001
+from duwcm.flow_manager import WaterQuality, WaterUse
 
 @dataclass
-class GraywaterData:
-    """
-    Data variables for subsurface graywater.
-    """
-    demand: float = 0
-    use: float = 0
-    deficit: float = 0
-    spillover: float = 0
-    check: bool = False
-
-@dataclass
-class WastewaterData:
-    """
-    Data variables for wastewater.
-    """
-    demand: float = 0
-    supply: float = 0
-    use: float = 0
-    deficit: float = 0
-    spillover: float = 0
-    storage: float = 0
-    water_balance: float = 0
-    check: bool = False
-
-@dataclass
-class RainTankData:
-    """
-    Data variables for rain tank.
-    """
-    demand: float = 0
-    domestic_demand: float = 0
-    toilet_demand: float = 0
-    irrigation_demand: float = 0
-    use: float = 0
-    deficit: float = 0
-    storage: float = 0
-    water_balance: float = 0
-    check: bool = False
+class WaterSource:
+    """Water source with quality level and priority settings"""
+    name: str
+    quality: WaterQuality
+    local: bool
+    available_amount: float = 0.0
 
 class DemandClass:
     """
-    Simulates the supply, demand, use, and deficit of SSG, WWS, and rain tank.
-    Updates the water level and water balance of rain tank.
+    Simulates the supply, demand, use, and deficit of water resources.
+    Handles water quality levels and fit-for-purpose allocation.
     """
     def __init__(self, params: Dict[str, Dict[str, Any]], demand_settings: pd.Series,
                  reuse_settings: pd.DataFrame, demand_data: DemandData):
         """
         Args:
-            params (Dict[str, float]): System parameters
-                number_houses: Number of houses in this cell
-                wastewater_area: Area of onsite wastewater storage [m2]
-                wastewater_capacity: Onsite wastewater storage capacity [L]
-                wastewater_intial_storage: Initial storage of onsite wastewater [L]
-                indoor_water_use: Daily indoor water use
-            demand: Water demand of different indoor water use per block [L/day/block]
-            setreuse: Setting of the supply and use priority (boolean)
+            params: System parameters including areas and capacities
+            demand_settings: Water demand settings for different uses
+            reuse_settings: Water reuse configuration and priorities
+            demand_data: Data structure for tracking flows and storage
         """
         self.demand_data = demand_data
 
         # Initialize wastewater storage parameters
         self.demand_data.area = params['reuse']['area'] * params['general']['number_houses']
         self.demand_data.flows.set_areas(self.demand_data.area)
-        self.wastewater_capacity = params['reuse']['capacity'] * params['general']['number_houses']
+        self.demand_data.ww_storage.set_capacity(params['reuse']['capacity'] * params['general']['number_houses'])
 
-        # Initialize other parameters
-        raintank_total_ratio = params['general']['number_houses'] * params['raintank']['install_ratio'] / 100
-        self.raintank_capacity = params['raintank']['capacity'] * raintank_total_ratio
+        # Initialize water demand patterns
         self.indoor_water_use = params['general']['indoor_water_use']
-        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
-        self.irrigation_factor = params['irrigation']['pervious']
+        self.kitchen_demand = demand_settings.kitchen * self.indoor_water_use / 100
+        self.bathroom_demand = demand_settings.bathroom * self.indoor_water_use / 100
+        self.toilet_demand = demand_settings.toilet * self.indoor_water_use / 100
+        self.laundry_demand = demand_settings.laundry * self.indoor_water_use / 100
 
-        # Initialize demand patterns
-        self.setdemand = pd.Series({
-            'K': demand_settings.kitchen,
-            'B': demand_settings.bathroom,
-            'T': demand_settings.toilet,
-            'L': demand_settings.laundry
-        }) * self.indoor_water_use / 100
+        # Initialize reuse settings
+        self.setreuse = {
+            'KforSSG': reuse_settings.kitchen_to_graywater / 100,
+            'BforSSG': reuse_settings.bathroom_to_graywater / 100,
+            'LforSSG': reuse_settings.laundry_to_graywater / 100,
+            'RTforK': reuse_settings.raintank_to_kitchen / 100,
+            'RTforB': reuse_settings.raintank_to_bathroom / 100,
+            'RTforL': reuse_settings.raintank_to_laundry / 100,
+            'RTforT': reuse_settings.raintank_to_toilet / 100,
+            'RTforIR': reuse_settings.raintank_to_irrigation / 100,
+            'WWSforT': reuse_settings.wastewater_to_toilet / 100,
+            'WWSforIR': reuse_settings.wastewater_to_irrigation / 100
+        }
 
-        self.setreuse = pd.Series({
-            'KforSSG': reuse_settings.kitchen_to_graywater,
-            'BforSSG': reuse_settings.bathroom_to_graywater,
-            'LforSSG': reuse_settings.laundry_to_graywater,
-            'RTforK': reuse_settings.kitchen_to_raintank,
-            'RTforB': reuse_settings.bathroom_to_raintank,
-            'RTforL': reuse_settings.laundry_to_raintank,
-            'WWSforT': reuse_settings.wastewater_to_toilet,
-            'WWSforIR': reuse_settings.wastewater_to_irrigation,
-            'RTforT': reuse_settings.raintank_to_toilet,
-            'RTforIR': reuse_settings.raintank_to_irrigation
-        })
+        # Define water sources and their qualities
+        self.sources = {
+            'SSG': WaterSource('SSG', WaterQuality.GREYWATER, True),
+            'WWS': WaterSource('WWS', WaterQuality.TREATED, True),
+            'RT': WaterSource('RT', WaterQuality.RAINWATER, True),
+            'cWWS': WaterSource('cWWS', WaterQuality.TREATED, False),
+            'SWS': WaterSource('SWS', WaterQuality.STORMWATER, False),
+            'PO': WaterSource('PO', WaterQuality.POTABLE, False)
+        }
 
-        self._initialize_demands()
+        # Define priority tables according to Table 4-8
+        self.priority_table = {
+            'K': ['RT', 'SWS', 'PO'],
+            'S': ['RT', 'SWS', 'PO'],
+            'L': ['RT', 'SWS', 'PO'],
+            'T': ['SSG', 'WWS', 'RT', 'cWWS', 'SWS', 'PO'],
+            'IR': ['SSG', 'WWS', 'RT', 'cWWS', 'SWS', 'PO'],
+            'PIR': ['cWWS', 'SWS', 'PO']
+        }
 
-    def _initialize_demands(self):
-        """
-        ssg_suply: Subsurface graywater irrigation suply [L]:
-        raintank_suply: Max supply from rain tank [L]
-        """
-        self.ssg_supply = (self.setreuse.KforSSG * self.setdemand['K'] +
-                           self.setreuse.BforSSG * self.setdemand['B'] +
-                           self.setreuse.LforSSG * self.setdemand['L'])
+        # Calculate initial supply capacities
+        self.ssg_supply = (self.setreuse['KforSSG'] * self.kitchen_demand +
+                          self.setreuse['BforSSG'] * self.bathroom_demand +
+                          self.setreuse['LforSSG'] * self.laundry_demand)
 
-        self.raintank_supply = (self.setreuse.RTforK * self.setdemand['K'] +
-                                self.setreuse.RTforB * self.setdemand['B'] +
-                                self.setreuse.RTforL * self.setdemand['L'])
-
-        self.kitchen_demand = self.setdemand['K']
-        self.bathroom_demand = self.setdemand['B']
-        self.laundry_demand = self.setdemand['L']
-        self.toilet_demand = self.setdemand['T']
+        self.raintank_supply = (self.setreuse['RTforK'] * self.kitchen_demand +
+                               self.setreuse['RTforB'] * self.bathroom_demand +
+                               self.setreuse['RTforL'] * self.laundry_demand)
 
     def solve(self, forcing: pd.Series) -> None:
         """
@@ -132,198 +97,127 @@ class DemandClass:
                 sgs_results: Subsurface graywater balance
                 wws_results: Wastewater storage balance
                 rt_results: Rain tank balance
-                imported_water: Required imported water [L] 
+                imported_water: Required imported water [L]  
         """
         data = self.demand_data
 
+        # Calculate total irrigation demand upfront
         roof_irrigation = data.flows.get_flow('to_roof', 'L')
         pavement_irrigation = data.flows.get_flow('to_pavement', 'L')
         pervious_irrigation = data.flows.get_flow('to_pervious', 'L')
-        indoor_use_leakage = data.flows.get_flow('to_groundwater', 'L')
         total_irrigation = roof_irrigation + pavement_irrigation + pervious_irrigation
 
-        # Use class's internal calculation methods
-        ssg_irrigation, ssg_results = self._calculate_ssg(total_irrigation)
-        wws_irrigation, wws_toilet, wws_results = self._calculate_wws(ssg_results, ssg_irrigation,
-                                                                      data.wws_storage)
-        rt_results = self._calculate_raintank(data.rt_storage.get_amount('L'), wws_toilet, wws_irrigation)
+        # 1. Process Raintank allocations first
+        rt_available = data.rt_storage.get_amount('L')
+        # Kitchen allocation
+        rt_to_kitchen = min(self.kitchen_demand * self.setreuse['RTforK'], rt_available)
+        data.internal_flows.rt_to_kitchen.set_amount(rt_to_kitchen, 'L')
+        rt_available -= rt_to_kitchen
 
-        imported_water = (rt_results.domestic_demand + rt_results.toilet_demand +
-                         rt_results.irrigation_demand + indoor_use_leakage)
+        # Bathroom allocation
+        rt_to_shower = min(self.bathroom_demand * self.setreuse['RTforB'], rt_available)
+        data.internal_flows.rt_to_shower.set_amount(rt_to_shower, 'L')
+        rt_available -= rt_to_shower
 
-        # Update ReuseData state
-        data.rt_storage.set_amount(rt_results.storage, 'L')
-        data.rt_water_balance = rt_results.water_balance
-        data.wws_storage = wws_results.storage
-        data.rt_domestic_demand = rt_results.domestic_demand
-        data.rt_toilet_demand = rt_results.toilet_demand
-        data.rt_irrigation_demand = rt_results.irrigation_demand
+        # Laundry allocation
+        rt_to_laundry = min(self.laundry_demand * self.setreuse['RTforL'], rt_available)
+        data.internal_flows.rt_to_laundry.set_amount(rt_to_laundry, 'L')
+        rt_available -= rt_to_laundry
 
-        # Update flows
-        data.flows.set_flow('imported_water', imported_water, 'L')
-        data.flows.set_flow('to_wastewater', wws_results.spillover, 'L')
+        # Toilet allocation
+        rt_to_toilet = min(self.toilet_demand * self.setreuse['RTforT'], rt_available)
+        data.internal_flows.rt_to_toilet.set_amount(rt_to_toilet, 'L')
+        rt_available -= rt_to_toilet
 
-    def _calculate_ssg(self, total_irrigation: float) -> (float, GraywaterData):
-        """
-        Calculate the subsurface greywater irrigation
-        """
-        if self.ssg_supply == 0:
-            ssg_result = GraywaterData(
-                demand = 0,
-                spillover = 0,
-                use = 0,
-                deficit = 0,
-                check = True
-            )
-            irrigation_demand = total_irrigation
-            return irrigation_demand, ssg_result
+        # Irrigation allocation
+        rt_to_irrigation = min(total_irrigation * self.setreuse['RTforIR'], rt_available)
+        data.internal_flows.rt_to_irrigation.set_amount(rt_to_irrigation, 'L')
+        rt_available -= rt_to_irrigation
 
-        use = min(self.ssg_supply, total_irrigation)
-        spillover = max(0, self.ssg_supply - use)
-        deficit = max(total_irrigation - use, 0)
-        irrigation_demand = deficit
+        # Update raintank storage
+        data.rt_storage.set_amount(rt_available, 'L')
 
-        ssg_result = GraywaterData(
-            demand = total_irrigation,
-            spillover = spillover,
-            use = use,
-            deficit = deficit,
-            check = total_irrigation - irrigation_demand == use
-        )
-        return irrigation_demand, ssg_result
+        # Update total raintank to demand flow
+        data.flows.set_flow('from_raintank',
+            data.internal_flows.rt_to_kitchen.get_amount('L') +
+            data.internal_flows.rt_to_shower.get_amount('L') +
+            data.internal_flows.rt_to_laundry.get_amount('L') +
+            data.internal_flows.rt_to_toilet.get_amount('L') +
+            data.internal_flows.rt_to_irrigation.get_amount('L'),
+            'L')
 
-    def _calculate_wws(self, ssg_results: Dict[str, float], ssg_irrigation: float,
-                       previous_storage: float) -> WastewaterData:
-        """
-        Calculate the wastewater treatment and storage 
-        """
-        inflow = (self.toilet_demand + ssg_results.spillover +
-                  ((1 - self.setreuse.KforSSG) * self.kitchen_demand +
-                   (1 - self.setreuse.BforSSG) * self.bathroom_demand +
-                   (1 - self.setreuse.LforSSG) * self.laundry_demand))
+        # 2. Calculate greywater generation from total indoor use
+        kitchen_to_grey = self.kitchen_demand * self.setreuse['KforSSG']
+        shower_to_grey = self.bathroom_demand * self.setreuse['BforSSG']
+        laundry_to_grey = self.laundry_demand * self.setreuse['LforSSG']
 
-        if self.wastewater_capacity == 0:
-            irrigation_demand = ssg_irrigation
-            toilet_demand = self.toilet_demand
-            wws_result = WastewaterData(
-                demand = 0.0,
-                supply = 0.0,
-                use = 0.0,
-                deficit = 0.0,
-                spillover = inflow,
-                storage = 0.0,
-                water_balance = 0.0,
-                check = True
-            )
-            return irrigation_demand, toilet_demand, wws_result
+        data.internal_flows.kitchen_to_greywater.set_amount(kitchen_to_grey, 'L')
+        data.internal_flows.shower_to_greywater.set_amount(shower_to_grey, 'L')
+        data.internal_flows.laundry_to_greywater.set_amount(laundry_to_grey, 'L')
 
-        demand = (self.toilet_demand * self.setreuse.WWSforT +
-                  ssg_irrigation * self.setreuse.WWSforIR)
+        total_greywater = kitchen_to_grey + shower_to_grey + laundry_to_grey
+        grey_to_irrigation = min(total_irrigation, total_greywater)
+        data.internal_flows.greywater_to_irrigation.set_amount(grey_to_irrigation, 'L')
 
-        if demand == 0:
-            wws_result = WastewaterData(
-                demand = 0,
-                supply = 0,
-                use = 0,
-                deficit = 0,
-                spillover = max(previous_storage - self.wastewater_capacity, 0.0),
-                storage = min(previous_storage, self.wastewater_capacity),
-                water_balance = 0,
-                check = True
-            )
-            irrigation_demand = ssg_irrigation
-            toilet_demand = self.toilet_demand
-            return irrigation_demand, toilet_demand, wws_result
+        greywater_to_wws = total_greywater - grey_to_irrigation
+        data.internal_flows.greywater_to_wastewater.set_amount(greywater_to_wws, 'L')
 
-        initial_storage = min(previous_storage + inflow, self.wastewater_capacity)
-        use = min(initial_storage, demand)
-        final_storage = initial_storage - use
-        deficit = max(demand - use, 0)
-        spillover = max(previous_storage + inflow - self.wastewater_capacity, 0)
-        water_balance = inflow - (spillover + use) - (final_storage - previous_storage)
+        # 3. Process wastewater treatment (WWS)
+        total_wastewater = (self.kitchen_demand + self.bathroom_demand +
+                            self.laundry_demand + self.toilet_demand)
+        total_treated = total_wastewater - (kitchen_to_grey + shower_to_grey + laundry_to_grey)
+        data.ww_storage.set_amount(min(data.ww_storage.get_capacity('L'),
+                                       data.ww_storage.get_previous('L') + total_treated), 'L')
 
-        toilet_demand, irrigation_demand = self._wastewater_reuse(use, ssg_irrigation)
+        remaining_toilet = (self.toilet_demand -
+                            data.internal_flows.rt_to_toilet.get_amount('L'))
+        remaining_irrigation = (total_irrigation -
+                                data.internal_flows.rt_to_irrigation.get_amount('L') -
+                                grey_to_irrigation)
 
-        wws_result = WastewaterData(
-            demand = demand,
-            supply = inflow,
-            use = use,
-            deficit = deficit,
-            spillover = spillover,
-            storage = final_storage,
-            water_balance = water_balance,
-            check = (self.toilet_demand - toilet_demand) + (ssg_irrigation - irrigation_demand) == use
-        )
-        return irrigation_demand, toilet_demand, wws_result
+        if data.ww_storage.get_capacity('L') > 0:
+            wws_available = data.ww_storage.get_amount('L')
 
-    def _wastewater_reuse(self, use: float, irrigation_demand: float) -> Tuple[float, float]:
-        if self.setreuse.WWSforT == 0 and self.setreuse.WWSforIR != 0:
-            return self.toilet_demand, irrigation_demand - use
-        if self.setreuse.WWSforT != 0 and self.setreuse.WWSforIR == 0:
-            return self.toilet_demand - use, irrigation_demand
-        if use < self.toilet_demand:
-            return self.toilet_demand - use, irrigation_demand
-        return 0, irrigation_demand - use + self.toilet_demand
+            # Allocate to toilet first
+            wws_toilet_use = min(remaining_toilet * self.setreuse['WWSforT'], wws_available)
+            wws_available -= wws_toilet_use
 
-    def _calculate_raintank(self, raintank_storage: float, wws_toilet: float,
-                            wws_irrigation: float) -> RainTankData:
-        """
-        Calculate rain tank reuse 
-        """
-        if self.raintank_capacity == 0:
-            return RainTankData(
-                demand = 0.0,
-                use = 0.0,
-                storage = raintank_storage,
-                deficit = 0.0,
-                domestic_demand = self.kitchen_demand + self.bathroom_demand + self.laundry_demand,
-                toilet_demand = wws_toilet,
-                irrigation_demand = wws_irrigation,
-                check = True
-            )
+            # Then irrigation if any remaining
+            wws_irrigation_use = min(remaining_irrigation * self.setreuse['WWSforIR'], wws_available)
 
-        demand = (self.raintank_supply + wws_toilet * self.setreuse.RTforT +
-                  wws_irrigation * self.setreuse.RTforIR)
+            # Update storage and flows
+            data.ww_storage.set_amount(wws_available - wws_irrigation_use, 'L')
+            data.internal_flows.wws_to_toilet.set_amount(wws_toilet_use, 'L')
+            data.internal_flows.wws_to_irrigation.set_amount(wws_irrigation_use, 'L')
 
-        if demand == 0:
-            return RainTankData(
-                demand = 0.0,
-                use = 0.0,
-                storage = raintank_storage,
-                deficit = 0.0,
-                domestic_demand = self.kitchen_demand + self.bathroom_demand + self.laundry_demand,
-                toilet_demand = wws_toilet,
-                irrigation_demand = wws_irrigation,
-                check = True
-            )
+        # 4. Calculate remaining demands that need potable water
+        remaining_indoor = {
+           'kitchen': self.kitchen_demand - data.internal_flows.rt_to_kitchen.get_amount('L'),
+           'bathroom': self.bathroom_demand - data.internal_flows.rt_to_shower.get_amount('L'),
+           'laundry': self.laundry_demand - data.internal_flows.rt_to_laundry.get_amount('L')
+        }
 
-        use = min(raintank_storage, demand)
-        final_storage = raintank_storage - use
-        deficit = max(demand - use, 0)
+        potable_indoor = sum(remaining_indoor.values())
 
-        domestic_demand = (self.kitchen_demand + self.bathroom_demand + self.laundry_demand -
-                           min(self.raintank_supply, use))
-        toilet_demand, irrigation_demand = self._raintank_use(use, wws_toilet, wws_irrigation)
+        data.internal_flows.po_to_kitchen.set_amount(remaining_indoor['kitchen'], 'L')
+        data.internal_flows.po_to_shower.set_amount(remaining_indoor['bathroom'], 'L')
+        data.internal_flows.po_to_laundry.set_amount(remaining_indoor['laundry'], 'L')
 
-        check = ((self.kitchen_demand + self.bathroom_demand + self.laundry_demand - domestic_demand) +
-                 (toilet_demand - wws_toilet) + (irrigation_demand - wws_irrigation)) == use
+        potable_toilet = (self.toilet_demand -
+                         (data.internal_flows.rt_to_toilet.get_amount('L') +
+                          data.internal_flows.wws_to_toilet.get_amount('L')))
 
+        potable_irrigation = (total_irrigation -
+                            (data.internal_flows.rt_to_irrigation.get_amount('L') +
+                             data.internal_flows.greywater_to_irrigation.get_amount('L') +
+                             data.internal_flows.wws_to_irrigation.get_amount('L')))
 
-        return RainTankData(
-            demand = demand,
-            use = use,
-            storage = final_storage,
-            deficit = deficit,
-            domestic_demand = domestic_demand,
-            toilet_demand = toilet_demand,
-            irrigation_demand = irrigation_demand,
-            check = check
-        )
+        data.internal_flows.po_to_toilet.set_amount(max(0, potable_toilet), 'L')
+        data.internal_flows.po_to_irrigation.set_amount(max(0, potable_irrigation), 'L')
 
-    def _raintank_use(self, use: float, wws_toilet: float, wws_irrigation: float) -> Tuple[float, float]:
-        if self.setreuse.RTforT == 0:
-            return wws_toilet, wws_irrigation - max(use - self.raintank_supply, 0)
-
-        toilet_demand = wws_toilet - min(max(use - self.raintank_supply, 0), wws_toilet)
-        irrigation_demand = wws_irrigation - max(use - self.raintank_supply - wws_toilet, 0)
-        return toilet_demand, irrigation_demand
+        # Calculate leakage and total imported water
+        total_potable = (potable_indoor +
+                        max(0, potable_toilet) +
+                        max(0, potable_irrigation))
+        leakage = data.flows.get_flow('to_groundwater', 'L')
+        data.flows.set_flow('imported_water', total_potable + leakage, 'L')

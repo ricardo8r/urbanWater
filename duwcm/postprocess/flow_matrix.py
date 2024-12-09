@@ -78,3 +78,63 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], nodes: List[str]) ->
     # Remove empty rows/columns
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
     return flow_matrix.loc[non_zero_mask, non_zero_mask]
+
+
+def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Calculate flow matrix for internal demand flows showing water quality transformations."""
+    if 'demand' not in results:
+        return pd.DataFrame()
+
+    demand = results['demand']
+    sources = ['Potable Water', 'Rainwater', 'Treated WW', 'Greywater']
+    uses = ['Kitchen', 'Shower', 'Laundry', 'Toilet', 'Irrigation', 'Wastewater']
+
+    nodes = sources + uses
+    flow_matrix = pd.DataFrame(0, index=nodes, columns=nodes, dtype=float)
+
+    # Get total demand for each use
+    total_kitchen = demand['po_to_kitchen'].sum() + demand['rt_to_kitchen'].sum()
+    total_shower = demand['po_to_shower'].sum() + demand['rt_to_shower'].sum()
+    total_laundry = demand['po_to_laundry'].sum() + demand['rt_to_laundry'].sum()
+
+    # Source to end use flows
+    flow_matrix.loc['Potable Water', 'Kitchen'] = demand['po_to_kitchen'].sum()
+    flow_matrix.loc['Potable Water', 'Shower'] = demand['po_to_shower'].sum()
+    flow_matrix.loc['Potable Water', 'Laundry'] = demand['po_to_laundry'].sum()
+    flow_matrix.loc['Potable Water', 'Toilet'] = demand['po_to_toilet'].sum()
+    flow_matrix.loc['Potable Water', 'Irrigation'] = demand['po_to_irrigation'].sum()
+
+    flow_matrix.loc['Rainwater', 'Kitchen'] = demand['rt_to_kitchen'].sum()
+    flow_matrix.loc['Rainwater', 'Shower'] = demand['rt_to_shower'].sum()
+    flow_matrix.loc['Rainwater', 'Laundry'] = demand['rt_to_laundry'].sum()
+    flow_matrix.loc['Rainwater', 'Toilet'] = demand['rt_to_toilet'].sum()
+    flow_matrix.loc['Rainwater', 'Irrigation'] = demand['rt_to_irrigation'].sum()
+
+    flow_matrix.loc['Treated', 'Toilet'] = demand['wws_to_toilet'].sum()
+    flow_matrix.loc['Treated', 'Irrigation'] = demand['wws_to_irrigation'].sum()
+    flow_matrix.loc['Wastewater', 'Treated'] = (demand['wws_to_irrigation'].sum() +
+                                                demand['wws_to_toilet'].sum())
+
+    # Greywater generation and use
+    flow_matrix.loc['Kitchen', 'Greywater'] = demand['kitchen_to_greywater'].sum()
+    flow_matrix.loc['Shower', 'Greywater'] = demand['shower_to_greywater'].sum()
+    flow_matrix.loc['Laundry', 'Greywater'] = demand['laundry_to_greywater'].sum()
+
+    flow_matrix.loc['Greywater', 'Irrigation'] = demand['greywater_to_irrigation'].sum()
+    flow_matrix.loc['Greywater', 'Wastewater'] = demand['greywater_to_wastewater'].sum()
+
+    # Flows to wastewater - everything that doesn't go to greywater
+    flow_matrix.loc['Kitchen', 'Wastewater'] = total_kitchen - demand['kitchen_to_greywater'].sum()
+    flow_matrix.loc['Shower', 'Wastewater'] = total_shower - demand['shower_to_greywater'].sum()
+    flow_matrix.loc['Laundry', 'Wastewater'] = total_laundry - demand['laundry_to_greywater'].sum()
+    flow_matrix.loc['Toilet', 'Wastewater'] = (demand['po_to_toilet'].sum() +
+                                              demand['rt_to_toilet'].sum() +
+                                              demand['wws_to_toilet'].sum())
+
+    # Remove any non-node columns/rows and NaN values
+    valid_cols = [col for col in flow_matrix.columns if col in nodes]
+    flow_matrix = flow_matrix.loc[valid_cols, valid_cols]
+
+    # Remove empty rows/columns
+    non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
+    return flow_matrix.loc[non_zero_mask, non_zero_mask]

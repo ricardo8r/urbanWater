@@ -204,5 +204,9 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
         flows = component.flows
         for flow_name, flow in vars(flows).items():
             results[flow_name] = flow.get_amount('m3')
+    if hasattr(component, 'internal_flows'):
+        internal_flows = component.internal_flows
+        for flow_name, flow in vars(internal_flows).items():
+            results[flow_name] = flow.get_amount('m3')
 
     return results

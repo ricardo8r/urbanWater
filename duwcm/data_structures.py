@@ -5,7 +5,7 @@ from duwcm.flow_manager import (
     Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, PavementFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
-    WastewaterFlows, DemandFlows
+    WastewaterFlows, DemandFlows, DemandInternalFlows
 )
 
 TO_METER = 0.001
@@ -234,16 +234,16 @@ class WastewaterData:
 class DemandData:
     """Water demand component"""
     flows: DemandFlows = field(default_factory=DemandFlows)
+    internal_flows: DemandInternalFlows = field(default_factory=DemandInternalFlows)
     area: float = field(default=0, metadata={'unit': 'm^2'})
     rt_storage: Storage = field(default_factory=lambda: Storage(
         _default_unit=StorageUnit.CUBIC_METER,
         _capacity=0.0
     ))
-    rt_water_balance: float = field(default=0, metadata={'unit': 'L'})
-    rt_domestic_demand: float = field(default=0, metadata={'unit': 'L'})
-    rt_toilet_demand: float = field(default=0, metadata={'unit': 'L'})
-    rt_irrigation_demand: float = field(default=0, metadata={'unit': 'L'})
-    wws_storage: float = field(default=0, metadata={'unit': 'L'})
+    ww_storage: Storage = field(default_factory=lambda: Storage(
+        _default_unit=StorageUnit.CUBIC_METER,
+        _capacity=0.0
+    ))
 
 
 @dataclass
@@ -273,6 +273,7 @@ class UrbanWaterData:
         ('roof', 'to_groundwater'): ('groundwater', 'from_roof'),
         ('raintank', 'to_pavement'): ('pavement', 'from_raintank'),
         ('raintank', 'to_stormwater'): ('stormwater', 'from_raintank'),
+        ('raintank', 'to_demand'): ('demand', 'from_raintank'),
         ('pavement', 'to_pervious'): ('pervious', 'from_pavement'),
         ('pavement', 'to_groundwater_infiltration'): ('groundwater', 'from_pavement_infiltration'),
         ('pavement', 'to_groundwater_leakage'): ('groundwater', 'from_pavement_leakage'),
