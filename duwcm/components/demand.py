@@ -133,14 +133,14 @@ class DemandClass:
         )
         total_treated = total_wastewater - graywater_total
 
-        # Update storage
-        data.ww_storage.set_amount(
-            min(data.ww_storage.get_capacity('L'),
-                data.ww_storage.get_previous('L') + total_treated),
-            'L'
-        )
-
         if data.ww_storage.get_capacity('L') > 0:
+            # Update storage
+            data.ww_storage.set_amount(
+                min(data.ww_storage.get_capacity('L'),
+                    data.ww_storage.get_previous('L') + total_treated),
+                'L'
+            )
+
             available = data.ww_storage.get_amount('L')
 
             # Allocate to toilet
@@ -166,6 +166,10 @@ class DemandClass:
             )
             data.internal_flows.wws_to_irrigation.set_amount(allocation, 'L')
             data.ww_storage.set_amount(available, 'L')
+            data.flows.set_flow('to_wastewater', total_treated - data.ww_storage.get_amount('L'), 'L')
+
+        else:
+            data.flows.set_flow('to_wastewater', total_treated, 'L')
 
     def _process_potable_demands(self) -> None:
         """Process remaining demands requiring potable water."""
