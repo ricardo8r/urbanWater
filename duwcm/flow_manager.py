@@ -178,9 +178,15 @@ class Flow:
         """Set the area used for unit conversions"""
         self._area = area
 
-    def set_volume_only(self, volume_only: bool = True):
-        """Restrict flow to volume units only (m3 and L)"""
-        self._volume_only = volume_only
+    @property
+    def volume_only(self) -> bool:
+        """Get volume only flag"""
+        return self._volume_only
+
+    @volume_only.setter
+    def volume_only(self, value: bool) -> None:
+        """Set volume only flag"""
+        self._volume_only = value
 
     def link(self, other_flow: 'Flow') -> None:
         """Link this flow to another flow for automatic synchronization"""
@@ -228,9 +234,15 @@ class MultiSourceFlow:
         """Set area for unit conversions"""
         self._area = area
 
-    def set_volume_only(self, volume_only: bool = True):
-        """Restrict flow to volume units only (m3 and L)"""
-        self._volume_only = volume_only
+    @property
+    def volume_only(self) -> bool:
+        """Get volume only flag"""
+        return self._volume_only
+
+    @volume_only.setter
+    def volume_only(self, value: bool) -> None:
+        """Set volume only flag"""
+        self._volume_only = value
 
     def reset_flows(self) -> None:
         """Reset flows - called during model updates"""
@@ -312,23 +324,27 @@ class ComponentFlows:
         """Calculate remaining capacity based on current total inflow"""
         return max(0, self._capacity - self.total_inflow)
 
-    def set_capacity(self, capacity: float, unit: Optional[WaterUnit] = None) -> None:
-        """Set maximum flow capacity in m³/day"""
-        self._capacity = capacity
+    def set_capacity(self, capacity: float, unit: Optional[str] = None) -> None:
+        """Set maximum flow capacity"""
+        unit = unit or 'm3'
+        if unit not in ['m3', 'L']:
+            raise ValueError("Capacity unit must be 'm3' or 'L'")
 
-    def get_capacity(self, unit: Optional[WaterUnit] = None) -> float:
+        self._capacity = WaterUnit.convert(capacity, unit, WaterUnit.CUBIC_METER, area=1)
+
+    def get_capacity(self, unit: Optional[str] = None) -> float:
         """Get maximum capacity in specified unit"""
-        if not unit:
-            return self._capacity
-        return WaterUnit.convert(self._capacity, WaterUnit.CUBIC_METER, unit, self._area)
+        unit = unit or 'm3'
+        if unit not in ['m3', 'L']:
+            raise ValueError("Capacity unit must be 'm3' or 'L'")
 
-    def set_flow(self, name: str, value: float, unit: Optional[WaterUnit] = None) -> None:
+        return WaterUnit.convert(self._capacity, WaterUnit.CUBIC_METER, unit, area=1)
+
+    def set_flow(self, name: str, value: float, unit: Optional[str] = None) -> float:
         """
         Set flow amount by name with optional unit.
         Returns excess amount that couldn't be added due to capacity limits.
         """
-        unit = unit or 'm3'
-
         if not hasattr(self, name):
             raise ValueError(f"Invalid flow name: {name}")
 
@@ -336,19 +352,27 @@ class ComponentFlows:
         if isinstance(flow, MultiSourceFlow):
             raise AttributeError(f"Cannot set amount directly for MultiSourceFlow '{name}'")
 
-        available = (self.get_capacity(unit) +
-                     flow.get_amount(unit) -
-                     self.get_total_inflow(unit))
+        # Convert input value to m³ at the start
+        unit = unit or 'm3'
+        # Use area=1 for volume-only flows
+        conversion_area = 1 if flow.volume_only else self._area
+        value_m3 = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, conversion_area)
+
+        # Get current flow in m³ for capacity calculation
+        current_flow_m3 = flow.amount
+        available_m3 = self._capacity + current_flow_m3 - self.get_total_inflow('m3')
 
         # Limit new value to available capacity
-        value = min(value, available)
-        excess = max(0, value - available)
+        value_m3 = min(value_m3, available_m3)
+        excess_m3 = max(0, value_m3 - available_m3)
+
         if isinstance(flow, Flow):
-            flow.set_amount(value, unit)
+            flow.set_amount(value_m3, 'm3')
         else:
             raise ValueError(f"Invalid flow type for {name}")
 
-        return excess
+        # Convert excess back to original unit using same area logic
+        return WaterUnit.convert(excess_m3, WaterUnit.CUBIC_METER, unit, conversion_area)
 
     def get_flow(self, name: str, unit: Optional[WaterUnit] = None) -> float:
         """Get flow amount by name in specified unit (defaults to m³)"""

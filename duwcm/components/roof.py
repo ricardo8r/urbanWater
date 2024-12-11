@@ -73,7 +73,7 @@ class RoofClass:
         effective_runoff = data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
-        data.flows.set_flow('to_raintank', effective_runoff, 'm3')
+        non_effective_runoff += data.flows.set_flow('to_raintank', effective_runoff, 'm3')
         data.flows.set_flow('to_pervious', non_effective_runoff, 'm3')
         data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'm3') *
                             self.leakage_rate / (1 - self.leakage_rate), 'm3')
