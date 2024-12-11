@@ -111,12 +111,12 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
             },
             'soil': {
                 'soil_type': soil_type,
-                'crop_type': crop_type,
+                'crop_type': crop_type
             },
             'roof': {
                 'area': roof_area,
                 'effective_area': calibration_params.effective_roof_area,
-                'max_storage': calibration_params.roof_storage,
+                'max_storage': calibration_params.roof_storage
             },
             'raintank': {
                 'is_open': altwater_params.RTop,
@@ -159,7 +159,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'capacity': altwater_params.SWSc,
                 'initial_storage': altwater_params.SWS0,
                 'first_flush': altwater_params.SWSff,
-                'wastewater_runoff_per': runoff_to_wastewater,
+                'wastewater_runoff_per': runoff_to_wastewater
             },
             'reuse': {
                 'area': altwater_params.AWWS,
@@ -170,6 +170,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'area': altwater_params.AcWWS,
                 'capacity': altwater_params.cWWSc,
                 'initial_storage': altwater_params.cWWS0,
+                'max_pipe_flow': calibration_params.wastewater_pipe_capacity
             }
         }
 

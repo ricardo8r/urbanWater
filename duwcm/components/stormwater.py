@@ -65,7 +65,7 @@ class StormwaterClass:
 
         # Handle zero capacity case
         if data.storage.get_capacity('m3') == 0:
-            data.flows.set_flow('to_wastewater', combined_sewer_inflow, 'm3')
+            runoff += data.flows.set_flow('to_wastewater', combined_sewer_inflow, 'm3')
             data.flows.set_flow('to_downstream', runoff, 'm3')
             data.flows.set_flow('precipitation', 0)
             data.flows.set_flow('evaporation', 0)
@@ -91,5 +91,5 @@ class StormwaterClass:
         runoff_sewer = first_flush + overflow
 
         # Update flows
-        data.flows.set_flow('to_wastewater', combined_sewer_inflow, 'm3')
+        runoff_sewer += data.flows.set_flow('to_wastewater', combined_sewer_inflow, 'm3')
         data.flows.set_flow('to_downstream', runoff_sewer, 'm3')

@@ -262,7 +262,7 @@ class UrbanWaterData:
     # Define components at class level
     COMPONENTS = [
         'roof', 'raintank', 'pavement', 'pervious', 'vadose',
-        'groundwater', 'stormwater', 'demand', 'wastewater'
+        'groundwater', 'demand', 'stormwater', 'wastewater'
     ]
 
     # Define flow connections at class level

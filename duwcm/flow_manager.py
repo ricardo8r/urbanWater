@@ -56,9 +56,10 @@ class WaterUnit(Enum):
         if isinstance(to_unit, str):
             to_unit = WaterUnit(to_unit)
 
+        if value == float('inf'):
+            return float('inf')
         if from_unit == to_unit:
             return value
-
         if not area:
             return 0.0
 
@@ -151,19 +152,19 @@ class Flow:
     def get_amount(self, unit: str) -> float:
         """Get flow amount in specified unit"""
         unit = WaterUnit(unit)
-        if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
-            raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
-        if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
-            return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, 1)
+        if self._volume_only:
+            if unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+                raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
+            return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, area=1)
         return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, self._area)
 
     def set_amount(self, value: float, unit: str) -> None:
         """Set flow amount from specified unit"""
         unit = WaterUnit(unit)
-        if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
-            raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
-        if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
-            self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, 1)
+        if self._volume_only:
+            if unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+                raise ValueError(f"Flow is volume-only. Cannot convert from {unit.value}")
+            self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, area=1)
         else:
             self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, self._area)
         if self.linked_flow is not None:
@@ -252,9 +253,103 @@ class MultiSourceFlow:
                 use_amounts[source.use] += source.amount
         return dict(use_amounts)
 
+    @property
+    def direction(self) -> FlowDirection:
+        """Get the flow direction based on sources' directions"""
+        if self._direction is not None:
+            return self._direction
+        # Check if all sources have the same direction
+        directions = {source.direction for source in self._sources}
+        if len(directions) == 1:
+            return next(iter(directions))
+        if self._direction:
+            return self._direction
+        raise ValueError("MultiSourceFlow has sources with mixed directions and no explicit direction set")
+
+    @direction.setter
+    def direction(self, value: FlowDirection) -> None:
+        """Set the flow direction"""
+        self._direction = value
+
+    @property
+    def process(self) -> FlowProcess:
+        """Get the flow type"""
+        return self._process
+
+    @process.setter
+    def process(self, value: FlowProcess) -> None:
+        """Set the flow type"""
+        self._process = value
+
+    @property
+    def quality(self) -> WaterQuality:
+        """Get the flow type"""
+        return self._quality
+
+    @quality.setter
+    def quality(self, value: WaterQuality) -> None:
+        """Set the flow type"""
+        self._quality = value
+
+    @property
+    def use(self) -> WaterUse:
+        """Get the flow type"""
+        return self._use
+
+    @use.setter
+    def use(self, value: WaterUse) -> None:
+        """Set the flow type"""
+        self._use = value
+
 @dataclass
 class ComponentFlows:
     """Base class for all component flows"""
+    _capacity: float = field(default=float('inf'))
+    _area: Optional[float] = field(default=None)
+
+    @property
+    def remaining_capacity(self) -> float:
+        """Calculate remaining capacity based on current total inflow"""
+        return max(0, self._capacity - self.total_inflow)
+
+    def set_capacity(self, capacity: float, unit: Optional[WaterUnit] = None) -> None:
+        """Set maximum flow capacity in m³/day"""
+        self._capacity = capacity
+
+    def get_capacity(self, unit: Optional[WaterUnit] = None) -> float:
+        """Get maximum capacity in specified unit"""
+        if not unit:
+            return self._capacity
+        return WaterUnit.convert(self._capacity, WaterUnit.CUBIC_METER, unit, self._area)
+
+    def set_flow(self, name: str, value: float, unit: Optional[WaterUnit] = None) -> None:
+        """
+        Set flow amount by name with optional unit.
+        Returns excess amount that couldn't be added due to capacity limits.
+        """
+        unit = unit or 'm3'
+
+        if not hasattr(self, name):
+            raise ValueError(f"Invalid flow name: {name}")
+
+        flow = getattr(self, name)
+        if isinstance(flow, MultiSourceFlow):
+            raise AttributeError(f"Cannot set amount directly for MultiSourceFlow '{name}'")
+
+        available = (self.get_capacity(unit) +
+                     flow.get_amount(unit) -
+                     self.get_total_inflow(unit))
+
+        # Limit new value to available capacity
+        value = min(value, available)
+        excess = max(0, value - available)
+        if isinstance(flow, Flow):
+            flow.set_amount(value, unit)
+        else:
+            raise ValueError(f"Invalid flow type for {name}")
+
+        return excess
+
     def get_flow(self, name: str, unit: Optional[WaterUnit] = None) -> float:
         """Get flow amount by name in specified unit (defaults to m³)"""
         if not hasattr(self, name):
@@ -264,22 +359,6 @@ class ComponentFlows:
         if unit:
             return flow.get_amount(unit)
         return flow.amount
-
-    def set_flow(self, name: str, value: float, unit: Optional[WaterUnit] = None) -> None:
-        """Set flow amount by name with optional unit (defaults to m³)"""
-        if not hasattr(self, name):
-            raise ValueError(f"Invalid flow name: {name}")
-
-        flow = getattr(self, name)
-        if isinstance(flow, MultiSourceFlow):
-            raise AttributeError(f"Cannot set amount directly for MultiSourceFlow '{name}'")
-        if isinstance(flow, Flow):
-            if unit:
-                flow.set_amount(value, unit)
-            else:
-                flow.amount = value
-        else:
-            raise ValueError(f"Invalid flow type for {name}")
 
     def set_flow_area(self, name: str, area: float) -> None:
         """Set area for a specific flow"""
@@ -292,7 +371,8 @@ class ComponentFlows:
 
     def set_areas(self, area: float) -> None:
         """Set area for all flows in the component"""
-        for attr_name, attr_value in vars(self).items():
+        self._area = area
+        for attr_value in vars(self).values():
             if isinstance(attr_value, Flow):
                 attr_value.set_area(area)
             elif isinstance(attr_value, MultiSourceFlow):
@@ -305,6 +385,20 @@ class ComponentFlows:
                 flow.amount = 0
             elif isinstance(flow, MultiSourceFlow):
                 flow.reset_flows()
+
+    @property
+    def total_inflow(self) -> float:
+        """Calculate total inflow in m³"""
+        return sum(flow.amount for flow in vars(self).values()
+                  if isinstance(flow, (Flow, MultiSourceFlow))
+                  and flow.direction == FlowDirection.IN)
+
+    @property
+    def total_outflow(self) -> float:
+        """Calculate total outflow in m³"""
+        return sum(flow.amount for flow in vars(self).values()
+                  if isinstance(flow, (Flow, MultiSourceFlow))
+                  and flow.direction == FlowDirection.OUT)
 
     def get_total_inflow(self, unit: Optional[WaterUnit] = None) -> float:
         """Calculate total inflow in specified unit (defaults to m³)"""
@@ -1101,7 +1195,7 @@ class DemandInternalFlows(ComponentFlows):
 
     cwws_to_irrigation: Flow = field(
         default_factory=lambda: Flow(
-            _process=None, 
+            _process=None,
             _quality=WaterQuality.TREATED,
             _use=WaterUse.IRRIGATION,
             _direction=FlowDirection.OUT,
