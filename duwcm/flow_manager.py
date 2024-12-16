@@ -10,10 +10,10 @@ class FlowProcess(Enum):
     """Physical processes affecting water movement"""
     PRECIPITATION = auto()
     EVAPORATION = auto()
-    TRANSPIRATION = auto()
     INFILTRATION = auto()
     PERCOLATION = auto()
     RUNOFF = auto()
+    SEWERAGE = auto()
     SEEPAGE = auto()
     BASEFLOW = auto()
 
@@ -96,6 +96,7 @@ class Flow:
     _area: Optional[float] = field(default=None)
     _volume_only: bool = field(default=False)
     linked_flow: Optional['Flow'] = field(default=None, repr=False)
+    _target_capacity: float = field(default=float('inf'))
 
     @property
     def amount(self) -> float:
@@ -188,10 +189,18 @@ class Flow:
         """Set volume only flag"""
         self._volume_only = value
 
+    @property
+    def target_capacity(self) -> float:
+        """Set target_capacity"""
+        if self.direction == FlowDirection.OUT and self.linked_flow:
+            return self.linked_flow.parent.remaining_capacity
+        return float('inf')
+
     def link(self, other_flow: 'Flow') -> None:
         """Link this flow to another flow for automatic synchronization"""
         self.linked_flow = other_flow
         other_flow.linked_flow = self
+
 
 @dataclass
 class MultiSourceFlow:
@@ -316,35 +325,45 @@ class MultiSourceFlow:
 @dataclass
 class ComponentFlows:
     """Base class for all component flows"""
-    _capacity: float = field(default=float('inf'))
+    _type_capacities: Dict[FlowProcess, float] = field(default_factory=lambda: defaultdict(lambda: float('inf')))
     _area: Optional[float] = field(default=None)
 
-    @property
-    def remaining_capacity(self) -> float:
-        """Calculate remaining capacity based on current total inflow"""
-        return max(0, self._capacity - self.total_inflow)
+    def __post_init__(self):
+        """Set parent reference for all flows"""
+        for name, attr in vars(self).items():
+            if isinstance(attr, Flow):
+                attr.parent = self
 
-    def set_capacity(self, capacity: float, unit: Optional[str] = None) -> None:
-        """Set maximum flow capacity"""
-        unit = unit or 'm3'
-        if unit not in ['m3', 'L']:
-            raise ValueError("Capacity unit must be 'm3' or 'L'")
+    def get_remaining_capacity(self, flow_type: FlowProcess) -> float:
+        """Get remaining capacity for a specific flow type"""
+        total_flow = sum(
+            flow.amount for flow in vars(self).values()
+            if isinstance(flow, (Flow, MultiSourceFlow))
+            and flow.process == flow_type
+            and flow.direction == FlowDirection.IN
+        )
+        return max(0, self._type_capacities.get(flow_type, float('inf')) - total_flow)
 
-        self._capacity = WaterUnit.convert(capacity, unit, WaterUnit.CUBIC_METER, area=1)
+    def set_capacity(self, flow_type: FlowProcess, capacity: float, unit: str = 'm3') -> None:
+        """Set capacity limit for a specific flow type"""
+        if unit not in ['m3', 'L', 'mm']:
+            raise ValueError("Capacity unit must be 'm3', 'L', or 'mm'")
 
-    def get_capacity(self, unit: Optional[str] = None) -> float:
-        """Get maximum capacity in specified unit"""
-        unit = unit or 'm3'
-        if unit not in ['m3', 'L']:
-            raise ValueError("Capacity unit must be 'm3' or 'L'")
+        value = WaterUnit.convert(capacity, unit, WaterUnit.CUBIC_METER,
+                                area=self._area if unit == 'mm' else 1)
+        self._type_capacities[flow_type] = value
 
-        return WaterUnit.convert(self._capacity, WaterUnit.CUBIC_METER, unit, area=1)
+    def get_capacity(self, flow_type: FlowProcess, unit: str = 'm3') -> float:
+        """Get capacity limit for a specific flow type"""
+        if unit not in ['m3', 'L', 'mm']:
+            raise ValueError("Capacity unit must be 'm3', 'L', or 'mm'")
+
+        value = self._type_capacities.get(flow_type, float('inf'))
+        return WaterUnit.convert(value, WaterUnit.CUBIC_METER, unit,
+                               area=self._area if unit == 'mm' else 1)
 
     def set_flow(self, name: str, value: float, unit: Optional[str] = None) -> float:
-        """
-        Set flow amount by name with optional unit.
-        Returns excess amount that couldn't be added due to capacity limits.
-        """
+        """Set flow amount respecting type-specific capacity"""
         if not hasattr(self, name):
             raise ValueError(f"Invalid flow name: {name}")
 
@@ -352,27 +371,27 @@ class ComponentFlows:
         if isinstance(flow, MultiSourceFlow):
             raise AttributeError(f"Cannot set amount directly for MultiSourceFlow '{name}'")
 
-        # Convert input value to m³ at the start
         unit = unit or 'm3'
-        # Use area=1 for volume-only flows
         conversion_area = 1 if flow.volume_only else self._area
         value_m3 = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, conversion_area)
 
-        # Get current flow in m³ for capacity calculation
-        current_flow_m3 = flow.amount
-        available_m3 = self._capacity + current_flow_m3 - self.get_total_inflow('m3')
-
-        # Limit new value to available capacity
-        value_m3 = min(value_m3, available_m3)
-        excess_m3 = max(0, value_m3 - available_m3)
-
         if isinstance(flow, Flow):
-            flow.set_amount(value_m3, 'm3')
-        else:
-            raise ValueError(f"Invalid flow type for {name}")
+            if flow.process:
+                remaining = self.get_remaining_capacity(flow.process)
+                value = min(value_m3, remaining)
 
-        # Convert excess back to original unit using same area logic
-        return WaterUnit.convert(excess_m3, WaterUnit.CUBIC_METER, unit, conversion_area)
+            # Handle linked flows
+            if flow.direction == FlowDirection.OUT and flow.linked_flow:
+                if flow.process:
+                    target_remaining = flow.linked_flow.parent.get_remaining_capacity(flow.process)
+                    value = min(value_m3, target_remaining)
+
+            flow.set_amount(value, 'm3')
+            excess = max(0, value_m3 - value)
+            return WaterUnit.convert(excess, WaterUnit.CUBIC_METER, unit, conversion_area)
+
+        raise ValueError(f"Invalid flow type for {name}")
+
 
     def get_flow(self, name: str, unit: Optional[WaterUnit] = None) -> float:
         """Get flow amount by name in specified unit (defaults to m³)"""
@@ -745,7 +764,7 @@ class VadoseFlows(ComponentFlows):
     # Environmental outputs
     transpiration: Flow = field(
         default_factory=lambda: Flow(
-            _process=FlowProcess.TRANSPIRATION,
+            _process=FlowProcess.EVAPORATION,
             _quality=WaterQuality.RAW,
             _use=WaterUse.ENVIRONMENTAL,
             _direction=FlowDirection.OUT
@@ -934,7 +953,7 @@ class StormwaterFlows(ComponentFlows):
     # Combined sewer output
     to_wastewater: Flow = field(
         default_factory=lambda: Flow(
-            _process=None,
+            _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.STORMWATER,
             _use=WaterUse.OVERFLOW,
             _direction=FlowDirection.OUT
@@ -955,7 +974,7 @@ class WastewaterFlows(ComponentFlows):
     # Collection system inputs
     from_demand: Flow = field(
         default_factory=lambda: Flow(
-            _process=None,
+            _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.BLACKWATER,
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.IN
@@ -973,7 +992,7 @@ class WastewaterFlows(ComponentFlows):
     # Combined sewer inputs
     from_stormwater: Flow = field(
         default_factory=lambda: Flow(
-            _process=None,
+            _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.STORMWATER,
             _use=WaterUse.OVERFLOW,
             _direction=FlowDirection.IN
@@ -982,7 +1001,7 @@ class WastewaterFlows(ComponentFlows):
     # Network flows
     from_upstream: MultiSourceFlow = field(
         default_factory=lambda: MultiSourceFlow(
-            _process=None,
+            _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.BLACKWATER,  # Mixed quality in reality
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.IN
@@ -990,7 +1009,7 @@ class WastewaterFlows(ComponentFlows):
 
     to_downstream: Flow = field(
         default_factory=lambda: Flow(
-            _process=None,
+            _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.BLACKWATER,  # Mixed quality in reality
             _use=WaterUse.DOMESTIC,
             _direction=FlowDirection.OUT

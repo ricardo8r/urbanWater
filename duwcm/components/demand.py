@@ -168,12 +168,12 @@ class DemandClass:
             data.ww_storage.set_amount(available, 'L')
             overflow = data.flows.set_flow('to_wastewater', total_treated - data.ww_storage.get_amount('L'), 'L')
             if overflow > 0:
-                raise ValueError(f"Overflow in domestic sewrage: {overflow}")
+                raise ValueError(f"Overflow in domestic sewerage: {overflow}")
 
         else:
             overflow = data.flows.set_flow('to_wastewater', total_treated, 'L')
             if overflow > 0:
-                raise ValueError(f"Overflow in domestic sewrage: {overflow}")
+                raise ValueError(f"Overflow in domestic sewerage: {overflow}")
 
     def _process_potable_demands(self) -> None:
         """Process remaining demands requiring potable water."""

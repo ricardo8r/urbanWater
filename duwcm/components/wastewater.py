@@ -1,6 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import WastewaterData
+from duwcm.flow_manager import FlowProcess
 
 # Constants
 TO_METERS = 0.001
@@ -24,7 +25,8 @@ class WastewaterClass:
         self.wastewater_data.area = params['wastewater']['area']
 
         self.wastewater_data.flows.set_areas(self.wastewater_data.area)
-        self.wastewater_data.flows.set_capacity(params['wastewater']['max_pipe_flow'], 'm3')
+        self.wastewater_data.flows.set_capacity(FlowProcess.SEWERAGE, params['wastewater']['max_pipe_flow'], 'm3')
+#        self.wastewater_data.flows.set_capacity(params['wastewater']['max_pipe_flow'], 'm3')
         self.wastewater_data.storage.set_area(self.wastewater_data.area)
         self.wastewater_data.storage.set_capacity(params['wastewater']['capacity'], 'L')
         self.wastewater_data.storage.set_previous(params['wastewater']['initial_storage'], 'L')

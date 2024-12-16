@@ -31,7 +31,7 @@ class RainTankClass:
 
         self.raintank_data.flows.set_areas(self.raintank_data.area)
         self.raintank_data.storage.set_area(self.raintank_data.area)
-        self.raintank_data.flows.set_capacity(params['raintank']['capacity'] * raintank_total_ratio, 'L')
+        #self.raintank_data.flows.set_capacity(params['raintank']['capacity'] * raintank_total_ratio, 'L')
         self.raintank_data.storage.set_capacity(params['raintank']['capacity'] * raintank_total_ratio, 'L')
         self.raintank_data.storage.set_previous(params['raintank']['initial_storage'], 'L')
 
