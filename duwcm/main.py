@@ -235,14 +235,14 @@ def main() -> None:
 
             output_dir = Path(config.output.output_directory) / 'maps'
             output_dir.mkdir(parents=True, exist_ok=True)
-            #generate_maps(
-            #    background_shapefile=background_shapefile,
-            #    feature_shapefiles=feature_shapefiles,
-            #    geometry_geopackage=geo_file,
-            #    results=results,
-            #    output_dir=output_dir,
-            #    flow_paths=flow_paths
-            #)
+            generate_maps(
+                background_shapefile=background_shapefile,
+                feature_shapefiles=feature_shapefiles,
+                geometry_geopackage=geo_file,
+                results=results,
+                output_dir=output_dir,
+                flow_paths=flow_paths
+            )
             logger.info("Maps saved to %s", output_dir)
 
             # Generate chord diagrams

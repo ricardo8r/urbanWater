@@ -2,7 +2,7 @@
 
 from .roof import RoofClass
 from .raintank import RainTankClass
-from .pavement import PavementClass
+from .impervious import ImperviousClass
 from .pervious import PerviousClass
 from .vadose import VadoseClass
 from .groundwater import GroundwaterClass
@@ -13,7 +13,7 @@ from .demand import DemandClass
 __all__ = [
     "RoofClass",
     "RainTankClass",
-    "PavementClass",
+    "ImperviousClass",
     "PerviousClass",
     "VadoseClass",
     "GroundwaterClass",

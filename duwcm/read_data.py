@@ -45,8 +45,8 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
             total_area = urban_data.Active[cell_id] * (grid_size**2)
 
         roof_area = urban_data.Blk_RoofsA[cell_id]
-        pavement_area = urban_data.Blk_TIA[cell_id] - roof_area #Block Total Impervious Area
-        pervious_area = total_area - roof_area - pavement_area
+        impervious_area = urban_data.Blk_TIA[cell_id] - roof_area #Block Total Impervious Area
+        pervious_area = total_area - roof_area - impervious_area
         num_houses = urban_data.ResHouses[cell_id] + urban_data.HDRFlats[cell_id]
         indoor_water_use = urban_data.WD_In[cell_id] * 1000.0  # kL/d/block --> L/day/block
 
@@ -105,7 +105,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
             },
             'irrigation': {
                 'roof': 0,
-                'pavement': 0,
+                'impervious': 0,
                 'pervious': 0,
                 'block_water_demand': urban_data.WD_Out[cell_id] * 365.0
             },
@@ -127,11 +127,11 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'effective_area': calibration_params.effective_raintank_area,
                 'install_ratio': altwater_params.pRT
             },
-            'pavement': {
-                'area': pavement_area,
-                'effective_area': calibration_params.effective_pavement_area,
-                'max_storage': calibration_params.pavement_storage,
-                'infiltration_capacity': calibration_params.pavement_infiltration
+            'impervious': {
+                'area': impervious_area,
+                'effective_area': calibration_params.effective_impervious_area,
+                'max_storage': calibration_params.impervious_storage,
+                'infiltration_capacity': calibration_params.impervious_infiltration
             },
             'pervious': {
                 'area': pervious_area,

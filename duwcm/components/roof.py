@@ -1,6 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import RoofData
+from duwcm.flow_manager import FlowProcess
 
 class RoofClass:
     """
@@ -58,6 +59,7 @@ class RoofClass:
         if data.area == 0:
             return
 
+        #data.flows.set_capacity(FlowProcess.EVAPORATION, forcing['potential_evaporation'], 'mm')
         data.flows.set_flow('precipitation', forcing['precipitation'], 'mm')
         data.flows.set_flow('from_demand', forcing.get('roof_irrigation', 0.0), 'mm')
 
@@ -73,7 +75,8 @@ class RoofClass:
         effective_runoff = data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
-        non_effective_runoff += data.flows.set_flow('to_raintank', effective_runoff, 'm3')
+        excess_runoff = data.flows.set_flow('to_raintank', effective_runoff, 'm3')
+        data.flows.set_flow('to_stormwater', excess_runoff, 'm3')
         data.flows.set_flow('to_pervious', non_effective_runoff, 'm3')
         data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'm3') *
                             self.leakage_rate / (1 - self.leakage_rate), 'm3')

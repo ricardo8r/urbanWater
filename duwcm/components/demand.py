@@ -84,7 +84,7 @@ class DemandClass:
             # Handle irrigation separately
             total_irrigation = sum(
                 data.flows.get_flow(f'to_{surface}', 'L')
-                for surface in ['roof', 'pavement', 'pervious']
+                for surface in ['roof', 'impervious', 'pervious']
             )
             allocation, available = self._allocate_source(
                 total_irrigation, available, self.reuse_config.rt_to_irrigation
@@ -111,7 +111,7 @@ class DemandClass:
         total_graywater = sum(graywater_flows)
         total_irrigation = sum(
             data.flows.get_flow(f'to_{surface}', 'L')
-            for surface in ['roof', 'pavement', 'pervious']
+            for surface in ['roof', 'impervious', 'pervious']
         )
 
         # Allocate graywater
@@ -154,7 +154,7 @@ class DemandClass:
             # Allocate to irrigation
             total_irrigation = sum(
                 data.flows.get_flow(f'to_{surface}', 'L')
-                for surface in ['roof', 'pavement', 'pervious']
+                for surface in ['roof', 'impervious', 'pervious']
             )
             remaining_irrigation = (
                 total_irrigation -
@@ -167,13 +167,11 @@ class DemandClass:
             data.internal_flows.wws_to_irrigation.set_amount(allocation, 'L')
             data.ww_storage.set_amount(available, 'L')
             overflow = data.flows.set_flow('to_wastewater', total_treated - data.ww_storage.get_amount('L'), 'L')
-            if overflow > 0:
-                raise ValueError(f"Overflow in domestic sewerage: {overflow}")
+            data.flows.set_flow('to_stormwater', overflow, 'L')
 
         else:
             overflow = data.flows.set_flow('to_wastewater', total_treated, 'L')
-            if overflow > 0:
-                raise ValueError(f"Overflow in domestic sewerage: {overflow}")
+            data.flows.set_flow('to_stormwater', overflow, 'L')
 
     def _process_potable_demands(self) -> None:
         """Process remaining demands requiring potable water."""
@@ -202,7 +200,7 @@ class DemandClass:
         # Calculate remaining irrigation demand
         total_irrigation = sum(
             data.flows.get_flow(f'to_{surface}', 'L')
-            for surface in ['roof', 'pavement', 'pervious']
+            for surface in ['roof', 'impervious', 'pervious']
         )
         remaining_irrigation = (
             total_irrigation -

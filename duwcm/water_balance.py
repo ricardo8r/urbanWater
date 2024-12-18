@@ -142,14 +142,14 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     aggregated['transpiration'] = total_transpiration_m3 / total_transpiration_area
 
     total_evap_area = sum(
-        data.roof.area + data.pavement.area + data.pervious.area +
+        data.roof.area + data.impervious.area + data.pervious.area +
         data.raintank.area + data.stormwater.area
         for cell_id, data in model.data.items()
     )
 
     total_evap_m3 = sum(
         (data.roof.flows.get_flow('evaporation', 'L') +
-         data.pavement.flows.get_flow('evaporation', 'L') +
+         data.impervious.flows.get_flow('evaporation', 'L') +
          data.pervious.flows.get_flow('evaporation', 'L') +
          data.raintank.flows.get_flow('evaporation', 'L') +
          data.stormwater.flows.get_flow('evaporation', 'L'))

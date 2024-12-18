@@ -13,7 +13,7 @@ def extract_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
 
     evaporation_components = [
         ('roof', 'evaporation'),
-        ('pavement', 'evaporation'),
+        ('impervious', 'evaporation'),
         ('pervious', 'evaporation'),
         ('raintank', 'evaporation'),
         ('stormwater', 'evaporation'),

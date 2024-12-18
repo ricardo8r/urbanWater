@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Dict, List, Any, Union, Optional
 from duwcm.flow_manager import (
     Flow, MultiSourceFlow,
-    RoofFlows, RainTankFlows, PavementFlows, PerviousFlows,
+    RoofFlows, RainTankFlows, ImperviousFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
     WastewaterFlows, DemandFlows, DemandInternalFlows
 )
@@ -141,9 +141,9 @@ class RainTankData:
     first_flush: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
-class PavementData:
-    """Pavement component"""
-    flows: PavementFlows = field(default_factory=PavementFlows)
+class ImperviousData:
+    """Imperviouys component"""
+    flows: ImperviousFlows = field(default_factory=ImperviousFlows)
     storage: Storage = field(default_factory=lambda: Storage(
         _default_unit=StorageUnit.CUBIC_METER,
         _capacity=0.0
@@ -251,7 +251,7 @@ class UrbanWaterData:
     """Container for all urban water components"""
     roof: RoofData = field(default_factory=RoofData)
     raintank: RainTankData = field(default_factory=RainTankData)
-    pavement: PavementData = field(default_factory=PavementData)
+    impervious: ImperviousData = field(default_factory=ImperviousData)
     pervious: PerviousData = field(default_factory=PerviousData)
     vadose: VadoseData = field(default_factory=VadoseData)
     groundwater: GroundwaterData = field(default_factory=GroundwaterData)
@@ -261,7 +261,7 @@ class UrbanWaterData:
 
     # Define components at class level
     COMPONENTS = [
-        'roof', 'raintank', 'pavement', 'pervious', 'vadose',
+        'roof', 'raintank', 'impervious', 'pervious', 'vadose',
         'groundwater', 'demand', 'stormwater', 'wastewater'
     ]
 
@@ -271,13 +271,14 @@ class UrbanWaterData:
         ('roof', 'to_raintank'): ('raintank', 'from_roof'),
         ('roof', 'to_pervious'): ('pervious', 'from_roof'),
         ('roof', 'to_groundwater'): ('groundwater', 'from_roof'),
-        ('raintank', 'to_pavement'): ('pavement', 'from_raintank'),
+        ('roof', 'to_stormwater'): ('stormwater', 'from_roof'),
+        ('raintank', 'to_impervious'): ('impervious', 'from_raintank'),
         ('raintank', 'to_stormwater'): ('stormwater', 'from_raintank'),
         ('raintank', 'to_demand'): ('demand', 'from_raintank'),
-        ('pavement', 'to_pervious'): ('pervious', 'from_pavement'),
-        ('pavement', 'to_groundwater_infiltration'): ('groundwater', 'from_pavement_infiltration'),
-        ('pavement', 'to_groundwater_leakage'): ('groundwater', 'from_pavement_leakage'),
-        ('pavement', 'to_stormwater'): ('stormwater', 'from_pavement'),
+        ('impervious', 'to_pervious'): ('pervious', 'from_impervious'),
+        ('impervious', 'to_groundwater_infiltration'): ('groundwater', 'from_impervious_infiltration'),
+        ('impervious', 'to_groundwater_leakage'): ('groundwater', 'from_impervious_leakage'),
+        ('impervious', 'to_stormwater'): ('stormwater', 'from_impervious'),
         ('pervious', 'to_vadose'): ('vadose', 'from_pervious'),
         ('pervious', 'to_groundwater'): ('groundwater', 'from_pervious'),
         ('pervious', 'to_stormwater'): ('stormwater', 'from_pervious'),
@@ -285,8 +286,9 @@ class UrbanWaterData:
         ('groundwater', 'to_wastewater'): ('wastewater', 'from_groundwater'),
         ('stormwater', 'to_wastewater'): ('wastewater', 'from_stormwater'),
         ('demand', 'to_wastewater'): ('wastewater', 'from_demand'),
+        ('demand', 'to_stormwater'): ('stormwater', 'from_demand'),
         ('demand', 'to_roof'): ('roof', 'from_demand'),
-        ('demand', 'to_pavement'): ('pavement', 'from_demand'),
+        ('demand', 'to_impervious'): ('impervious', 'from_demand'),
         ('demand', 'to_pervious'): ('pervious', 'from_demand'),
         ('demand', 'to_groundwater'): ('groundwater', 'from_demand'),
     }

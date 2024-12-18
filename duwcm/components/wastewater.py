@@ -26,7 +26,6 @@ class WastewaterClass:
 
         self.wastewater_data.flows.set_areas(self.wastewater_data.area)
         self.wastewater_data.flows.set_capacity(FlowProcess.SEWERAGE, params['wastewater']['max_pipe_flow'], 'm3')
-#        self.wastewater_data.flows.set_capacity(params['wastewater']['max_pipe_flow'], 'm3')
         self.wastewater_data.storage.set_area(self.wastewater_data.area)
         self.wastewater_data.storage.set_capacity(params['wastewater']['capacity'], 'L')
         self.wastewater_data.storage.set_previous(params['wastewater']['initial_storage'], 'L')

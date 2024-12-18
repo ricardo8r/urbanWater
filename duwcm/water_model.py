@@ -13,7 +13,7 @@ Key components:
 The module supports the simulation of:
     - Roof surface
     - Rain tank dynamics
-    - Pavement surface
+    - Impervious surface
     - Pervious surface
     - Vadose zone
     - Groundwater dynamics
@@ -33,7 +33,7 @@ from duwcm.functions import find_order
 from duwcm.data_structures import UrbanWaterData
 
 from duwcm.components import (
-    roof, raintank, pavement, pervious, vadose,
+    roof, raintank, impervious, pervious, vadose,
     groundwater, stormwater, demand, wastewater
 )
 
@@ -42,7 +42,7 @@ class UrbanWaterModel:
     Urban water model class. Includes submodels:
         - Roof
         - Rain tank
-        - Pavement
+        - Impervious
         - Pervious
         - Vadose
         - Groundwater
@@ -93,7 +93,7 @@ class UrbanWaterModel:
             cell_submodels = {
                 'roof': roof.RoofClass(cell_params, self.data[cell_id].roof),
                 'raintank': raintank.RainTankClass(cell_params, self.data[cell_id].raintank),
-                'pavement': pavement.PavementClass(cell_params, self.data[cell_id].pavement),
+                'impervious': impervious.ImperviousClass(cell_params, self.data[cell_id].impervious),
                 'pervious': pervious.PerviousClass(cell_params, self.soil_data, self.et_data,
                                                    self.data[cell_id].pervious),
                 'vadose': vadose.VadoseClass(cell_params, self.soil_data, self.et_data, self.data[cell_id].vadose),

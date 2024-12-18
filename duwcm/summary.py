@@ -17,7 +17,7 @@ def print_summary(results: Dict[str, pd.DataFrame]) -> None:
 
     # Calculate storage changes for each component
     surface_storage_changes = 0.0
-    for component in ['roof', 'raintank', 'pavement', 'pervious', 'stormwater', 'wastewater']:
+    for component in ['roof', 'raintank', 'impervious', 'pervious', 'stormwater', 'wastewater']:
         if component in results:
             if 'storage' in results[component].columns:
                 initial_storage = results[component]['storage'].iloc[0]
@@ -50,11 +50,11 @@ def print_summary(results: Dict[str, pd.DataFrame]) -> None:
     summary = pd.Series({
         # Inputs
         'Precipitation': sum(results[comp]['precipitation'].sum()
-                           for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']
+                           for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']
                            if 'precipitation' in results[comp].columns) * 0.001,
         'Imported Water': agg['imported_water'].sum() * 0.001,
         'Irrigation': sum(results[comp]['irrigation'].sum()
-                          for comp in ['roof', 'pavement', 'pervious']
+                          for comp in ['roof', 'impervious', 'pervious']
                           if 'irrigation' in results[comp].columns) * 0.001,
 
         # Outputs
@@ -103,7 +103,7 @@ def print_summary(results: Dict[str, pd.DataFrame]) -> None:
     # Print breakdown of precipitation by component
     print("\nPrecipitation Breakdown:")
     print("-" * 20)
-    for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
+    for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
         if 'precipitation' in results[comp].columns:
             precip = results[comp]['precipitation'].sum() * 0.001
             print(f"{comp:20s}: {precip:,.2f}")
@@ -111,7 +111,7 @@ def print_summary(results: Dict[str, pd.DataFrame]) -> None:
     # Print breakdown of evaporation by component
     print("\nEvaporation Breakdown:")
     print("-" * 20)
-    for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
+    for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
         if 'evaporation' in results[comp].columns:
             evap = results[comp]['evaporation'].sum() * 0.001
             print(f"{comp:20s}: {evap:,.2f}")
@@ -119,7 +119,7 @@ def print_summary(results: Dict[str, pd.DataFrame]) -> None:
     # Print breakdown of irrigation by component
     print("\nIrrigation Breakdown:")
     print("-" * 20)
-    for comp in ['roof', 'pavement', 'pervious']:
+    for comp in ['roof', 'impervious', 'pervious']:
         if 'irrigation' in results[comp].columns:
             irrig = results[comp]['irrigation'].sum() * 0.001
             print(f"{comp:20s}: {irrig:,.2f}")
@@ -128,7 +128,7 @@ def print_summary(results: Dict[str, pd.DataFrame]) -> None:
     print("\nStorage Changes Breakdown:")
     print("-" * 20)
     print(f"{'Surface Storage':20s}: {surface_storage_changes:,.2f}")
-    for comp in ['roof', 'raintank', 'pavement', 'pervious', 'stormwater', 'wastewater']:
+    for comp in ['roof', 'raintank', 'impervious', 'pervious', 'stormwater', 'wastewater']:
         if comp in results and 'storage' in results[comp].columns:
             initial_storage = results[comp]['storage'].iloc[0]
             final_storage = results[comp]['storage'].iloc[-1]

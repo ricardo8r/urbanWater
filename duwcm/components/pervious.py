@@ -10,7 +10,7 @@ class PerviousClass:
     """
     Calculates water balance for a pervious area.
 
-    Inflows: Precipitation, irrigation, non-effective runoff from roof and pavement
+    Inflows: Precipitation, irrigation, non-effective runoff from roof and impervious
     Outflows: Evaporation, overflow from pervious interception, infiltration to groundwater 
     """
 
@@ -68,7 +68,7 @@ class PerviousClass:
             precipitation: Precipitation on pervious area [m³]
             irrigation: Irrigation on pervious area [m³]
             from_roof: Non-effective runoff from roof area [m³]
-            from_pavement: Non-effective runoff from pavement area [m³]
+            from_impervious: Non-effective runoff from impervious area [m³]
             evaporation: Evaporation from pervious area [m³]
             to_vadose: Infiltration to vadose zone [m³]
             to_groundwater: Leakage to groundwater [m³]
@@ -86,7 +86,7 @@ class PerviousClass:
         total_inflow = (data.flows.get_flow('precipitation', 'mm') +
                         data.flows.get_flow('from_demand', 'mm') +
                         data.flows.get_flow('from_roof', 'mm') +
-                        data.flows.get_flow('from_pavement', 'mm'))
+                        data.flows.get_flow('from_impervious', 'mm'))
 
         # Calculate current storage
         current_storage = max(0.0, data.storage.get_previous('mm') + total_inflow)

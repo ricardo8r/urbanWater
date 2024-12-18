@@ -38,7 +38,7 @@ def read_forcing(config: Dynaconf) -> pd.DataFrame:
     forcing['irrigation_index'] = forcing['potential_evaporation']
     yearly_sum = forcing['irrigation_index'].groupby(forcing.index.year).sum()
     forcing['pervious_irrigation'] = forcing['irrigation_index'] / yearly_sum[forcing.index.year].values
-    forcing['roof_irrigation'] = forcing['pavement_irrigation'] = 0.0
+    forcing['roof_irrigation'] = forcing['impervious_irrigation'] = 0.0
 
     return forcing
 

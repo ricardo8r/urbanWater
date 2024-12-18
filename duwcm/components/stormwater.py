@@ -6,7 +6,7 @@ class StormwaterClass:
     """
     Simulates storm water storage dynamics.
 
-    Inflows: Precipitation, raintank runoff, pavement runoff, pervious runoff, upstream inflow
+    Inflows: Precipitation, raintank runoff, impervious runoff, pervious runoff, upstream inflow
     Outflows: Flush, overflow, evaporation, wastewater inflow
     """
     def __init__(self, params: Dict[str, Dict[str, Any]], stormwater_data: StormwaterData):
@@ -45,7 +45,7 @@ class StormwaterClass:
             precipitation: Direct precipitation [m³]
             evaporation: Evaporation [m³]
             from_raintank: Outflow from raintank [m³]
-            from_pavement: Runoff from pavement [m³]
+            from_impervious: Runoff from impervious [m³]
             from_pervious: Overflow from pervious [m³]
             from_upstream: Stormwater from upstream cells [m³]
             to_wastewater: Combined sewer inflow [m³]
@@ -55,11 +55,12 @@ class StormwaterClass:
 
         # Calculate total runoff
         raintank_runoff = data.flows.get_flow('from_raintank', 'm3')
-        pavement_runoff = data.flows.get_flow('from_pavement', 'm3')
+        roof_runoff = data.flows.get_flow('from_roof', 'm3')
+        impervious_runoff = data.flows.get_flow('from_impervious', 'm3')
         pervious_runoff = data.flows.get_flow('from_pervious', 'm3')
         upstream_inflow = data.flows.get_flow('from_upstream', 'm3')
 
-        total_runoff = raintank_runoff + pavement_runoff + pervious_runoff + upstream_inflow
+        total_runoff = raintank_runoff + roof_runoff + impervious_runoff + pervious_runoff + upstream_inflow
         combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
         runoff = total_runoff - combined_sewer_inflow
 

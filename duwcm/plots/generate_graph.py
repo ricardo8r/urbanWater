@@ -20,7 +20,7 @@ def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         'irrigation': (0, 0),
         'roof': (0.25, 0.9),
         'raintank': (0.25, 0.7),
-        'pavement': (0.25, 0.5),
+        'impervious': (0.25, 0.5),
         'pervious': (0.25, 0.3),
         'vadose': (0.5, 0.4),
         'groundwater': (0.75, 0.4),

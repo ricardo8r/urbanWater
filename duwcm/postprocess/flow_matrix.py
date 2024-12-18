@@ -23,14 +23,14 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], nodes: List[str]) ->
                 flow_matrix.loc[src_comp, trg_comp] = float(flow_value)
 
     # Add precipitation flows
-    for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
+    for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
         if comp in results:
             flow_value = results[comp]['precipitation'].sum()
             if flow_value > 0:
                 flow_matrix.loc['precipitation', comp] = float(flow_value)
 
     # Add evaporation flows
-    for comp in ['roof', 'pavement', 'pervious', 'raintank', 'stormwater']:
+    for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
         if comp in results:
             flow_value = results[comp]['evaporation'].sum()
             if flow_value > 0:

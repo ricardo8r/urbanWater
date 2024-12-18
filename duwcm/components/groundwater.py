@@ -15,7 +15,7 @@ class GroundwaterClass:
     Simulates groundwater dynamics
 
     Inflows: Leakage (irrigation + indoor water usage), vadose zone percolation,
-            pavement infiltration
+            impervious infiltration
     Outflows: Seepage to deep groundwater, baseflow to open water, pipe insfiltration
     """
     def __init__(self, params: Dict[str, Dict[str, Any]], soil_data: pd.DataFrame,
@@ -75,7 +75,7 @@ class GroundwaterClass:
             storage_coefficient: Storage coefficient [-]
         Updates flows with:
             from_vadose: Percolation from vadose zone [L]
-            from_pavement: Infiltration from pavement [L]
+            from_impervious: Infiltration from impervious [L]
             from_input: Irrigation and indoor use leakage [L]
             to_output: Seepage and baseflow [L]
             to_wastewater: Pipe infiltration [L]
@@ -89,15 +89,15 @@ class GroundwaterClass:
 
         # Calculate total inflow
         irrigation_leakage = (data.flows.get_flow('from_roof', 'm') +
-                              data.flows.get_flow('from_pavement_leakage', 'm') +
+                              data.flows.get_flow('from_impervious_leakage', 'm') +
                               data.flows.get_flow('from_pervious', 'm'))
 
         leakage = irrigation_leakage + data.flows.get_flow('from_demand', 'm')
 
         vadose_percolation = data.flows.get_flow('from_vadose', 'm')
-        pavement_infiltration = data.flows.get_flow('from_pavement_infiltration', 'm')
+        impervious_infiltration = data.flows.get_flow('from_impervious_infiltration', 'm')
 
-        inflow = leakage + vadose_percolation + pavement_infiltration
+        inflow = leakage + vadose_percolation + impervious_infiltration
 
         # Calculate storage coefficient
         data.storage_coefficient = self._storage_coefficient(data.water_level.get_previous('m'))
@@ -119,10 +119,10 @@ class GroundwaterClass:
 
         # Update water levels
         water_level = max(0, effective_previous_head)# -
-                          #(inflow - seepage - infiltration - baseflow) / (data.storage_coefficient))
+        #water_level = max(0, (inflow - seepage - infiltration - baseflow) / (data.storage_coefficient))
         surface_water_level = min(0, effective_previous_head  * data.storage_coefficient)#-
-                                  #(inflow - seepage - infiltration - baseflow) /
-                                  #(data.storage_coefficient)) * data.storage_coefficient
+        #surface_water_level = min(0, (inflow - seepage - infiltration - baseflow) /
+        #                          (data.storage_coefficient)) * data.storage_coefficient
 
         data.water_level.set_amount(water_level, 'm')
         data.surface_water_level.set_amount(surface_water_level, 'm')
@@ -130,6 +130,7 @@ class GroundwaterClass:
         # Update flows
         data.flows.set_flow('seepage', seepage, 'm')
         data.flows.set_flow('baseflow', -baseflow, 'm')
+        #data.flows.set_flow('to_stormwater', -baseflow, 'm')
         data.flows.set_flow('to_wastewater', -infiltration, 'm')
 
     def _storage_coefficient(self, initial_level: float) -> float:
