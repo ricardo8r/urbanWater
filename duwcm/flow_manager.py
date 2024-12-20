@@ -329,20 +329,12 @@ class ComponentFlows:
     """Base class for all component flows"""
     _type_capacities: Dict[FlowProcess, float] = field(default_factory=lambda: defaultdict(lambda: float('inf')))
     _area: Optional[float] = field(default=None)
-    # Add tracking of evaporation sources
-    _evaporation_sources: MultiSourceFlow = field(default_factory=lambda: MultiSourceFlow(
-        _process=FlowProcess.EVAPORATION,
-        _direction=FlowDirection.OUT
-    ))
 
     def __post_init__(self):
-        """Set parent reference for all flows and link evaporation flows"""
+        """Set parent reference for all flows"""
         for name, attr in vars(self).items():
             if isinstance(attr, Flow):
                 attr.parent = self
-                # Link any evaporation flows to the tracker
-                if attr.process == FlowProcess.EVAPORATION:
-                    self._evaporation_sources.add_source(attr)
 
     def get_remaining_capacity(self, flow_type: FlowProcess) -> float:
         """Get remaining capacity for a specific flow type"""
@@ -387,18 +379,12 @@ class ComponentFlows:
         flow_value = value_m3
 
         if isinstance(flow, Flow):
-            if flow.process == FlowProcess.EVAPORATION:
-                # Limit by total evaporation capacity
-                total_evap = self._evaporation_sources.get_amount('m3')
-                remaining = self.get_remaining_capacity(FlowProcess.EVAPORATION) - total_evap
-                flow_value = min(value_m3, remaining)
-            elif flow.process:
+            if flow.process:
                 remaining = self.get_remaining_capacity(flow.process)
                 flow_value = min(value_m3, remaining)
 
-            # Handle linked flows
-            if flow.direction == FlowDirection.OUT and flow.linked_flow:
-                if flow.process:
+                # Handle linked flows
+                if flow.direction == FlowDirection.OUT and flow.linked_flow:
                     remaining = flow.linked_flow.parent.get_remaining_capacity(flow.process)
                     flow_value = min(value_m3, remaining)
 

@@ -1,7 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
 from duwcm.data_structures import RoofData
-from duwcm.flow_manager import FlowProcess
 
 class RoofClass:
     """
@@ -59,16 +58,15 @@ class RoofClass:
         if data.area == 0:
             return
 
-        data.flows.set_capacity(FlowProcess.EVAPORATION, forcing['potential_evaporation'], 'mm')
         data.flows.set_flow('precipitation', forcing['precipitation'], 'mm')
         data.flows.set_flow('from_demand', forcing.get('roof_irrigation', 0.0), 'mm')
 
         total_inflow = data.flows.get_flow('precipitation', 'm3') + data.flows.get_flow('from_demand', 'm3')
         current_storage = min(data.storage.get_capacity('m3'), max(0.0, data.storage.get_previous('m3') + total_inflow))
 
-        current_storage = data.flows.set_flow('evaporation', current_storage, 'm3')
-
-        data.storage.set_amount(current_storage, 'm3')
+        data.flows.set_flow('evaporation', forcing['potential_evaporation'], 'mm')
+        data.flows.set_flow('evaporation', min(data.flows.get_flow('evaporation', 'm3'), current_storage), 'm3')
+        data.storage.set_amount(current_storage - data.flows.get_flow('evaporation', 'm3'), 'm3')
 
         excess_water = total_inflow - data.flows.get_flow('evaporation', 'm3') - data.storage.get_change('m3')
         effective_runoff = data.effective_outflow * max(0.0, excess_water)
