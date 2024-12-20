@@ -9,6 +9,7 @@ from duwcm.water_model import UrbanWaterModel
 from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
+from duwcm.initialization import initialize_model
 from duwcm.summary import print_summary
 from duwcm.functions import load_config
 from duwcm.checker import generate_report
@@ -55,6 +56,9 @@ def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
     logger.info("Initializing water balance model")
     model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data, demand_data,
                             reuse_settings, config.grid.direction)
+
+    #logger.info("Initializing groundwater using %s method", config.simulation.init_method)
+    #initialize_model(model, forcing_data, config)
 
     # Run simulation
     logger.info("Running water balance simulation")

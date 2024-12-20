@@ -85,6 +85,15 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
 
         gdf_feature.plot(ax=ax, color=color, edgecolor=edgecolor, alpha=0.8, linewidth=1)
 
+    # Get unit from data attributes if available
+    unit = data.attrs.get('unit', 'm3')
+    unit_label = {
+        'm3': r'm³',
+        'mm': 'mm',
+        'm': 'm',
+        'L': 'L'
+    }.get(unit, unit)
+
     # Plot data
     if variable_name in ['stormwater_runoff', 'wastewater_discharge']:
         sm = plot_linear(ax, gdf_geometry, flow_paths, variable_name, cmap)
@@ -114,7 +123,6 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     ax.set_title(f'{variable_name.replace("_", " ").capitalize()}')
     ax.axis('off')
 
-
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad=0.1)
     cbar = plt.colorbar(sm, cax=cax)
@@ -122,14 +130,18 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     # Format with scientific notation
     cbar.formatter.set_powerlimits((0, 0))
     cbar.ax.yaxis.set_offset_position('right')
-    cbar.ax.yaxis.offsetText.set_fontsize(8)  # Adjust exponent text size
-    cbar.ax.yaxis.offsetText.set_position((0, 1.05))  # Position exponent at top
+    cbar.ax.yaxis.offsetText.set_fontsize(8)
+    cbar.ax.yaxis.offsetText.set_position((0, 1.05))
     cbar.update_ticks()
 
-    cbar.set_label(fr'{variable_name.replace("_", " ").capitalize()} [$\mathrm{{m}}^3$/yr]',
-                   rotation=270, labelpad=15)
+    # Set label with proper unit
+    if unit in ['m3', 'L']:
+        cbar.set_label(fr'{variable_name.replace("_", " ").capitalize()} [{unit_label}/yr]',
+                       rotation=270, labelpad=15)
+    else:
+        cbar.set_label(fr'{variable_name.replace("_", " ").capitalize()} [{unit_label}]',
+                       rotation=270, labelpad=15)
 
-    # Save the plot
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -145,14 +157,24 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
         'baseflow': ('Blues', None),
         'deep_seepage': ('PuBuGn', None),
         'stormwater_runoff': ('BuPu', flow_paths),
-        'wastewater_discharge': ('PuRd', flow_paths)
+        'wastewater_discharge': ('PuRd', flow_paths),
+        'groundwater': ('YlOrBr', None),
+        'vadose_moisture': ('YlGnBu', None)
     }
 
-
+    # Get local results with units
     local_results = extract_local_results(results)
+    units = local_results.attrs.get('units', {})
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
-        data = local_results[variable_name].groupby(level='cell').sum()
+        if variable_name == 'vadose_moisture':
+            data = local_results['vadose_moisture'].groupby(level='cell').last()
+        elif variable_name == 'groundwater':
+            data = local_results['groundwater'].groupby(level='cell').last()
+        else:
+            data = local_results[variable_name].groupby(level='cell').sum()
+        data.attrs['unit'] = units.get(variable_name, 'm3')
+
         output_path = output_dir / f'{variable_name}_map.png'
         plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
                       data, variable_name, output_path, cmap, flow_paths=paths)

@@ -8,8 +8,14 @@ def extract_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
         'stormwater_runoff': ('stormwater', 'to_downstream'),
         'wastewater_discharge': ('wastewater', 'to_downstream'),
         'baseflow': ('groundwater', 'baseflow'),
-        'deep_seepage': ('groundwater', 'seepage')
+        'deep_seepage': ('groundwater', 'seepage'),
+        'vadose_moisture': ('vadose', 'moisture')
     }
+
+    level_components = [
+        ('groundwater', 'water_level', -1),
+        ('groundwater', 'surface_water_level', 1)
+    ]
 
     evaporation_components = [
         ('roof', 'evaporation'),
@@ -21,13 +27,29 @@ def extract_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
     ]
 
     results_dict = {}
+    unit_dict = {}  # Track units separately
 
     # Process regular flows
     for col_name, (component, flow) in selected.items():
         if component in dataframe_results and flow in dataframe_results[component].columns:
             results_dict[col_name] = dataframe_results[component][flow]
+            unit_dict[col_name] = dataframe_results[component][flow].attrs.get('unit', 'm3')
 
-    # Calculate evapotranspiration by summing all components
+    # Calculate groundwater
+    level_sum = None
+    for component, flow, factor in level_components:
+        if component in dataframe_results and flow in dataframe_results[component].columns:
+            current = factor * dataframe_results[component][flow]
+            if level_sum is None:
+                level_sum = current
+            else:
+                level_sum += current
+
+    if level_sum is not None:
+        results_dict['groundwater'] = level_sum
+        unit_dict['groundwater'] = 'm'
+
+    # Calculate evapotranspiration
     evap_sum = None
     for component, flow in evaporation_components:
         if component in dataframe_results and flow in dataframe_results[component].columns:
@@ -38,5 +60,8 @@ def extract_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
 
     if evap_sum is not None:
         results_dict['evapotranspiration'] = evap_sum
+        unit_dict['evapotranspiration'] = 'm3'
 
-    return pd.DataFrame(results_dict)
+    df = pd.DataFrame(results_dict)
+    df.attrs['units'] = unit_dict
+    return df
