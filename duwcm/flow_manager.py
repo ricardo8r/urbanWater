@@ -24,8 +24,8 @@ class WaterQuality(Enum):
     POTABLE = auto()      # Drinking water quality
     RAINWATER = auto()    # Direct precipitation collection
     STORMWATER = auto()   # Surface runoff collection
-    GRAYWATER = auto()    # Lightly contaminated wastewater
-    BLACKWATER = auto()   # Heavily contaminated wastewater
+    GRAYWATER = auto()    # Lightly contaminated sewerage
+    BLACKWATER = auto()   # Heavily contaminated sewerage
     TREATED = auto()      # Treated water (various levels possible)
     RAW = auto()          # Untreated water (groundwater, surface water)
 
@@ -809,7 +809,7 @@ class GroundwaterFlows(ComponentFlows):
     - Leakage inputs from infrastructure
     - Baseflow to surface water
     - Deep seepage losses
-    - Infiltration to wastewater system
+    - Infiltration to sewerage system
     """
     # Natural environmental outputs
     seepage: Flow = field(
@@ -880,7 +880,7 @@ class GroundwaterFlows(ComponentFlows):
         ))
 
     # Infrastructure interaction outputs
-    to_wastewater: Flow = field(
+    to_sewerage: Flow = field(
         default_factory=lambda: Flow(
             _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.RAW,
@@ -899,7 +899,7 @@ class StormwaterFlows(ComponentFlows):
     - Evaporation from open facilities
     - Upstream drainage inputs
     - Downstream discharge
-    - Combined sewer inputs to wastewater
+    - Combined sewer inputs to sewerage
     """
     # Environmental inputs/outputs (for open facilities)
     precipitation: Flow = field(
@@ -977,7 +977,7 @@ class StormwaterFlows(ComponentFlows):
         ))
 
     # Combined sewer output
-    to_wastewater: Flow = field(
+    to_sewerage: Flow = field(
         default_factory=lambda: Flow(
             _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.STORMWATER,
@@ -986,12 +986,12 @@ class StormwaterFlows(ComponentFlows):
         ))
 
 @dataclass
-class WastewaterFlows(ComponentFlows):
+class SewerageFlows(ComponentFlows):
     """
-    Wastewater component flows tracking sewage collection and transport.
+    Sewerage component flows tracking sewage collection and transport.
 
     Tracks:
-    - Domestic wastewater inputs
+    - Domestic sewerage inputs
     - Groundwater infiltration
     - Combined sewer inputs from stormwater
     - Upstream collection inputs
@@ -1059,7 +1059,7 @@ class DemandFlows(ComponentFlows):
     - Imported water supply
     - Alternative water supplies (rainwater, treated)
     - Distribution to end uses
-    - Wastewater generation
+    - Sewerage generation
     - System losses
     """
     # Primary supply
@@ -1083,7 +1083,7 @@ class DemandFlows(ComponentFlows):
         ))
 
     # Distribution outputs
-    to_wastewater: Flow = field(
+    to_sewerage: Flow = field(
         default_factory=lambda: Flow(
             _process=FlowProcess.SEWERAGE,
             _quality=WaterQuality.BLACKWATER,
@@ -1145,7 +1145,7 @@ class DemandInternalFlows(ComponentFlows):
     Internal demand flows tracking detailed water use paths and quality transformations.
 
     Tracks pathways by water quality level (lowest to highest):
-    - Graywater (GW): Lightly contaminated domestic wastewater
+    - Graywater (GW): Lightly contaminated domestic sewerage
     - Non-potable (NP): Treated to non-drinking standards
     - Stormwater (SW): Collected urban runoff
     - Rainwater (RW): Direct precipitation collection
@@ -1187,7 +1187,7 @@ class DemandInternalFlows(ComponentFlows):
             _direction=FlowDirection.OUT,
             _volume_only=True
         ))
-    graywater_to_wastewater: Flow = field(
+    graywater_to_sewerage: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
             _quality=WaterQuality.GRAYWATER,
@@ -1196,7 +1196,7 @@ class DemandInternalFlows(ComponentFlows):
             _volume_only=True
         ))
 
-    # Treated wastewater use
+    # Treated sewerage use
     wws_to_toilet: Flow = field(
         default_factory=lambda: Flow(
             _process=None,
@@ -1261,7 +1261,7 @@ class DemandInternalFlows(ComponentFlows):
             _volume_only=True
         ))
 
-    # Treated cluster wastewater use
+    # Treated cluster sewerage use
     cwws_to_toilet: Flow = field(
         default_factory=lambda: Flow(
             _process=None,

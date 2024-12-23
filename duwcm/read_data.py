@@ -166,7 +166,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'capacity': altwater_params.WWSc,
                 'initial_storage': altwater_params.WWS0
             },
-            'wastewater': {
+            'sewerage': {
                 'area': altwater_params.AcWWS,
                 'capacity': altwater_params.cWWSc,
                 'initial_storage': altwater_params.cWWS0,

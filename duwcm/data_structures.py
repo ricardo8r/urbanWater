@@ -5,7 +5,7 @@ from duwcm.flow_manager import (
     Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, ImperviousFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
-    WastewaterFlows, DemandFlows, DemandInternalFlows
+    SewerageFlows, DemandFlows, DemandInternalFlows
 )
 
 TO_METER = 0.001
@@ -221,9 +221,9 @@ class StormwaterData:
     first_flush: float = field(default=0, metadata={'unit': 'L'})
 
 @dataclass
-class WastewaterData:
-    """Wastewater component"""
-    flows: WastewaterFlows = field(default_factory=WastewaterFlows)
+class SewerageData:
+    """Sewerage component"""
+    flows: SewerageFlows = field(default_factory=SewerageFlows)
     storage: Storage = field(default_factory=lambda: Storage(
         _default_unit=StorageUnit.CUBIC_METER,
         _capacity=0.0
@@ -256,13 +256,13 @@ class UrbanWaterData:
     vadose: VadoseData = field(default_factory=VadoseData)
     groundwater: GroundwaterData = field(default_factory=GroundwaterData)
     stormwater: StormwaterData = field(default_factory=StormwaterData)
-    wastewater: WastewaterData = field(default_factory=WastewaterData)
+    sewerage: SewerageData = field(default_factory=SewerageData)
     demand: DemandData = field(default_factory=DemandData)
 
     # Define components at class level
     COMPONENTS = [
         'roof', 'raintank', 'impervious', 'pervious', 'vadose',
-        'groundwater', 'demand', 'stormwater', 'wastewater'
+        'groundwater', 'demand', 'stormwater', 'sewerage'
     ]
 
     # Define flow connections at class level
@@ -283,9 +283,9 @@ class UrbanWaterData:
         ('pervious', 'to_groundwater'): ('groundwater', 'from_pervious'),
         ('pervious', 'to_stormwater'): ('stormwater', 'from_pervious'),
         ('vadose', 'to_groundwater'): ('groundwater', 'from_vadose'),
-        ('groundwater', 'to_wastewater'): ('wastewater', 'from_groundwater'),
-        ('stormwater', 'to_wastewater'): ('wastewater', 'from_stormwater'),
-        ('demand', 'to_wastewater'): ('wastewater', 'from_demand'),
+        ('groundwater', 'to_sewerage'): ('sewerage', 'from_groundwater'),
+        ('stormwater', 'to_sewerage'): ('sewerage', 'from_stormwater'),
+        ('demand', 'to_sewerage'): ('sewerage', 'from_demand'),
         ('demand', 'to_stormwater'): ('stormwater', 'from_demand'),
         ('demand', 'to_roof'): ('roof', 'from_demand'),
         ('demand', 'to_impervious'): ('impervious', 'from_demand'),

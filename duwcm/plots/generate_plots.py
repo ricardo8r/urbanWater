@@ -45,15 +45,15 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
         'Precipitation': forcing['precipitation'],
         'PotentialEvaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (results['evaporation'] + results['transpiration']),
-        'Stormwater': results['stormwater'],
-        'Wastewater': results['wastewater'],
+        'Runoff': results['stormwater'],
+        'Sewerage': results['sewerage'],
         'Baseflow': results['baseflow']
     })
 
     plot_configs = [
-        ('Stormwater'),
+        ('Runoff'),
         ('Baseflow'),
-        ('Wastewater')
+        ('Sewerage')
     ]
     index = pd.to_datetime(plot_data.index)
     color_cycle = plt.rcParams['axes.prop_cycle'].by_key()['color']

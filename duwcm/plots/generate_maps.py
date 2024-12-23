@@ -95,7 +95,7 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     }.get(unit, unit)
 
     # Plot data
-    if variable_name in ['stormwater_runoff', 'wastewater_discharge']:
+    if variable_name in ['stormwater_runoff', 'sewerage_discharge']:
         sm = plot_linear(ax, gdf_geometry, flow_paths, variable_name, cmap)
     else:
         values = gdf_geometry[variable_name].dropna()
@@ -157,7 +157,7 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], ge
         'baseflow': ('Blues', None),
         'deep_seepage': ('PuBuGn', None),
         'stormwater_runoff': ('BuPu', flow_paths),
-        'wastewater_discharge': ('PuRd', flow_paths),
+        'sewerage_discharge': ('PuRd', flow_paths),
         'groundwater': ('YlOrBr', None),
         'vadose_moisture': ('YlGnBu', None)
     }

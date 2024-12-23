@@ -64,12 +64,12 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], nodes: List[str]) ->
 
     if 'aggregated' in results:
         stormwater_runoff = results['aggregated']['stormwater'].sum()
-        wastewater_discharge = results['aggregated']['wastewater'].sum()
+        sewerage_discharge = results['aggregated']['sewerage'].sum()
 
         if stormwater_runoff > 0:
             flow_matrix.loc['stormwater', 'runoff'] = float(stormwater_runoff)
-        if wastewater_discharge > 0:
-            flow_matrix.loc['wastewater', 'discharge'] = float(wastewater_discharge)
+        if sewerage_discharge > 0:
+            flow_matrix.loc['sewerage', 'discharge'] = float(sewerage_discharge)
 
     # Remove any non-node columns/rows and NaN values
     valid_cols = [col for col in flow_matrix.columns if col in nodes]
@@ -87,7 +87,7 @@ def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFram
 
     demand = results['demand']
     sources = ['Potable Water', 'Rainwater', 'Treated WW', 'Graywater']
-    uses = ['Kitchen', 'Bathroom', 'Laundry', 'Toilet', 'Irrigation', 'Wastewater']
+    uses = ['Kitchen', 'Bathroom', 'Laundry', 'Toilet', 'Irrigation', 'Sewerage']
 
     nodes = sources + uses
     flow_matrix = pd.DataFrame(0, index=nodes, columns=nodes, dtype=float)
@@ -112,7 +112,7 @@ def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFram
 
     flow_matrix.loc['Treated', 'Toilet'] = demand['wws_to_toilet'].sum()
     flow_matrix.loc['Treated', 'Irrigation'] = demand['wws_to_irrigation'].sum()
-    flow_matrix.loc['Wastewater', 'Treated'] = (demand['wws_to_irrigation'].sum() +
+    flow_matrix.loc['Sewerage', 'Treated'] = (demand['wws_to_irrigation'].sum() +
                                                 demand['wws_to_toilet'].sum())
 
     # Graywater generation and use
@@ -121,13 +121,13 @@ def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFram
     flow_matrix.loc['Laundry', 'Graywater'] = demand['laundry_to_graywater'].sum()
 
     flow_matrix.loc['Graywater', 'Irrigation'] = demand['graywater_to_irrigation'].sum()
-    flow_matrix.loc['Graywater', 'Wastewater'] = demand['graywater_to_wastewater'].sum()
+    flow_matrix.loc['Graywater', 'Sewerage'] = demand['graywater_to_sewerage'].sum()
 
-    # Flows to wastewater - everything that doesn't go to graywater
-    flow_matrix.loc['Kitchen', 'Wastewater'] = total_kitchen - demand['kitchen_to_graywater'].sum()
-    flow_matrix.loc['Bathroom', 'Wastewater'] = total_bathroom - demand['bathroom_to_graywater'].sum()
-    flow_matrix.loc['Laundry', 'Wastewater'] = total_laundry - demand['laundry_to_graywater'].sum()
-    flow_matrix.loc['Toilet', 'Wastewater'] = (demand['po_to_toilet'].sum() +
+    # Flows to sewerage - everything that doesn't go to graywater
+    flow_matrix.loc['Kitchen', 'Sewerage'] = total_kitchen - demand['kitchen_to_graywater'].sum()
+    flow_matrix.loc['Bathroom', 'Sewerage'] = total_bathroom - demand['bathroom_to_graywater'].sum()
+    flow_matrix.loc['Laundry', 'Sewerage'] = total_laundry - demand['laundry_to_graywater'].sum()
+    flow_matrix.loc['Toilet', 'Sewerage'] = (demand['po_to_toilet'].sum() +
                                               demand['rt_to_toilet'].sum() +
                                               demand['wws_to_toilet'].sum())
 

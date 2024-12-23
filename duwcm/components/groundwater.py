@@ -78,7 +78,7 @@ class GroundwaterClass:
             from_impervious: Infiltration from impervious [L]
             from_input: Irrigation and indoor use leakage [L]
             to_output: Seepage and baseflow [L]
-            to_wastewater: Pipe infiltration [L]
+            to_sewerage: Pipe infiltration [L]
         """
         data = self.groundwater_data
 
@@ -134,7 +134,7 @@ class GroundwaterClass:
         data.flows.set_flow('seepage', seepage, 'm')
         data.flows.set_flow('baseflow', -baseflow, 'm')
         #data.flows.set_flow('to_stormwater', -baseflow, 'm')
-        data.flows.set_flow('to_wastewater', -infiltration, 'm')
+        data.flows.set_flow('to_sewerage', -infiltration, 'm')
 
     def _storage_coefficient(self, initial_level: float) -> float:
         gw_up, gw_low, id_up, id_low = gw_levels(initial_level)

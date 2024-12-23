@@ -56,7 +56,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
     results_agg.append({
         'date': initial_date,
         'stormwater': 0,
-        'wastewater': 0,
+        'sewerage': 0,
         'baseflow': 0,
         'total_seepage': 0,
         'imported_water': 0,
@@ -79,7 +79,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
 
         # Solve timestep
         solve_timestep(model, results, timestep_forcing, current_date)
-        model.distribute_wastewater()
+        model.distribute_sewerage()
         model.distribute_stormwater()
         _aggregate_timestep(model, results_agg, current_date)
 
@@ -116,7 +116,7 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     aggregated = {
         'date': current_date,
         'stormwater': 0,
-        'wastewater': 0,
+        'sewerage': 0,
         'baseflow': 0,
         'total_seepage': 0,
         'imported_water': 0,
@@ -128,7 +128,7 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
         # Aggregate end-point flows
         if model.path.loc[cell_id, 'down'] == 0:
             aggregated['stormwater'] += data.stormwater.flows.to_downstream.get_amount('m3')
-            aggregated['wastewater'] += data.wastewater.flows.to_downstream.get_amount('m3')
+            aggregated['sewerage'] += data.sewerage.flows.to_downstream.get_amount('m3')
 
         aggregated['baseflow'] += data.groundwater.flows.baseflow.get_amount('m3')
         aggregated['total_seepage'] += data.groundwater.flows.seepage.get_amount('m3')
@@ -159,7 +159,7 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
 
     aggregated['evaporation'] = total_evap_m3 / total_evap_area
 
-    #aggregated['imported_water'] -= sum(model.current[w].wastewater.use for w in model.wastewater_cells)
+    #aggregated['imported_water'] -= sum(model.current[w].sewerage.use for w in model.sewerage_cells)
     #aggregated['imported_water'] -= sum(model.current[s].stormwater.use for s in model.stormwater_cells)
 
     results_agg.append(aggregated)

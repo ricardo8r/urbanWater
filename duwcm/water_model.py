@@ -19,7 +19,7 @@ The module supports the simulation of:
     - Groundwater dynamics
     - Stormwater
     - Water demand
-    - Wastewater
+    - Sewerage
 
 The UrbanWaterModel class provides methods for initializing the model, updating states,
 and managing the overall simulation process. It serves as the central component in the
@@ -34,7 +34,7 @@ from duwcm.data_structures import UrbanWaterData
 
 from duwcm.components import (
     roof, raintank, impervious, pervious, vadose,
-    groundwater, stormwater, demand, wastewater
+    groundwater, stormwater, demand, sewerage
 )
 
 class UrbanWaterModel:
@@ -48,7 +48,7 @@ class UrbanWaterModel:
         - Groundwater
         - Stormawater
         - Demand
-        - Wastewater
+        - Sewerage
     """
 
     def __init__(self, params: Dict[str, Dict[str, float]], path: pd.DataFrame, soil_data: pd.DataFrame,
@@ -76,7 +76,7 @@ class UrbanWaterModel:
         # Initialize submodels
         self._init_submodels()
 
-        self.wastewater_cells = [i for i, p in self.params.items() if p['wastewater']['capacity'] > 0]
+        self.sewerage_cells = [i for i, p in self.params.items() if p['sewerage']['capacity'] > 0]
         self.stormwater_cells = [i for i, p in self.params.items() if p['stormwater']['capacity'] > 0]
 
         # Calculate the order of cells
@@ -102,11 +102,11 @@ class UrbanWaterModel:
                 'stormwater': stormwater.StormwaterClass(cell_params, self.data[cell_id].stormwater),
                 'demand': demand.DemandClass(cell_params, self.demand_settings, self.reuse_settings,
                                           self.data[cell_id].demand),
-                'wastewater': wastewater.WastewaterClass(cell_params, self.data[cell_id].wastewater)
+                'sewerage': sewerage.SewerageClass(cell_params, self.data[cell_id].sewerage)
             }
             self.classes[cell_id] = cell_submodels
 
-        # Connect upstream flows for both stormwater and wastewater
+        # Connect upstream flows for both stormwater and sewerage
         for cell_id in self.params:
             for up in self.path.loc[cell_id].iloc[1:]:
                 if up != 0:
@@ -114,9 +114,9 @@ class UrbanWaterModel:
                     self.data[cell_id].stormwater.flows.from_upstream.add_source(
                         self.data[up].stormwater.flows.to_downstream
                     )
-                    # Link wastewater flows
-                    self.data[cell_id].wastewater.flows.from_upstream.add_source(
-                        self.data[up].wastewater.flows.to_downstream
+                    # Link sewerage flows
+                    self.data[cell_id].sewerage.flows.from_upstream.add_source(
+                        self.data[up].sewerage.flows.to_downstream
                     )
 
     def update_states(self):
@@ -125,32 +125,32 @@ class UrbanWaterModel:
             data.update_storage()
             data.reset_flows()
 
-    def distribute_wastewater(self):
-        for w in self.wastewater_cells:
+    def distribute_sewerage(self):
+        for w in self.sewerage_cells:
             available_cells = list(self.cell_order)
-            while self.data[w].wastewater.storage.amount > 0 and available_cells:
+            while self.data[w].sewerage.storage.amount > 0 and available_cells:
                 select = np.random.choice(available_cells)
                 #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
                 setreuse = self.reuse_settings
 
                 # Toilet use
                 wws_toilet_use = min(
-                    self.data[w].wastewater.storage.amount,
+                    self.data[w].sewerage.storage.amount,
                     self.data[select].demand.rt_toilet_demand * setreuse.central_ww_to_toilet
                 )
                 self.data[select].demand.rt_toilet_demand -= wws_toilet_use
 
                 # Irrigation use
                 wws_irrigation_use = min(
-                    self.data[w].wastewater.storage.amount - wws_toilet_use,
+                    self.data[w].sewerage.storage.amount - wws_toilet_use,
                     self.data[select].demand.rt_irrigation_demand * setreuse.central_ww_to_irrigation
                 )
                 self.data[select].demand.rt_irrigation_demand -= wws_irrigation_use
 
                 # Update storages and uses
-                self.data[w].wastewater.storage.amount -= (wws_toilet_use + wws_irrigation_use)
-                self.data[w].wastewater.use += (wws_toilet_use + wws_irrigation_use)
-                self.data[select].wastewater.supply += (wws_toilet_use + wws_irrigation_use)
+                self.data[w].sewerage.storage.amount -= (wws_toilet_use + wws_irrigation_use)
+                self.data[w].sewerage.use += (wws_toilet_use + wws_irrigation_use)
+                self.data[select].sewerage.supply += (wws_toilet_use + wws_irrigation_use)
                 self.data[select].demand.imported_water -= (wws_toilet_use + wws_irrigation_use)
 
                 available_cells.remove(select)

@@ -48,7 +48,7 @@ class StormwaterClass:
             from_impervious: Runoff from impervious [m³]
             from_pervious: Overflow from pervious [m³]
             from_upstream: Stormwater from upstream cells [m³]
-            to_wastewater: Combined sewer inflow [m³]
+            to_sewerage: Combined sewer inflow [m³]
             to_downstream: Stormwater discharge [m³]
         """
         data = self.stormwater_data
@@ -66,7 +66,7 @@ class StormwaterClass:
 
         # Handle zero capacity case
         if data.storage.get_capacity('m3') == 0:
-            runoff += data.flows.set_flow('to_wastewater', combined_sewer_inflow, 'm3')
+            runoff += data.flows.set_flow('to_sewerage', combined_sewer_inflow, 'm3')
             data.flows.set_flow('to_downstream', runoff, 'm3')
             data.flows.set_flow('precipitation', 0)
             data.flows.set_flow('evaporation', 0)
@@ -92,5 +92,5 @@ class StormwaterClass:
         runoff_sewer = first_flush + overflow
 
         # Update flows
-        runoff_sewer += data.flows.set_flow('to_wastewater', combined_sewer_inflow, 'm3')
+        runoff_sewer += data.flows.set_flow('to_sewerage', combined_sewer_inflow, 'm3')
         data.flows.set_flow('to_downstream', runoff_sewer, 'm3')

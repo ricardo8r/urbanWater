@@ -25,7 +25,7 @@ def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         'vadose': (0.5, 0.4),
         'groundwater': (0.75, 0.4),
         'stormwater': (0.5, 0.7),
-        'wastewater': (0.75, 0.7),
+        'sewerage': (0.75, 0.7),
         'demand': (0.5, 0.1),
         'evaporation': (1, 0.8),
         'transpiration': (1, 0.6),

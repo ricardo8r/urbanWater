@@ -1,51 +1,51 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import WastewaterData
+from duwcm.data_structures import SewerageData
 from duwcm.flow_manager import FlowProcess
 
 # Constants
 TO_METERS = 0.001
 
-class WastewaterClass:
+class SewerageClass:
     """
-    Simulates cluster wastewater storage dynamics.
+    Simulates cluster sewerage storage dynamics.
 
     Inflows: Stormwater, reuse, upstream and infiltration
     Outflows: Sewer
     """
-    def __init__(self, params: Dict[str, Dict[str, Any]], wastewater_data: WastewaterData):
+    def __init__(self, params: Dict[str, Dict[str, Any]], sewerage_data: SewerageData):
         """
         Args:
             params (Dict[str, float]): System parameters
-                area: Wastewater area [m²]
-                capacity: Wastewater storage capacity [m³]
-                previous: Wastewater initial storage [m³]
+                area: sewerage area [m²]
+                capacity: sewerage storage capacity [m³]
+                previous: sewerage initial storage [m³]
         """
-        self.wastewater_data = wastewater_data
-        self.wastewater_data.area = params['wastewater']['area']
+        self.sewerage_data = sewerage_data
+        self.sewerage_data.area = params['sewerage']['area']
 
-        self.wastewater_data.flows.set_areas(self.wastewater_data.area)
-        self.wastewater_data.flows.set_capacity(FlowProcess.SEWERAGE, params['wastewater']['max_pipe_flow'], 'm3')
-        self.wastewater_data.storage.set_area(self.wastewater_data.area)
-        self.wastewater_data.storage.set_capacity(params['wastewater']['capacity'], 'L')
-        self.wastewater_data.storage.set_previous(params['wastewater']['initial_storage'], 'L')
+        self.sewerage_data.flows.set_areas(self.sewerage_data.area)
+        self.sewerage_data.flows.set_capacity(FlowProcess.SEWERAGE, params['sewerage']['max_pipe_flow'], 'm3')
+        self.sewerage_data.storage.set_area(self.sewerage_data.area)
+        self.sewerage_data.storage.set_capacity(params['sewerage']['capacity'], 'L')
+        self.sewerage_data.storage.set_previous(params['sewerage']['initial_storage'], 'L')
 
     def solve(self, forcing: pd.Series) -> None:
         """
-        Calculate the states and fluxes on wastewater storage during current time step.
+        Calculate the states and fluxes on sewerage storage during current time step.
 
         Args:
             forcing (pd.DataFrame): Climate forcing data with columns:
 
-        Updates wastewater_data with:
-            storage: Wastewater storage at the end of the time step [m³]
+        Updates sewerage_data with:
+            storage: Sewerage storage at the end of the time step [m³]
         Updates flows with:
-            from_reuse: Outflow from onsite wastewater storage [m³]
+            from_reuse: Outflow from onsite sewerage storage [m³]
             from_groundwater: Infiltration from groundwater [m³]
             from_stormwater: Inflow of stormwater [m³]
-            to_downstream: Wastewater sewer discharge [m³]
+            to_downstream: sewerage sewer discharge [m³]
         """
-        data = self.wastewater_data
+        data = self.sewerage_data
         total_inflow = (data.flows.get_flow('from_demand', 'm3') +
                         data.flows.get_flow('from_groundwater', 'm3') +
                         data.flows.get_flow('from_stormwater', 'm3') +

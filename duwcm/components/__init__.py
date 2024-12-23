@@ -7,7 +7,7 @@ from .pervious import PerviousClass
 from .vadose import VadoseClass
 from .groundwater import GroundwaterClass
 from .stormwater import StormwaterClass
-from .wastewater import WastewaterClass
+from .sewerage import SewerageClass
 from .demand import DemandClass
 
 __all__ = [
@@ -18,6 +18,6 @@ __all__ = [
     "VadoseClass",
     "GroundwaterClass",
     "StormwaterClass",
-    "WastewaterClass",
+    "SewerageClass",
     "DemandClass"
 ]

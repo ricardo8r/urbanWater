@@ -6,7 +6,7 @@ def extract_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
     selected = {
         'imported_water': ('demand', 'imported_water'),
         'stormwater_runoff': ('stormwater', 'to_downstream'),
-        'wastewater_discharge': ('wastewater', 'to_downstream'),
+        'sewerage_discharge': ('sewerage', 'to_downstream'),
         'baseflow': ('groundwater', 'baseflow'),
         'deep_seepage': ('groundwater', 'seepage'),
         'vadose_moisture': ('vadose', 'moisture')
