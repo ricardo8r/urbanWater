@@ -120,6 +120,8 @@ class DemandClass:
         data.internal_flows.graywater_to_sewerage.set_amount(
             total_graywater - gray_to_irrigation, 'L'
         )
+        overflow = data.flows.set_flow('to_sewerage', total_graywater - gray_to_irrigation, 'L', additive=True)
+        data.flows.set_flow('to_stormwater', overflow, 'L', additive=True)
 
     def _process_wastewater_treatment(self) -> None:
         """Process wastewater treatment and allocation."""
@@ -166,12 +168,12 @@ class DemandClass:
             )
             data.internal_flows.wws_to_irrigation.set_amount(allocation, 'L')
             data.ww_storage.set_amount(available, 'L')
-            overflow = data.flows.set_flow('to_sewerage', total_treated - data.ww_storage.get_amount('L'), 'L')
-            data.flows.set_flow('to_stormwater', overflow, 'L')
+            overflow = data.flows.set_flow('to_sewerage', total_treated - data.ww_storage.get_amount('L'), 'L', additive=True)
+            data.flows.set_flow('to_stormwater', overflow, 'L', additive=True)
 
         else:
-            overflow = data.flows.set_flow('to_sewerage', total_treated, 'L')
-            data.flows.set_flow('to_stormwater', overflow, 'L')
+            overflow = data.flows.set_flow('to_sewerage', total_treated, 'L', additive=True)
+            data.flows.set_flow('to_stormwater', overflow, 'L', additive=True)
 
     def _process_potable_demands(self) -> None:
         """Process remaining demands requiring potable water."""

@@ -336,15 +336,22 @@ class ComponentFlows:
             if isinstance(attr, Flow):
                 attr.parent = self
 
+
     def get_remaining_capacity(self, flow_type: FlowProcess) -> float:
         """Get remaining capacity for a specific flow type"""
+        capacity = self._type_capacities.get(flow_type, float('inf'))
+
+        # For downstream flows
+        if hasattr(self, 'from_upstream'):
+            capacity -= self.from_upstream.amount
+
         total_flow = sum(
             flow.amount for flow in vars(self).values()
             if isinstance(flow, (Flow, MultiSourceFlow))
             and flow.process == flow_type
             and flow.direction == FlowDirection.IN
         )
-        return max(0, self._type_capacities.get(flow_type, float('inf')) - total_flow)
+        return max(0, capacity - total_flow)
 
     def set_capacity(self, flow_type: FlowProcess, capacity: float, unit: str = 'm3') -> None:
         """Set capacity limit for a specific flow type"""
@@ -364,8 +371,8 @@ class ComponentFlows:
         return WaterUnit.convert(value, WaterUnit.CUBIC_METER, unit,
                                area=self._area if unit == 'mm' else 1)
 
-    def set_flow(self, name: str, value: float, unit: Optional[str] = None) -> float:
-        """Set flow amount respecting type-specific capacity"""
+    def set_flow(self, name: str, value: float, unit: Optional[str] = None, additive: bool = False) -> float:
+        """Set flow amount respecting type-specific capacity."""
         if not hasattr(self, name):
             raise ValueError(f"Invalid flow name: {name}")
 
@@ -381,14 +388,22 @@ class ComponentFlows:
         if isinstance(flow, Flow):
             if flow.process:
                 remaining = self.get_remaining_capacity(flow.process)
-                flow_value = min(value_m3, remaining)
+                if hasattr(self, 'from_upstream'):
+                    flow_value = min(value_m3, remaining + value_m3)
+                else:
+                    flow_value = min(value_m3, remaining)
 
                 # Handle linked flows
                 if flow.direction == FlowDirection.OUT and flow.linked_flow:
                     remaining = flow.linked_flow.parent.get_remaining_capacity(flow.process)
                     flow_value = min(value_m3, remaining)
 
-            flow.set_amount(flow_value, 'm3')
+            if additive:
+                current_value = flow.get_amount('m3')
+                flow.set_amount(current_value + flow_value, 'm3')
+            else:
+                flow.set_amount(flow_value, 'm3')
+
             excess = max(0, value_m3 - flow_value)
             return WaterUnit.convert(excess, WaterUnit.CUBIC_METER, unit, conversion_area)
 

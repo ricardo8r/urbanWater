@@ -60,7 +60,9 @@ class StormwaterClass:
         pervious_runoff = data.flows.get_flow('from_pervious', 'm3')
         upstream_inflow = data.flows.get_flow('from_upstream', 'm3')
 
-        total_runoff = raintank_runoff + roof_runoff + impervious_runoff + pervious_runoff + upstream_inflow
+        demand_overflow = data.flows.get_flow('from_demand', 'm3')
+
+        total_runoff = raintank_runoff + roof_runoff + impervious_runoff + pervious_runoff + upstream_inflow + demand_overflow
         combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
         runoff = total_runoff - combined_sewer_inflow
 
