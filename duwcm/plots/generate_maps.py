@@ -1,5 +1,6 @@
 from typing import Dict, List, Any, Optional
 from pathlib import Path
+from dynaconf import Dynaconf
 import numpy as np
 import pandas as pd
 
@@ -10,6 +11,162 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
 
 from duwcm.postprocess import extract_local_results
+
+def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Path],
+                         geometry_geopackage: Path, flow_paths: pd.DataFrame,
+                         output_dir: Path, config: Dynaconf) -> None:
+    """Create maps showing cell IDs, elevation and flow paths with background features."""
+    gdf_geometry = gpd.read_file(geometry_geopackage)
+    gdf_background = gpd.read_file(background_shapefile)
+    if gdf_background.crs != gdf_geometry.crs:
+        gdf_background = gdf_background.to_crs(gdf_geometry.crs)
+
+    # Get selected cells from config
+    selected_cells = getattr(config.grid, 'selected_cells', None)
+    if selected_cells is not None:
+        selected = gdf_geometry['BlockID'].isin(selected_cells)
+    else:
+        selected = pd.Series(True, index=gdf_geometry.index)
+
+    # Map 1: Cell IDs
+    _, ax1 = plt.subplots(figsize=(12, 10))
+    plot_background_map(ax1, gdf_background, feature_shapefiles, gdf_geometry, selected_cells)
+
+    if (~selected).any():
+        gdf_geometry[~selected].plot(ax=ax1, color='lightgray', edgecolor='none', alpha=0.2)
+    if selected.any():
+        gdf_geometry[selected].plot(ax=ax1, color='lightblue', edgecolor='none', alpha=0.3)
+
+    for idx, row in gdf_geometry.iterrows():
+        if selected_cells is None or row['BlockID'] in selected_cells:
+            centroid = row.geometry.centroid
+            ax1.annotate(str(int(row['BlockID'])),
+                        (centroid.x, centroid.y),
+                        ha='center', va='center',
+                        fontsize=8, color='black',
+                        bbox={'facecolor': 'white',
+                              'edgecolor': 'none',
+                              'alpha': 0.4,
+                              'pad': 0.5})
+    ax1.set_title('Cell IDs')
+    ax1.axis('off')
+    plt.savefig(output_dir / 'cells_map.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Map 2: Elevation
+    _, ax2 = plt.subplots(figsize=(12, 10))
+    plot_background_map(ax2, gdf_background, feature_shapefiles, gdf_geometry, selected_cells)
+
+    elevation = gdf_geometry['AvgElev']
+    vmin, vmax = elevation.min(), elevation.max()
+
+    if (~selected).any():
+        gdf_geometry[~selected].plot(ax=ax2, color='lightgray', alpha=0.2)
+
+    selected_geom = gdf_geometry[selected].copy() if selected.any() else gdf_geometry
+    selected_geom.plot(column='AvgElev',
+                      ax=ax2,
+                      cmap='terrain',
+                      alpha=0.7)
+
+    divider = make_axes_locatable(ax2)
+    cax = divider.append_axes("right", size="5%", pad=0.1)
+    sm = plt.cm.ScalarMappable(cmap='terrain', norm=plt.Normalize(vmin=vmin, vmax=vmax))
+    sm.set_array([])
+    cbar = plt.colorbar(sm, cax=cax)
+    cbar.set_label('Elevation [m]', rotation=270, labelpad=15)
+
+    ax2.set_title('Elevation')
+    ax2.axis('off')
+    plt.savefig(output_dir / 'elevation_map.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+    # Map 3: Flow paths
+    _, ax3 = plt.subplots(figsize=(12, 10))
+    plot_background_map(ax3, gdf_background, feature_shapefiles, gdf_geometry, selected_cells)
+
+    if (~selected).any():
+        gdf_geometry[~selected].plot(ax=ax3, color='lightgray', edgecolor='none', alpha=0.2)
+    if selected.any():
+        gdf_geometry[selected].plot(ax=ax3, color='lightblue', edgecolor='none', alpha=0.3)
+
+    # Draw flow paths using plot_linear approach
+    cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
+
+    for cell_id, row in cell_data.items():
+        if selected_cells is None or cell_id in selected_cells:
+            downstream_id = flow_paths.loc[cell_id, 'down']
+            if downstream_id in cell_data and downstream_id != 0:
+                # Get center points
+                start_point = row.geometry.centroid
+                end_point = cell_data[downstream_id].geometry.centroid
+                line = LineString([start_point, end_point])
+
+                # Draw line with arrow
+                line_coords = line.xy
+                ax3.plot(line_coords[0], line_coords[1],
+                        color='red', linewidth=1.5, alpha=0.6)
+
+                # Add arrow
+                arrow_pos = 0.5  # Position along the line (0-1)
+                arrow_x = line_coords[0][0] + (line_coords[0][1] - line_coords[0][0]) * arrow_pos
+                arrow_y = line_coords[1][0] + (line_coords[1][1] - line_coords[1][0]) * arrow_pos
+                dx = line_coords[0][1] - line_coords[0][0]
+                dy = line_coords[1][1] - line_coords[1][0]
+                ax3.arrow(arrow_x, arrow_y, dx*0.1, dy*0.1,
+                         head_width=50, head_length=50,
+                         fc='red', ec='red', alpha=0.6)
+
+    # Mark outflow cells
+    outflow_cells = flow_paths[flow_paths['down'] == 0].index
+    for cell_id in outflow_cells:
+        if cell_id in cell_data:
+            cell = cell_data[cell_id]
+            centroid = cell.geometry.centroid
+            ax3.plot(centroid.x, centroid.y, 'r*', markersize=15,
+                    label='Outflow point' if cell_id == outflow_cells[0] else "")
+
+    if len(outflow_cells) > 0:
+        ax3.legend(loc='upper right', bbox_to_anchor=(1.1, 1))
+
+    ax3.set_title('Flow Paths')
+    ax3.axis('off')
+    plt.savefig(output_dir / 'flow_paths_map.png', dpi=300, bbox_inches='tight')
+    plt.close()
+
+def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
+                  geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
+                  output_dir: Path, flow_paths: pd.DataFrame) -> None:
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    variables_to_plot = {
+        'evapotranspiration': ('Greens', None),
+        'imported_water': ('YlOrRd', None),
+        'baseflow': ('Blues', None),
+        'deep_seepage': ('PuBuGn', None),
+        'stormwater_runoff': ('BuPu', flow_paths),
+        'sewerage_discharge': ('PuRd', flow_paths),
+        'groundwater': ('YlOrBr', None),
+        'vadose_moisture': ('YlGnBu', None)
+    }
+
+    # Get local results with units
+    local_results = extract_local_results(results)
+    units = local_results.attrs.get('units', {})
+
+    for variable_name, (cmap, paths) in variables_to_plot.items():
+        if variable_name == 'vadose_moisture':
+            data = local_results['vadose_moisture'].groupby(level='cell').last()
+        elif variable_name == 'groundwater':
+            data = local_results['groundwater'].groupby(level='cell').last()
+        else:
+            data = local_results[variable_name].groupby(level='cell').sum()
+        data.attrs['unit'] = units.get(variable_name, 'm3')
+
+        output_path = output_dir / f'{variable_name}_map.png'
+        plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
+                      data, variable_name, output_path, cmap, flow_paths=paths)
 
 def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.DataFrame,
                 variable_name: str, cmap: str) -> Optional[plt.cm.ScalarMappable]:
@@ -58,32 +215,12 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     # Remove 0 values and add data to the geometry GeoDataFrame
     data = data[abs(data) > 0]
     gdf_geometry[variable_name] = gdf_geometry['BlockID'].map(data)
-
-    _, ax = plt.subplots(figsize=(12, 10))
-
-    # Plot background shapefile
     gdf_background = gpd.read_file(background_shapefile)
     if gdf_background.crs != gdf_geometry.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
 
-    gdf_geometry.plot(ax=ax, color='lightgray', edgecolor='none', alpha=0.8)
-    gdf_background.plot(ax=ax, color='none', edgecolor='gray', alpha=0.8)
-
-    # Plot feature shapefiles
-    for shapefile in feature_shapefiles:
-        gdf_feature = gpd.read_file(shapefile)
-        if gdf_feature.crs != gdf_geometry.crs:
-            gdf_feature = gdf_feature.to_crs(gdf_geometry.crs)
-
-        # Determine color based on the feature type
-        if 'Rivers' in shapefile.name:
-            edgecolor = 'dodgerblue'
-            color = 'dodgerblue'
-        else:
-            edgecolor = 'gray'
-            color = 'none'
-
-        gdf_feature.plot(ax=ax, color=color, edgecolor=edgecolor, alpha=0.8, linewidth=1)
+    _, ax = plt.subplots(figsize=(12, 10))
+    plot_background_map(ax, gdf_background, feature_shapefiles, gdf_geometry)
 
     # Get unit from data attributes if available
     unit = data.attrs.get('unit', 'm3')
@@ -146,35 +283,26 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
     plt.close()
 
-def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path], geometry_geopackage: Path,
-                  results: Dict[str, pd.DataFrame], output_dir: Path, flow_paths: pd.DataFrame) -> None:
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+def plot_background_map(ax: plt.Axes, gdf_background: gpd.GeoDataFrame,
+                       feature_shapefiles: List[Path], gdf_geometry: gpd.GeoDataFrame,
+                       selected_cells: Optional[List[int]] = None) -> None:
+    """Plot background elements for all maps."""
+    gdf_background.plot(ax=ax, color='none', edgecolor='gray', alpha=0.8)
 
-    variables_to_plot = {
-        'evapotranspiration': ('Greens', None),
-        'imported_water': ('YlOrRd', None),
-        'baseflow': ('Blues', None),
-        'deep_seepage': ('PuBuGn', None),
-        'stormwater_runoff': ('BuPu', flow_paths),
-        'sewerage_discharge': ('PuRd', flow_paths),
-        'groundwater': ('YlOrBr', None),
-        'vadose_moisture': ('YlGnBu', None)
-    }
-
-    # Get local results with units
-    local_results = extract_local_results(results)
-    units = local_results.attrs.get('units', {})
-
-    for variable_name, (cmap, paths) in variables_to_plot.items():
-        if variable_name == 'vadose_moisture':
-            data = local_results['vadose_moisture'].groupby(level='cell').last()
-        elif variable_name == 'groundwater':
-            data = local_results['groundwater'].groupby(level='cell').last()
+    for shapefile in feature_shapefiles:
+        gdf_feature = gpd.read_file(shapefile)
+        if gdf_feature.crs != gdf_geometry.crs:
+            gdf_feature = gdf_feature.to_crs(gdf_geometry.crs)
+        if 'Rivers' in str(shapefile):
+            gdf_feature.plot(ax=ax, color='dodgerblue', edgecolor='dodgerblue', alpha=0.8, linewidth=1)
         else:
-            data = local_results[variable_name].groupby(level='cell').sum()
-        data.attrs['unit'] = units.get(variable_name, 'm3')
+            gdf_feature.plot(ax=ax, color='none', edgecolor='gray', alpha=0.8, linewidth=1)
 
-        output_path = output_dir / f'{variable_name}_map.png'
-        plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
-                      data, variable_name, output_path, cmap, flow_paths=paths)
+    if selected_cells is not None:
+        selected = gdf_geometry['BlockID'].isin(selected_cells)
+        if (~selected).any():
+            gdf_geometry[~selected].plot(ax=ax, color='lightgray', edgecolor='none', alpha=0.2)
+        if selected.any():
+            gdf_geometry[selected].plot(ax=ax, color='lightblue', edgecolor='none', alpha=0.3)
+    else:
+        gdf_geometry.plot(ax=ax, color='lightblue', edgecolor='none', alpha=0.3)

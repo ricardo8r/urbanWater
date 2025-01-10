@@ -13,7 +13,7 @@ from duwcm.initialization import initialize_model
 from duwcm.summary import print_summary
 from duwcm.functions import load_config
 from duwcm.checker import generate_report
-from duwcm.plots import (export_geodata, generate_plots, generate_maps,
+from duwcm.plots import (export_geodata, generate_plots, generate_maps, generate_system_maps,
                          generate_chord, generate_alluvial, generate_graph)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
@@ -42,6 +42,23 @@ def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
     logger.info("Preparing model parameters")
     model_params, reuse_settings, demand_data, soil_data, et_data, flow_paths = read_data(config)
 
+    # Filter for selected cells if specified
+    selected_cells = getattr(config.grid, 'selected_cells', None)
+    if selected_cells is not None:
+        # Filter model parameters
+        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
+
+        # Filter flow paths and reset upstream connections for non-selected cells
+        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
+        # Reset upstream connections that aren't in selected cells
+        for col in flow_paths.columns:
+            if col != 'down':  # Don't modify downstream connections
+                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
+
+        # Ensure downstream connections are valid
+        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
+
+
     logger.info("Reading forcing data")
     forcing_data = read_forcing(config)
     logger.info("Number of grid cells: %d", len(model_params))
@@ -65,7 +82,7 @@ def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
     results = run_water_balance(model, forcing_data, check=check)
 
     logger.info("Simulation completed")
-    return results, model, forcing_data, flow_paths
+    return results, forcing_data, flow_paths
 
 def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
                  config: Dynaconf) -> None:
@@ -222,7 +239,7 @@ def main() -> None:
 
     try:
         # Run simulation
-        results, model, forcing_data, flow_paths = run(config, check=args.check)
+        results, forcing_data, flow_paths = run(config, check=args.check)
 
         # Generate plots
         if args.plot:
@@ -239,6 +256,16 @@ def main() -> None:
 
             output_dir = Path(config.output.output_directory) / 'maps'
             output_dir.mkdir(parents=True, exist_ok=True)
+
+            generate_system_maps(
+                background_shapefile=background_shapefile,
+                feature_shapefiles=feature_shapefiles,
+                geometry_geopackage=geo_file,
+                output_dir=output_dir,
+                flow_paths=flow_paths,
+                config = config
+                )
+
             generate_maps(
                 background_shapefile=background_shapefile,
                 feature_shapefiles=feature_shapefiles,
@@ -247,6 +274,7 @@ def main() -> None:
                 output_dir=output_dir,
                 flow_paths=flow_paths
             )
+
             logger.info("Maps saved to %s", output_dir)
 
             # Generate chord diagrams
