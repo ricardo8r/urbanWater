@@ -1,40 +1,93 @@
 from typing import Dict, List, Optional, Union
 from pathlib import Path
+from dynaconf import Dynaconf
 import pandas as pd
 import geopandas as gpd
 import plotly.graph_objects as go
 
-from duwcm.postprocess import extract_local_results
-
-def create_map_base(geometry_geopackage: Path, background_shapefile: Path) -> go.Figure:
-    """Create base map with hexagonal grid and background."""
+def create_map_base(geometry_geopackage: Path, background_shapefile: Path, flow_paths: pd.DataFrame) -> go.Figure:
+    """Create base map with hexagonal grid, background, elevation and flow paths."""
     gdf_geometry = gpd.read_file(geometry_geopackage)
     gdf_background = gpd.read_file(background_shapefile)
 
     if gdf_geometry.crs != gdf_background.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
 
-    # Project and get center
-    gdf_background_projected = gdf_background.to_crs(epsg=3857)
-    centroid_projected = gdf_background_projected.geometry.centroid
-    centroid = centroid_projected.to_crs(epsg=4326)
-
-    # Convert to WGS84
     gdf_geometry = gdf_geometry.to_crs(epsg=4326)
+    gdf_geometry = gdf_geometry.set_crs('EPSG:2056', allow_override=True)
+
     gdf_background = gdf_background.to_crs(epsg=4326)
 
     fig = go.Figure()
 
-    # Add hexagons
+    # Add hexagons for grid view
     fig.add_trace(go.Choroplethmapbox(
         geojson=gdf_geometry.__geo_interface__,
         locations=gdf_geometry.index,
         z=[1]*len(gdf_geometry),
         colorscale=['white', 'lightblue'],
         showscale=False,
-        marker_opacity=0.5,
+        marker_opacity=0.8,
         marker_line_width=0.6,
-        marker_line_color='lightblue'
+        marker_line_color='lightblue',
+        visible=True,
+        name='Grid',
+        selected={"marker": {"opacity": 1}},
+        unselected={"marker": {"opacity": 0.6}},
+        selectedpoints=[]
+    ))
+
+    # Add hexagons colored by elevation
+    fig.add_trace(go.Choroplethmapbox(
+        geojson=gdf_geometry.__geo_interface__,
+        locations=gdf_geometry.index,
+        z=gdf_geometry['AvgElev'],
+        colorscale='viridis',
+        showscale=True,
+        marker_opacity=0.7,
+        marker_line_width=0.5,
+        colorbar_title="Elevation [m]",
+        visible=False,
+        name='Elevation'
+    ))
+
+    # Add flow paths
+    lines_lons = []
+    lines_lats = []
+
+    cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
+    for cell_id, row in cell_data.items():
+        downstream_id = flow_paths.loc[cell_id, 'down']
+        if downstream_id in cell_data and downstream_id != 0:
+            start_point = row.geometry.centroid
+            end_point = cell_data[downstream_id].geometry.centroid
+
+            # Add to lines
+            lines_lons.extend([start_point.x, end_point.x, None])
+            lines_lats.extend([start_point.y, end_point.y, None])
+
+    # Add single trace for all flow paths
+    fig.add_trace(go.Scattermapbox(
+        lon=lines_lons,
+        lat=lines_lats,
+        mode='lines',
+        line={"width": 2, "color": 'red'},
+        showlegend=True,
+        visible=False,
+        name='Flow Paths'
+    ))
+
+    # Add outlets with larger markers
+    outflow_cells = gdf_geometry[gdf_geometry['BlockID'].isin(flow_paths[flow_paths['down'] == 0].index)]
+    outflow_centroids = outflow_cells.geometry.centroid
+    fig.add_trace(go.Scattermapbox(
+        lon=outflow_centroids.x.tolist(),
+        lat=outflow_centroids.y.tolist(),
+        mode='markers',
+        marker={"size": 15, "color": 'blue'},
+        name='Outlets',
+        visible=False,
+        showlegend=True
     ))
 
     # Add background outline
@@ -54,35 +107,98 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path) -> go
     bounds = gdf_background.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
+    updatemenus = [{
+        "type": "buttons",
+        "direction": "right",
+        "x": 0.1,
+        "y": 1.1,
+        "showactive": True,
+        "buttons": [
+            {
+                "label": "Grid",
+                "method": "update",
+                "args": [{"visible": [True] + [False] * (len(fig.data)-1)},
+                        {"showscale": False}]
+            },
+            {
+                "label": "Elevation",
+                "method": "update",
+                "args": [{"visible": [False, True] + [False] * (len(fig.data)-2)},
+                        {"showscale": True}]
+            },
+            {
+                "label": "Flow Paths",
+                "method": "update",
+                "args": [{"visible": [False, False] + [True] * (len(fig.data)-2)},
+                        {"showscale": False}]
+            }
+        ]
+    }]
+
     fig.update_layout(
         mapbox_style="carto-positron",
         mapbox={
-            "bearing": 0,
             "center": {"lat": center_lat, "lon": center_lon},
-            "pitch": 0,
             "zoom": 10
         },
-        margin={"r":0,"t":0,"l":0,"b":0}
+        updatemenus=updatemenus,
+        margin={"r":0,"t":45,"l":0,"b":0},
+        height=700
     )
 
     return fig
 
-def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str],
-                       time_series_data: pd.DataFrame) -> go.Figure:
+def create_dynamic_map(gdf: gpd.GeoDataFrame, background_shapefile: Path, variables: List[str],
+                      time_series_data: pd.DataFrame, config: Dynaconf) -> go.Figure:
     """Create interactive map with time slider and variable selector."""
     gdf_wgs84 = gdf.to_crs(epsg=4326)
+    gdf_background = gpd.read_file(background_shapefile)
+    gdf_background = gdf_background.to_crs(epsg=4326)
+
+    # If we have selected cells, filter the geometry and data
+    if hasattr(config.grid, 'selected_cells'):
+        gdf_wgs84 = gdf_wgs84[gdf_wgs84['BlockID'].isin(config.grid['selected_cells'])]
+
     bounds = gdf_wgs84.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
     monthly_data = time_series_data.groupby(pd.Grouper(freq='ME')).mean()
+    monthly_data.attrs['units'] = time_series_data.attrs['units']
 
-    # Calculate absolute global min/max across ALL variables
-    global_min = monthly_data[variables].min().min()  # Min across all variables
-    global_max = monthly_data[variables].max().max()  # Max across all variables
+    global_min = monthly_data[variables].min().min()
+    global_max = monthly_data[variables].max().max()
     var_min = {var: monthly_data[var].min().min() for var in variables}
     var_max = {var: monthly_data[var].max().max() for var in variables}
 
     fig = go.Figure()
+
+    # Get units from data attributes
+    units = {}
+    for var in variables:
+        if hasattr(monthly_data, 'attrs') and 'units' in monthly_data.attrs:
+            unit = monthly_data.attrs['units'][var]
+            unit_label = {
+                'm3': 'm³/yr',
+                'mm': 'mm',
+                'm': 'm',
+                'L': 'L/yr'
+            }.get(unit, unit)
+            units[var] = unit_label
+        else:
+            units[var] = 'm³/yr'
+
+    # Add the contour map basemap first
+    fig.add_trace(go.Choroplethmapbox(
+        geojson=gdf_background.__geo_interface__,
+        locations=gdf_background.index,
+        z=[1]*len(gdf_background),
+        colorscale=[[0, 'white'], [1, 'lightgray']],
+        showscale=False,
+        marker_opacity=0.3,
+        marker_line_width=0,
+        visible=True,
+        name='Background'
+    ))
 
     # Create traces for each variable
     for variable in variables:
@@ -95,7 +211,7 @@ def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str],
             colorscale="Viridis",
             marker_opacity=0.7,
             marker_line_width=0,
-            colorbar_title_text=f"{variable.replace('_', ' ').capitalize()} [m³/yr]",
+            colorbar_title_text=f"{variable.replace('_', ' ').capitalize()} [{units[variable]}]",
             colorbar_title_side="right",
             colorbar_thickness=20,
             colorbar_title_font={"size": 12},
@@ -103,17 +219,16 @@ def create_dynamic_map(gdf: gpd.GeoDataFrame, variables: List[str],
             name=variable
         ))
 
-    # Create variable buttons that preserve the current zmin/zmax setting
+    # Create variable buttons
     var_buttons = []
     for i, variable in enumerate(variables):
         var_buttons.append({
-            'args': [{"visible": [i == j for j in range(len(variables))],
-                     "colorbar_title_text": f"{variable.replace('_', ' ').capitalize()} [m³/yr]"}],
+            'args': [{"visible": [True] + [i == j for j in range(len(variables))]},
+                     {"colorbar_title_text": f"{variable.replace('_', ' ').capitalize()} [{units[variable]}]"}],
             'label': variable.replace('_', ' ').capitalize(),
             'method': "update"
         })
 
-    # Scale buttons now need to handle all variables
     scale_buttons = [
         {
             'args': [{"zmin": [var_min[var] for var in variables],

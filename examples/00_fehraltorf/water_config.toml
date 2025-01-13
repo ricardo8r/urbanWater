@@ -6,34 +6,35 @@ seepage_model = 0                    # Seepage calculation method (0/1)
 effective_roof_area = 80             # Connected roof area percentage 
 roof_storage = 0                     # Maximum roof storage in mm
 effective_raintank_area = 100        # Connected raintank area percentage
-effective_pavement_area = 50         # Connected pavement area percentage
-pavement_storage = 0                 # Maximum pavement storage in mm
+effective_impervious_area = 50       # Connected impervious area percentage
+impervious_storage = 0               # Maximum impervious storage in mm
 pervious_storage = 8                 # Maximum pervious storage in mm
-pavement_infiltration = 5            # Pavement infiltration rate mm/day
+impervious_infiltration = 5          # Impervious infiltration rate mm/day
 pervious_infiltration = 35           # Pervious infiltration rate mm/day
 leakage_rate = 2.5                   # Groundwater leakage percentage
 infiltration_coef = 0.0000015        # Infiltration recession coefficient
 drainage_resistance = 25             # Drainage resistance in days
 seepage_resistance = 200             # Vertical resistance in days
 downward_seepage = 1.4               # Constant seepage rate mm/day
-wastewater_inflow = 80               # Percentage runoff to wastewater
-deep_resistance = 1000000            # Deep aquifer resistance in days
+wastewater_inflow = 95               # Percentage runoff to wastewater
+wastewater_pipe_capacity = 15000     # Wastewater pipe capacity
+deep_resistance = 100                # Deep aquifer resistance in days
 
 [default.reuse]
-kitchen_to_graywater = 15             # Percentage of kitchen greywater for local reuse
-bathroom_to_graywater = 25            # Percentage of bathroom greywater for local reuse  
-laundry_to_graywater = 15             # Percentage of laundry greywater for local reuse
+kitchen_to_graywater = 15            # Percentage of kitchen greywater for local reuse
+bathroom_to_graywater = 25           # Percentage of bathroom greywater for local reuse  
+laundry_to_graywater = 15            # Percentage of laundry greywater for local reuse
 wastewater_to_irrigation = 0         # Percentage of wastewater for irrigation
 wastewater_to_toilet = 0             # Percentage of wastewater for toilet flushing
 raintank_to_kitchen = 25             # Percentage of kitchen water to raintank
 raintank_to_bathroom = 25            # Percentage of bathroom water to raintank
 raintank_to_laundry = 25             # Percentage of laundry water to raintank
-raintank_to_toilet = 25               # Percentage of raintank water for toilet
+raintank_to_toilet = 25              # Percentage of raintank water for toilet
 raintank_to_irrigation = 0           # Percentage of raintank water for irrigation
 central_ww_to_toilet = 10            # Percentage of centralized wastewater for toilet
 central_ww_to_irrigation = 10        # Percentage of centralized wastewater for irrigation
 stormwater_to_toilet = 0             # Percentage of stormwater for toilet
-stormwater_to_irrigation = 0              # Percentage of stormwater for reuse
+stormwater_to_irrigation = 0         # Percentage of stormwater for reuse
 
 [default.demand]
 kitchen = 15.75                      # Daily kitchen water use percentage

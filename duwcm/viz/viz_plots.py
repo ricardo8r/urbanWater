@@ -10,18 +10,18 @@ def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFr
         'Potential Evaporation': forcing['potential_evaporation'],
         'Evapotranspiration': (aggregated_results['evaporation'] +
                                aggregated_results['transpiration']),
-        'Stormwater': aggregated_results['stormwater'],
+        'Runoff': aggregated_results['stormwater'],
         'Baseflow': aggregated_results['baseflow'],
-        'Wastewater': aggregated_results['wastewater']
+        'Sewerage': aggregated_results['sewerage']
     })
 
     colors = {
         'Precipitation': 'lightblue',
         'Potential Evaporation': 'purple',
         'Evapotranspiration': 'green',
-        'Stormwater': 'orange',
+        'Runoff': 'orange',
         'Baseflow': 'red',
-        'Wastewater': 'brown'
+        'Sewerage': 'brown'
     }
 
     fig = go.Figure()
