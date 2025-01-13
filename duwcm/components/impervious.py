@@ -31,9 +31,6 @@ class ImperviousClass:
 
         self.impervious_data.effective_outflow = (1.0 if params['pervious']['area'] == 0
                                                 else params['impervious']['effective_area'] / 100)
-        self.impervious_data.infiltration_capacity = (params['impervious']['infiltration_capacity'] *
-                                               params['impervious']['area']) * 0.001
-        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
         self.time_step = params['general']['time_step']
 
     def solve(self, forcing: pd.Series) -> None:
@@ -52,8 +49,6 @@ class ImperviousClass:
             from_demand: Demanded water for irrigation + leakage [m³]
             from_raintank: Runoff from rain tank [m³]
             evaporation: Evaporation [m³]
-            to_groundwater_infiltration: Infiltration to groundwater [m³]
-            to_groundwater_leakage: Leakage from irrigation to groundwater [m³]
             to_stormwater: Effective runoff to stormwater system [m³]
             to_pervious: Non-effective runoff to pervious area [m³]
         """
@@ -77,21 +72,11 @@ class ImperviousClass:
 
         data.storage.set_amount(storage - data.flows.get_flow('evaporation', 'm3'), 'm3')
 
-        data.flows.set_flow('to_groundwater_infiltration',
-                            max(0.0, min(data.infiltration_capacity * self.time_step,
-                                         inflow - data.storage.get_capacity('m3') +
-                                         data.storage.get_previous('m3'))), 'm3')
-
         excess_water = (inflow -
                         data.flows.get_flow('evaporation', 'm3') -
-                        data.flows.get_flow('to_groundwater_infiltration', 'm3') -
                         data.storage.get_change('m3'))
         effective_runoff = data.effective_outflow * max(0.0, excess_water)
         non_effective_runoff = max(0.0, excess_water - effective_runoff)
 
         data.flows.set_flow('to_stormwater', effective_runoff, 'm3')
         data.flows.set_flow('to_pervious', non_effective_runoff, 'm3')
-        data.flows.set_flow('to_groundwater_leakage',data.flows.get_flow('from_demand', 'm3') *
-                            self.leakage_rate / (1 - self.leakage_rate), 'm3')
-        data.flows.set_flow('from_demand', data.flows.get_flow('from_demand', 'm3') /
-                            (1 - self.leakage_rate), 'm3')

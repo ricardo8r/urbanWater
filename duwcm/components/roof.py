@@ -31,7 +31,6 @@ class RoofClass:
 
         self.roof_data.effective_outflow = (1.0 if  params['pervious']['area'] == 0
                                             else params['roof']['effective_area'] / 100)
-        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
         self.time_step = params['general']['time_step']
 
     def solve(self, forcing: pd.Series) -> None:
@@ -51,7 +50,6 @@ class RoofClass:
             evaporation: Evaporation [m³]
             to_raintank: Effective impervious surface runoff [m³]
             to_pervious: Non-effective runoff [m³]
-            to_groundwater: Irrigation leakage [m³]
         """
         data = self.roof_data
 
@@ -75,7 +73,3 @@ class RoofClass:
         excess_runoff = data.flows.set_flow('to_raintank', effective_runoff, 'm3')
         data.flows.set_flow('to_stormwater', excess_runoff, 'm3')
         data.flows.set_flow('to_pervious', non_effective_runoff, 'm3')
-        data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'm3') *
-                            self.leakage_rate / (1 - self.leakage_rate), 'm3')
-        data.flows.set_flow('from_demand', data.flows.get_flow('from_demand', 'm3') /
-                            (1 - self.leakage_rate), 'm3')

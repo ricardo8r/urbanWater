@@ -540,15 +540,6 @@ class RoofFlows(ComponentFlows):
             _direction=FlowDirection.OUT
         ))
 
-    # Losses
-    to_groundwater: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.TREATED,
-            _use=WaterUse.LEAKAGE,
-            _direction=FlowDirection.OUT
-        ))
-
 @dataclass
 class RainTankFlows(ComponentFlows):
     """
@@ -676,23 +667,6 @@ class ImperviousFlows(ComponentFlows):
             _direction=FlowDirection.OUT
         ))
 
-    # Groundwater interactions
-    to_groundwater_infiltration: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.STORMWATER,
-            _use=WaterUse.ENVIRONMENTAL,
-            _direction=FlowDirection.OUT
-        ))
-
-    to_groundwater_leakage: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.TREATED,
-            _use=WaterUse.LEAKAGE,
-            _direction=FlowDirection.OUT
-        ))
-
 @dataclass
 class PerviousFlows(ComponentFlows):
     """
@@ -756,14 +730,6 @@ class PerviousFlows(ComponentFlows):
             _process=FlowProcess.INFILTRATION,
             _quality=WaterQuality.RAW,
             _use=WaterUse.ENVIRONMENTAL,
-            _direction=FlowDirection.OUT
-        ))
-
-    to_groundwater: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.TREATED,
-            _use=WaterUse.LEAKAGE,
             _direction=FlowDirection.OUT
         ))
 
@@ -844,40 +810,7 @@ class GroundwaterFlows(ComponentFlows):
         ))
 
     # Infrastructure leakage inputs
-    from_roof: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.TREATED,
-            _use=WaterUse.LEAKAGE,
-            _direction=FlowDirection.IN
-        ))
-
     from_demand: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.TREATED,
-            _use=WaterUse.LEAKAGE,
-            _direction=FlowDirection.IN
-        ))
-
-    # Surface infiltration inputs
-    from_impervious_infiltration: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.STORMWATER,
-            _use=WaterUse.ENVIRONMENTAL,
-            _direction=FlowDirection.IN
-        ))
-
-    from_impervious_leakage: Flow = field(
-        default_factory=lambda: Flow(
-            _process=FlowProcess.INFILTRATION,
-            _quality=WaterQuality.TREATED,
-            _use=WaterUse.LEAKAGE,
-            _direction=FlowDirection.IN
-        ))
-
-    from_pervious: Flow = field(
         default_factory=lambda: Flow(
             _process=FlowProcess.INFILTRATION,
             _quality=WaterQuality.TREATED,

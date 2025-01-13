@@ -84,8 +84,13 @@ class GroundwaterClass:
 
         #data.open_water.set_amount(forcing.get('open_water_level', 0.0), 'm')
         open_water = forcing.get('open_water_level', 0.0)
-        data.flows.set_flow('from_demand', self.indoor_water_use * data.leakage_rate /
-                            (1 - data.leakage_rate), 'L')
+        total_leakage = (self.indoor_water_use +  # Indoor water use
+                         forcing.get('roof_irrigation', 0.0) +  # Roof irrigation
+                         forcing.get('impervious_irrigation', 0.0) +  # Impervious irrigation
+                         forcing.get('pervious_irrigation', 0.0)  # Pervious irrigation
+                         ) * data.leakage_rate / (1 - data.leakage_rate)
+
+        data.flows.set_flow('from_demand', total_leakage, 'L')
 
         # Calculate total inflow
         irrigation_leakage = (data.flows.get_flow('from_roof', 'm') +

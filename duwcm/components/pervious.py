@@ -45,7 +45,6 @@ class PerviousClass:
         self.pervious_data.irrigation_factor = params['irrigation']['pervious']
 
         self.time_step = params['general']['time_step']
-        self.leakage_rate = params['groundwater']['leakage_rate'] / 100
 
         # Get soil parameters
         soil_params = soil_selector(soil_data, et_data,
@@ -71,7 +70,6 @@ class PerviousClass:
             from_impervious: Non-effective runoff from impervious area [m³]
             evaporation: Evaporation from pervious area [m³]
             to_vadose: Infiltration to vadose zone [m³]
-            to_groundwater: Leakage to groundwater [m³]
             to_stormwater: Overflow from pervious interception [m³]
         """
         data = self.pervious_data
@@ -119,7 +117,3 @@ class PerviousClass:
                        data.storage.get_change('mm'))
 
         data.flows.set_flow('to_stormwater', overflow, 'mm')
-        data.flows.set_flow('to_groundwater',data.flows.get_flow('from_demand', 'mm') *
-                            self.leakage_rate / (1 - self.leakage_rate), 'mm')
-        data.flows.set_flow('from_demand', data.flows.get_flow('from_demand', 'mm') /
-                            (1 - self.leakage_rate), 'mm')

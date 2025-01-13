@@ -150,7 +150,6 @@ class ImperviousData:
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
     effective_outflow: float = field(default=0.0, metadata={'unit': '%'})
-    infiltration_capacity: float = field(default=0.0, metadata={'unit': 'mm/d'})
 
 @dataclass
 class PerviousData:
@@ -270,17 +269,13 @@ class UrbanWaterData:
         # Regular component flows
         ('roof', 'to_raintank'): ('raintank', 'from_roof'),
         ('roof', 'to_pervious'): ('pervious', 'from_roof'),
-        ('roof', 'to_groundwater'): ('groundwater', 'from_roof'),
         ('roof', 'to_stormwater'): ('stormwater', 'from_roof'),
         ('raintank', 'to_impervious'): ('impervious', 'from_raintank'),
         ('raintank', 'to_stormwater'): ('stormwater', 'from_raintank'),
         ('raintank', 'to_demand'): ('demand', 'from_raintank'),
         ('impervious', 'to_pervious'): ('pervious', 'from_impervious'),
-        ('impervious', 'to_groundwater_infiltration'): ('groundwater', 'from_impervious_infiltration'),
-        ('impervious', 'to_groundwater_leakage'): ('groundwater', 'from_impervious_leakage'),
         ('impervious', 'to_stormwater'): ('stormwater', 'from_impervious'),
         ('pervious', 'to_vadose'): ('vadose', 'from_pervious'),
-        ('pervious', 'to_groundwater'): ('groundwater', 'from_pervious'),
         ('pervious', 'to_stormwater'): ('stormwater', 'from_pervious'),
         ('vadose', 'to_groundwater'): ('groundwater', 'from_vadose'),
         ('groundwater', 'to_sewerage'): ('sewerage', 'from_groundwater'),
