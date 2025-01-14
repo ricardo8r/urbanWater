@@ -5,7 +5,9 @@ import warnings
 import geopandas as gpd
 import pandas as pd
 
-def export_geodata(geometry_geopackage: Path, local_results: pd.DataFrame,
+from duwcm.postprocess import extract_local_results
+
+def export_geodata(geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
                forcing: pd.DataFrame, output_dir: Path, crs: str, file_format: str = 'gpkg') -> None:
     """
     Export simulation results to GeoPackage or GeoJSON files: one for statistical data and one for temporal data.
@@ -28,6 +30,8 @@ def export_geodata(geometry_geopackage: Path, local_results: pd.DataFrame,
                       f"specified CRS ({crs}). Using geometry CRS.")
         crs = gdf_geometry.crs
 
+    local_results = extract_local_results(results)
+    units = local_results.attrs.get('units', {})
     statistics_file = output_dir / f'statistics_results.{file_format}'
     temporal_file = output_dir / f'temporal_results.{file_format}'
 
@@ -35,7 +39,7 @@ def export_geodata(geometry_geopackage: Path, local_results: pd.DataFrame,
     statistical_data = local_results.groupby(level='cell').agg({
         'imported_water': ['sum', 'mean', 'max'],
         'stormwater_runoff': ['sum', 'mean', 'max'],
-        'wastewater_runoff': ['sum', 'mean', 'max'],
+        'sewerage_discharge': ['sum', 'mean', 'max'],
         'evapotranspiration': ['sum', 'mean', 'max'],
         'baseflow': ['sum', 'mean', 'max'],
         'deep_seepage': ['sum', 'mean', 'max']
@@ -57,6 +61,9 @@ def export_geodata(geometry_geopackage: Path, local_results: pd.DataFrame,
     else:
         raise ValueError("Format must be either 'shp', 'gpkg' or 'geojson'")
 
+    # Create output directory if it doesn't exist
+    output_dir.mkdir(parents=True, exist_ok=True)
+
     # Prepare and export temporal data
     local_results_reset = local_results.reset_index()
 
@@ -65,10 +72,10 @@ def export_geodata(geometry_geopackage: Path, local_results: pd.DataFrame,
     gdf_temporal = gpd.GeoDataFrame(gdf_temporal, geometry='geometry', crs=crs)
 
     if file_format == 'gpkg':
-        gdf_temporal.to_file(temporal_file, driver="GPKG", mode="a", layer="temporal_data")
+        gdf_temporal.to_file(temporal_file, driver="GPKG", layer="temporal_data")
     elif file_format == 'shp':
-        gdf_temporal.to_file(temporal_file, mode="a")
+        gdf_temporal.to_file(temporal_file)
     elif file_format == 'geojson':
-        gdf_temporal.to_file(temporal_file, driver="GeoJSON", mode="a")
+        gdf_temporal.to_file(temporal_file, driver="GeoJSON")
     else:
         raise ValueError("Format must be either 'shp', 'gpkg' or 'geojson'")

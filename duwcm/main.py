@@ -66,6 +66,19 @@ def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
             forcing_data.index[0].strftime('%Y-%m-%d'),
             forcing_data.index[-1].strftime('%Y-%m-%d'))
 
+    # Apply scenario modifications here
+    scenario_factor = getattr(config.simulation, 'precipitation_factor', 1.0)
+    if scenario_factor != 1.0:
+        logger.info(f"Applying precipitation factor: {scenario_factor}")
+        forcing_data['precipitation'] = forcing_data['precipitation'] * scenario_factor
+
+    # Indoor water use modification
+    indoor_factor = getattr(config.simulation, 'indoor_water_factor', 1.0)
+    if indoor_factor != 1.0:
+        logger.info(f"Applying indoor water factor: {indoor_factor}")
+        for cell_id in model_params:
+            model_params[cell_id]['general']['indoor_water_use'] *= indoor_factor
+
     logger.info("Distributing irrigation")
     distribute_irrigation(forcing_data, model_params)
 
@@ -303,7 +316,7 @@ def main() -> None:
             output_dir.mkdir(parents=True, exist_ok=True)
             export_geodata(
                 geometry_geopackage=geo_file,
-                local_results=results['local'],
+                results=results,
                 forcing=forcing_data,
                 output_dir=output_dir,
                 crs=config.output.crs,
