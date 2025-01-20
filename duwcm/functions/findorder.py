@@ -13,72 +13,47 @@ def find_order(path_index: pd.DataFrame, direction: int) -> np.ndarray:
     Returns:
         np.ndarray: Calculation order for grid cells
     """
-    d1 = np.where(path_index.u1 == 0)
-    order = path_index.index[d1].values
-    order = np.insert(order, 0, 0)
-    more = np.zeros(1)
+    # First identify all terminal cells (those with no downstream cell or downstream = 0)
+    terminal_cells = path_index[path_index['down'] == 0].index.values
+    if len(terminal_cells) == 0:
+        # If no terminal cells, treat cells with downstream connections 
+        # outside the selected set as terminal
+        terminal_cells = path_index[~path_index['down'].isin(path_index.index)].index.values
 
-    for i in path_index.iloc[d1]['down']:
-        if i == 0:
-            break
-        if path_index.loc[i, 'u2'] == 0:
-            order = np.append(order, i)
-            down = path_index.loc[i, 'down']
-            if down != 0:
-                if path_index.loc[down, 'u2'] != 0:
-                    more = np.append(more, down)
-                while path_index.loc[down, 'u2'] == 0:
-                    order = np.append(order, down)
-                    down = path_index.loc[down, 'down']
-                    if down == 0:
-                        break
-                    if path_index.loc[down, 'u2'] != 0:
-                        more = np.append(more, down)
-        else:
-            more = np.append(more, i)
+    # Start building order from terminal cells
+    order = []
+    processed = set()
 
-    more = np.delete(more, 0)
-    more = np.unique(more)
+    def add_upstream_cells(cell_id):
+        if cell_id in processed:
+            return
+        # Get all valid upstream cells
+        upstream = []
+        for col in [f'u{i}' for i in range(1, direction + 1)]:
+            if col in path_index.columns:
+                up_id = path_index.loc[cell_id, col]
+                if up_id != 0 and up_id in path_index.index:
+                    upstream.append(up_id)
+        # Recursively process upstream cells first
+        for up_id in upstream:
+            add_upstream_cells(up_id)
+        # Add current cell if not already processed
+        if cell_id not in processed:
+            order.append(cell_id)
+            processed.add(cell_id)
 
-    new = np.zeros(1)
-    for mul in more:
-        if _is_available(path_index, mul, order, direction):
-            new = np.append(new, mul)
-            order = np.append(order, mul)
-            more = np.delete(more, np.where(more == mul))
-    new = np.delete(new, 0)
+    # Process each terminal cell
+    for cell in terminal_cells:
+        add_upstream_cells(cell)
 
-    while len(order) < len(path_index) + 1:
-        for i in path_index.loc[new, 'down']:
-            if i in order:
-                continue
-            if path_index.loc[i, 'u2'] == 0:
-                order = np.append(order, i)
-                down = path_index.loc[i, 'down']
-                if down == 0:
-                    break
-                if path_index.loc[down, 'u2'] != 0:
-                    more = np.append(more, down)
-                while path_index.loc[down, 'u2'] == 0:
-                    order = np.append(order, down)
-                    down = path_index.loc[down, 'down']
-                    if down == 0:
-                        break
-                    if path_index.loc[down, 'u2'] != 0:
-                        more = np.append(more, down)
-            else:
-                more = np.append(more, i)
+    # Handle any remaining unprocessed cells (disconnected components)
+    remaining = set(path_index.index) - processed
+    while remaining:
+        cell = remaining.pop()
+        add_upstream_cells(cell)
 
-        more = np.unique(more)
-        new = np.zeros(1)
-        for mul in more:
-            if _is_available(path_index, mul, order, direction):
-                order = np.append(order, mul)
-                new = np.append(new, mul)
-                more = np.delete(more, np.where(more == mul))
-        new = np.delete(new, 0)
+    return np.array(order)
 
-    return np.delete(order, 0)
 
 def _is_available(path_index: pd.DataFrame, mul: Union[int, float], order: np.ndarray, direction: int) -> bool:
     """

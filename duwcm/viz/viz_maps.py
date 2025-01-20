@@ -5,7 +5,8 @@ import pandas as pd
 import geopandas as gpd
 import plotly.graph_objects as go
 
-def create_map_base(geometry_geopackage: Path, background_shapefile: Path, flow_paths: pd.DataFrame) -> go.Figure:
+def create_map_base(geometry_geopackage: Path, background_shapefile: Path,
+                    flow_paths: pd.DataFrame) -> go.Figure:
     """Create base map with hexagonal grid, background, elevation and flow paths."""
     gdf_geometry = gpd.read_file(geometry_geopackage)
     gdf_background = gpd.read_file(background_shapefile)
@@ -15,6 +16,8 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path, flow_
 
     gdf_geometry = gdf_geometry.to_crs(epsg=4326)
     gdf_geometry = gdf_geometry.set_crs('EPSG:2056', allow_override=True)
+    bounds = gdf_geometry.total_bounds
+    center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
     gdf_background = gdf_background.to_crs(epsg=4326)
 
@@ -103,10 +106,6 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path, flow_
                 showlegend=False
             ))
 
-    # Calculate bounds and center
-    bounds = gdf_background.total_bounds
-    center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
-
     updatemenus = [{
         "type": "buttons",
         "direction": "right",
@@ -148,70 +147,42 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path, flow_
 
     return fig
 
-def create_dynamic_map(gdf: gpd.GeoDataFrame, background_shapefile: Path, variables: List[str],
-                      time_series_data: pd.DataFrame, config: Dynaconf) -> go.Figure:
+def create_dynamic_map(gdf_geometry: gpd.GeoDataFrame, background_shapefile: Path,
+                       variables: List[str], time_series_data: pd.DataFrame) -> go.Figure:
     """Create interactive map with time slider and variable selector."""
-    gdf_wgs84 = gdf.to_crs(epsg=4326)
-    gdf_background = gpd.read_file(background_shapefile)
-    gdf_background = gdf_background.to_crs(epsg=4326)
-
-    # If we have selected cells, filter the geometry and data
-    if hasattr(config.grid, 'selected_cells'):
-        gdf_wgs84 = gdf_wgs84[gdf_wgs84['BlockID'].isin(config.grid['selected_cells'])]
-
-    bounds = gdf_wgs84.total_bounds
+    gdf_geometry = gdf_geometry.set_index('BlockID')
+    gdf_geometry = gdf_geometry.to_crs(epsg=4326)
+    bounds = gdf_geometry.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
     monthly_data = time_series_data.groupby(pd.Grouper(freq='ME')).mean()
-    monthly_data.attrs['units'] = time_series_data.attrs['units']
 
-    global_min = monthly_data[variables].min().min()
-    global_max = monthly_data[variables].max().max()
+    # Calculate absolute global min/max across ALL variables
+    global_min = monthly_data[variables].min().min()  # Min across all variables
+    global_max = monthly_data[variables].max().max()  # Max across all variables
     var_min = {var: monthly_data[var].min().min() for var in variables}
     var_max = {var: monthly_data[var].max().max() for var in variables}
 
     fig = go.Figure()
 
-    # Get units from data attributes
-    units = {}
-    for var in variables:
-        if hasattr(monthly_data, 'attrs') and 'units' in monthly_data.attrs:
-            unit = monthly_data.attrs['units'][var]
-            unit_label = {
-                'm3': 'm³/yr',
-                'mm': 'mm',
-                'm': 'm',
-                'L': 'L/yr'
-            }.get(unit, unit)
-            units[var] = unit_label
-        else:
-            units[var] = 'm³/yr'
+    gdf_background = gpd.read_file(background_shapefile)
+    if gdf_geometry.crs != gdf_background.crs:
+        gdf_background = gdf_background.to_crs(gdf_geometry.crs)
+    gdf_background = gdf_background.to_crs(epsg=4326)
 
-    # Add the contour map basemap first
-    fig.add_trace(go.Choroplethmapbox(
-        geojson=gdf_background.__geo_interface__,
-        locations=gdf_background.index,
-        z=[1]*len(gdf_background),
-        colorscale=[[0, 'white'], [1, 'lightgray']],
-        showscale=False,
-        marker_opacity=0.3,
-        marker_line_width=0,
-        visible=True,
-        name='Background'
-    ))
 
     # Create traces for each variable
     for variable in variables:
         fig.add_trace(go.Choroplethmapbox(
-            geojson=gdf_wgs84.__geo_interface__,
-            locations=gdf_wgs84.index,
+            geojson=gdf_geometry.__geo_interface__,
+            locations=time_series_data.columns.get_level_values(1),
             z=monthly_data.loc[monthly_data.index[0], variable],
             zmin=var_min[variable],
             zmax=var_max[variable],
             colorscale="Viridis",
             marker_opacity=0.7,
             marker_line_width=0,
-            colorbar_title_text=f"{variable.replace('_', ' ').capitalize()} [{units[variable]}]",
+            colorbar_title_text=f"{variable.replace('_', ' ').capitalize()} [m³/yr]",
             colorbar_title_side="right",
             colorbar_thickness=20,
             colorbar_title_font={"size": 12},
@@ -219,16 +190,30 @@ def create_dynamic_map(gdf: gpd.GeoDataFrame, background_shapefile: Path, variab
             name=variable
         ))
 
-    # Create variable buttons
+    # Add background outline
+    for _, row in gdf_background.iterrows():
+        coords = _get_polygon_coordinates(row.geometry)
+        for polygon in coords:
+            lons, lats = zip(*polygon)
+            fig.add_trace(go.Scattermapbox(
+                lon=list(lons),
+                lat=list(lats),
+                mode='lines',
+                line={"width": 1, "color": 'gray'},
+                showlegend=False
+            ))
+
+    # Create variable buttons that preserve the current zmin/zmax setting
     var_buttons = []
     for i, variable in enumerate(variables):
         var_buttons.append({
-            'args': [{"visible": [True] + [i == j for j in range(len(variables))]},
-                     {"colorbar_title_text": f"{variable.replace('_', ' ').capitalize()} [{units[variable]}]"}],
+            'args': [{"visible": [i == j for j in range(len(variables))],
+                     "colorbar_title_text": f"{variable.replace('_', ' ').capitalize()} [m³/yr]"}],
             'label': variable.replace('_', ' ').capitalize(),
             'method': "update"
         })
 
+    # Scale buttons now need to handle all variables
     scale_buttons = [
         {
             'args': [{"zmin": [var_min[var] for var in variables],
