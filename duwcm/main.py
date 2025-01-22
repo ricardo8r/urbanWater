@@ -115,129 +115,49 @@ def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
     logger.info("Results and forcing data saved to %s", output_file)
 
 def check_results(results: Dict[str, pd.DataFrame], config: Dynaconf) -> None:
-    """
-    Process and report validation results.
-
-    Args:
-        results: Dictionary containing simulation results including validation
-        config: Configuration object with output settings
-    """
-
-    logger.info("Processing validation results...")
-
-    # These keys match exactly what we create in water_balance.py
+    """Process and report validation results."""
     validation_keys = ['validation_balance', 'validation_flows', 'validation_storage']
 
-    # Check if we have validation results
     if not any(key in results for key in validation_keys):
-        logger.warning("No validation results found in simulation output")
+        logger.warning("No validation results found")
         return
 
-    # Extract validation results using the exact keys
     validation_results = {
         'balance': results.get('validation_balance', pd.DataFrame()),
         'flows': results.get('validation_flows', pd.DataFrame()),
         'storage': results.get('validation_storage', pd.DataFrame())
     }
 
-    # Only proceed if we have actual validation data
     if all(df.empty for df in validation_results.values()):
         logger.warning("All validation DataFrames are empty")
         return
 
-    # Log validation summary
+    # Log warnings for each type of issue
     balance_df = validation_results['balance']
     if not balance_df.empty:
-        # Create a view with significant issues and absolute error
         significant_mask = abs(balance_df['balance_error_percent']) > 1.0
         if significant_mask.any():
-            significant_issues = balance_df[significant_mask].copy()  # Create explicit copy
-            logger.warning("Found %d significant balance errors", len(significant_issues))
-
-            # Get worst issues by absolute error
-            worst_indices = abs(significant_issues['balance_error_percent']).nlargest(15).index
-            worst_issues = significant_issues.loc[worst_indices]
-
-            for _, issue in worst_issues.iterrows():
-                logger.warning(
-                    "Cell %d at %s, Component %s: Error %.2f%% (Balance: %.2f, Inflow: %.2f, "
-                    "Outflow: %.2f, Storage Change: %.2f)",
-                    issue['cell'],
-                    issue['timestep'].strftime('%Y-%m-%d'),
-                    issue['component'],
-                    issue['balance_error_percent'],
-                    issue['balance'],
-                    issue['inflow'],
-                    issue['outflow'],
-                    issue['storage_change']
-                )
-
-            # Log statistics about the balance errors
-            logger.warning(
-                "Balance error stats - Mean: %.2f%%, Max: %.2f%%, Min: %.2f%%",
-                significant_issues['balance_error_percent'].mean(),
-                significant_issues['balance_error_percent'].max(),
-                significant_issues['balance_error_percent'].min()
-            )
+            logger.warning("Found %d significant balance errors", len(balance_df[significant_mask]))
 
     flows_df = validation_results['flows']
     if not flows_df.empty:
-        flow_issues = len(flows_df)
-        if flow_issues > 0:
-            logger.warning("Found %d flow validation issues", flow_issues)
-            # Group issues by type
-            by_type = flows_df.groupby('issue_type').size()
-            for issue_type, count in by_type.items():
-                logger.warning("  %s: %d issues", issue_type, count)
-            # Show some example issues
-            for _, issue in flows_df.head(3).iterrows():
-                logger.warning(
-                    "  %s->%s: %s",
-                    issue['source_component'],
-                    issue['target_component'],
-                    issue['description']
-                )
+        logger.warning("Found %d flow validation issues", len(flows_df))
+        by_type = flows_df.groupby('issue_type').size()
+        for issue_type, count in by_type.items():
+            logger.warning("  %s: %d issues", issue_type, count)
 
     storage_df = validation_results['storage']
     if not storage_df.empty:
-        storage_issues = len(storage_df)
-        if storage_issues > 0:
-            logger.warning("Found %d storage validation issues", storage_issues)
-            # Group issues by component and type
-            by_component = storage_df.groupby(['component', 'issue_type']).size()
-            for (comp, issue_type), count in by_component.items():
-                logger.warning("  %s - %s: %d issues", comp, issue_type, count)
-            # Show some example violations
-            for _, issue in storage_df.head(3).iterrows():
-                logger.warning(
-                    "  %s %s: Current value: %.2f, Limit: %.2f",
-                    issue['component'],
-                    issue['storage_name'],
-                    issue['current_value'],
-                    issue['limit_value']
-                )
+        logger.warning("Found %d storage validation issues", len(storage_df))
+        by_component = storage_df.groupby(['component', 'issue_type']).size()
+        for (comp, issue_type), count in by_component.items():
+            logger.warning("  %s - %s: %d issues", comp, issue_type, count)
 
     # Generate validation reports
     output_dir = Path(config.output.output_directory) / 'validation'
     output_dir.mkdir(parents=True, exist_ok=True)
-
     generate_report(validation_results, output_dir)
     logger.info("Validation reports generated in %s", output_dir)
-
-    # Calculate total issues
-    total_issues = (
-        len(significant_issues) if 'significant_issues' in locals() else 0 +
-        flow_issues if 'flow_issues' in locals() else 0 +
-        storage_issues if 'storage_issues' in locals() else 0
-    )
-
-    if total_issues > 0:
-        logger.warning(
-            "Total validation issues found: %d. "
-            "Check the validation reports in %s for detailed information.",
-            total_issues,
-            output_dir
-        )
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Urban Water Model")

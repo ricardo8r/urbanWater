@@ -179,22 +179,6 @@ def track_validation_results(model: UrbanWaterModel, current_date: pd.Timestamp)
         'storage': check_storage(model, current_date)
     }
 
-def analyze_balance_errors(balance_df: pd.DataFrame, threshold: float = 1.0) -> Dict[str, pd.DataFrame]:
-    """
-    Analyze water balance errors and identify problematic components/cells.
-    """
-    violations = balance_df[abs(balance_df['balance_error_percent']) > threshold].copy()
-
-    summary = balance_df.groupby(['component']).agg({
-        'balance_error_percent': ['mean', 'std', 'min', 'max'],
-        'balance': ['mean', 'std', 'min', 'max']
-    })
-
-    return {
-        'summary': summary,
-        'violations': violations
-    }
-
 def generate_report(validation_results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
     """
     Generate detailed CSV reports of validation results.
@@ -210,9 +194,6 @@ def generate_report(validation_results: Dict[str, pd.DataFrame], output_dir: Pat
 
     # Process each type of validation result
     for check_type, df in validation_results.items():
-        # Save full results
-        df.to_csv(output_dir / f'validation_{check_type}.csv')
-
         # Generate summaries based on validation type
         if check_type == 'balance' and 'balance_error_percent' in df.columns:
             # Create balance summary

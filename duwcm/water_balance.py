@@ -73,7 +73,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
             'storage': []
         }
 
-    for t in tqdm(range(1, num_timesteps), desc="Water balance"):
+    for t in tqdm(range(1, num_timesteps), desc="Water balance", leave=False):
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
 
