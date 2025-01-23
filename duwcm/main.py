@@ -66,19 +66,6 @@ def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
             forcing_data.index[0].strftime('%Y-%m-%d'),
             forcing_data.index[-1].strftime('%Y-%m-%d'))
 
-    # Apply scenario modifications here
-    scenario_factor = getattr(config.simulation, 'precipitation_factor', 1.0)
-    if scenario_factor != 1.0:
-        logger.info(f"Applying precipitation factor: {scenario_factor}")
-        forcing_data['precipitation'] = forcing_data['precipitation'] * scenario_factor
-
-    # Indoor water use modification
-    indoor_factor = getattr(config.simulation, 'indoor_water_factor', 1.0)
-    if indoor_factor != 1.0:
-        logger.info(f"Applying indoor water factor: {indoor_factor}")
-        for cell_id in model_params:
-            model_params[cell_id]['general']['indoor_water_use'] *= indoor_factor
-
     logger.info("Distributing irrigation")
     distribute_irrigation(forcing_data, model_params)
 
@@ -97,24 +84,7 @@ def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
     logger.info("Simulation completed")
     return results, forcing_data, flow_paths
 
-def save_results(results: Dict[str, pd.DataFrame], forcing_data: pd.DataFrame,
-                 config: Dynaconf) -> None:
-    """Save simulation results, model parameters, and forcing data to files."""
-    output_dir = Path(config.output.output_directory)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
-    output_file = output_dir / 'simulation_results.h5'
-
-    with pd.HDFStore(output_file, mode='w') as store:
-        for module, df in results.items():
-            store.put(module, df, format='table', data_columns=True)
-
-        # Save forcing data
-        store.put('forcing', forcing_data, format='table', data_columns=True)
-
-    logger.info("Results and forcing data saved to %s", output_file)
-
-def check_results(results: Dict[str, pd.DataFrame], config: Dynaconf) -> None:
+def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
     """Process and report validation results."""
     validation_keys = ['validation_balance', 'validation_flows', 'validation_storage']
 
@@ -154,10 +124,7 @@ def check_results(results: Dict[str, pd.DataFrame], config: Dynaconf) -> None:
             logger.warning("  %s - %s: %d issues", comp, issue_type, count)
 
     # Generate validation reports
-    output_dir = Path(config.output.output_directory) / 'validation'
-    output_dir.mkdir(parents=True, exist_ok=True)
-    generate_report(validation_results, output_dir)
-    logger.info("Validation reports generated in %s", output_dir)
+    generate_report(validation_results, check_dir)
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Urban Water Model")
@@ -166,96 +133,102 @@ def main() -> None:
     parser.add_argument("--plot", action="store_true", help="Generate plots and map plots")
     parser.add_argument("--gis", action="store_true", help="Generate map plots")
     parser.add_argument("--check", action="store_true", help="Check water balance")
+    parser.add_argument("--scenarios", action="store_true", help="Run multiple scenarios defined in config")
+    parser.add_argument("--save", action="store_true", help="Save results")
 
     args = parser.parse_args()
-    config = load_config(args.config, args.env)
+    base_config = load_config(args.config, args.env)
+    scenarios = base_config.get('simulation', {}).get('scenarios', ['default']) if args.scenarios else ['default']
 
-    try:
-        # Run simulation
+    for scenario in scenarios:
+        logger.info("Running %s scenario...", scenario)
+        config = load_config(args.config, env=scenario)
+        out_base = Path(config.output.output_directory) / scenario
         results, forcing_data, flow_paths = run(config, check=args.check)
 
         # Generate plots
         if args.plot:
-            output_dir = Path(config.output.output_directory) / 'figures'
+            plot_dir = out_base / 'figures'
+            map_dir = out_base / 'maps'
+            flow_dir = out_base / 'flows'
+            for directory in [plot_dir, map_dir, flow_dir]:
+                directory.mkdir(parents=True, exist_ok=True)
+
             generate_plots(results['aggregated'],
                            forcing_data,
-                           output_dir)
-            logger.info("Plots saved to %s", output_dir)
+                           plot_dir)
+            logger.info("Plots saved to %s", plot_dir)
 
             geo_dir = Path(config.geodata_directory)
             geo_file = Path(config.input_directory) / Path(config.files.geo_file)
             background_shapefile = geo_dir / config.files.background_shapefile
             feature_shapefiles = [geo_dir / shapefile for shapefile in config.files.feature_shapefiles]
 
-            output_dir = Path(config.output.output_directory) / 'maps'
-            output_dir.mkdir(parents=True, exist_ok=True)
-
             generate_system_maps(
-                background_shapefile=background_shapefile,
-                feature_shapefiles=feature_shapefiles,
-                geometry_geopackage=geo_file,
-                output_dir=output_dir,
-                flow_paths=flow_paths,
+                background_shapefile = background_shapefile,
+                feature_shapefiles = feature_shapefiles,
+                geometry_geopackage = geo_file,
+                output_dir = map_dir,
+                flow_paths = flow_paths,
                 config = config
                 )
-
             generate_maps(
-                background_shapefile=background_shapefile,
-                feature_shapefiles=feature_shapefiles,
-                geometry_geopackage=geo_file,
-                results=results,
-                output_dir=output_dir,
-                flow_paths=flow_paths
+                background_shapefile = background_shapefile,
+                feature_shapefiles = feature_shapefiles,
+                geometry_geopackage = geo_file,
+                results = results,
+                output_dir = map_dir,
+                flow_paths = flow_paths
             )
 
-            logger.info("Maps saved to %s", output_dir)
+            logger.info("Maps saved to %s", map_dir)
 
             # Generate chord diagrams
-            output_dir = Path(config.output.output_directory) / 'flows'
             generate_chord(
                 results=results,
-                output_dir=output_dir
+                output_dir=flow_dir
             )
-            logger.info("Chord diagrams saved to %s", output_dir)
-
             # Generate sankey diagrams
-            output_dir = Path(config.output.output_directory) / 'flows'
             generate_alluvial(
                 results=results,
-                output_dir=output_dir
+                output_dir=flow_dir
             )
-            logger.info("Alluvial diagrams saved to %s", output_dir)
             generate_graph(
                 results=results,
-                output_dir=output_dir
+                output_dir=flow_dir
             )
-            logger.info("Network diagrams saved to %s", output_dir)
+            logger.info("Flow diagrams saved to %s", flow_dir)
 
         if args.gis:
-            output_dir = Path(config.output.output_directory) / 'gis'
-            output_dir.mkdir(parents=True, exist_ok=True)
+            gis_dir = out_base / 'gis'
+            gis_dir.mkdir(parents=True, exist_ok=True)
             export_geodata(
-                geometry_geopackage=geo_file,
-                results=results,
-                forcing=forcing_data,
-                output_dir=output_dir,
-                crs=config.output.crs,
-                file_format='gpkg'
+                geometry_geopackage = geo_file,
+                results = results,
+                forcing = forcing_data,
+                output_dir = gis_dir,
+                crs = config.output.crs,
+                file_format = 'gpkg'
             )
-            logger.info("Geodata saved to %s", output_dir)
+            logger.info("Geodata saved to %s", gis_dir)
 
         # Check results and save water balance
         if args.check:
-            check_results(results, config)
+            check_dir = out_base / 'validation'
+            check_dir.mkdir(parents=True, exist_ok=True)
+            check_results(results, check_dir)
+            logger.info("Validation reports saved to %s", check_dir)
             #print_summary(results)
 
-        # Save results
-        save_results(results, forcing_data, config)
+        if args.save:
+            save_dir = out_base / 'simulation_results.h5'
 
+            with pd.HDFStore(save_dir, mode='w') as store:
+                for module, df in results.items():
+                    store.put(module, df, format='table', data_columns=True)
+                store.put('forcing', forcing_data, format='table', data_columns=True)
 
-    except Exception as e:
-        logger.error("Simulation failed: %s", str(e))
-        raise
+            logger.info("Results and forcing data saved to %s", save_dir)
 
 if __name__ == "__main__":
     main()
