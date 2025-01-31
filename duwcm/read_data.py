@@ -215,25 +215,25 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
     input_dir = config.input_directory
     files = config.files
 
-    # Read data files 
-    dbf = Dbf5(os.path.join(input_dir, files.urban_beats_file), codec='utf-8')
+    # Read data files
+    dbf = Dbf5(os.path.join(input_dir, files.urban_beats), codec='utf-8')
     urban_data = dbf.to_dataframe()
     urban_data.set_index('BlockID', inplace=True)
 
-    altwater_data = pd.read_csv(os.path.join(input_dir, files.alternative_water_file))
+    altwater_data = pd.read_csv(os.path.join(input_dir, files.alternative_water))
     altwater_data.loc[len(altwater_data)] = np.zeros(len(altwater_data.columns))
     altwater_data.set_index('id', inplace=True)
 
-    groundwater_data = pd.read_csv(os.path.join(input_dir, files.groundwater_file)).set_index('BlockID')
-    soil_data = pd.read_csv(os.path.join(input_dir, files.soil_file), header=0)
-    et_data = pd.read_csv(os.path.join(input_dir, files.et_file), header=0)
+    groundwater_data = pd.read_csv(os.path.join(input_dir, files.groundwater)).set_index('BlockID')
+    soil_data = pd.read_csv(os.path.join(input_dir, files.soil), header=0)
+    et_data = pd.read_csv(os.path.join(input_dir, files.et), header=0)
 
     # Process data and prepare model parameters
-    model_params = prepare_model_parameters(urban_data, config.calibration,
+    model_params = prepare_model_parameters(urban_data, config.model.calibration,
                                          altwater_data, groundwater_data, soil_data, et_data,
                                          config.grid.cell_size, config.grid.direction)
 
     # Create flow paths
     flow_paths = create_flow_paths(urban_data, config.grid.direction)
 
-    return model_params, config.reuse, config.demand, soil_data, et_data, flow_paths
+    return model_params, config.model.reuse, config.model.demand, soil_data, et_data, flow_paths

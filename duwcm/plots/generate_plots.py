@@ -118,5 +118,5 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
         # Save the figure
         base_filename = output_dir / config.lower()
         plt.savefig(f"{base_filename}.png", format='png', dpi=300, bbox_inches='tight')
-        plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
+#        plt.savefig(f"{base_filename}.pdf", format='pdf', dpi=300, bbox_inches='tight')
         plt.close(fig)

@@ -16,10 +16,10 @@ def read_forcing(config: Dynaconf) -> pd.DataFrame:
     input_dir = config.input_directory
     files = config.files
 
-    climate_data = pd.read_csv(os.path.join(input_dir, files.climate_file), header=0)
+    climate_data = pd.read_csv(os.path.join(input_dir, files.climate), header=0)
     climate_data['Date'] = pd.to_datetime(climate_data['Date'], format='%Y-%m-%d', errors='coerce')
     climate_data.set_index('Date', inplace=True)
-    water_data = pd.read_csv(os.path.join(input_dir, files.open_water_file), header=0)
+    water_data = pd.read_csv(os.path.join(input_dir, files.open_water), header=0)
     water_data['Date'] = pd.to_datetime(water_data['Date'], format='%Y-%m-%d', errors='coerce')
     water_data.set_index('Date', inplace=True)
 
