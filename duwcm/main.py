@@ -13,7 +13,7 @@ from duwcm.water_model import UrbanWaterModel
 from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing, distribute_irrigation
 from duwcm.water_balance import run_water_balance
-from duwcm.scenario_manager import ScenarioManager
+from duwcm.scenario_manager import ScenarioManager, run_scenario
 
 from duwcm.initialization import initialize_model
 from duwcm.summary import print_summary
@@ -52,15 +52,15 @@ def main() -> None:
              forcing_data.index[-1].strftime('%Y-%m-%d'))
 
     # Filter selected cells if specified
-    selected_cells = getattr(base_config.grid, 'selected_cells', None)
-    if selected_cells is not None:
-        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
-        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
-        for col in flow_paths.columns:
-            if col != 'down':
-                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
-        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
-        logger.info("Filtered to %d selected cells", len(model_params))
+    #selected_cells = getattr(base_config.grid, 'selected_cells', None)
+    #if selected_cells is not None:
+    #    model_params = {k: v for k, v in model_params.items() if k in selected_cells}
+    #    flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
+    #    for col in flow_paths.columns:
+    #        if col != 'down':
+    #            flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
+    #    flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
+    #    logger.info("Filtered to %d selected cells", len(model_params))
 
 
     if args.scenarios:
@@ -69,16 +69,19 @@ def main() -> None:
 
         scenario_manager = ScenarioManager.from_config(scenario_config)
 
-        # Setup model runner closure with all fixed parameters
-        def model_runner(params, forcing):
-            distribute_irrigation(params)
-            model = UrbanWaterModel(params, flow_paths, soil_data, et_data,
-                                  demand_data, reuse_settings, base_config.grid.direction)
-            return run_water_balance(model, forcing, check=args.check)
+        # Create shared data dict
+        model_data = {
+            'flow_paths': flow_paths,
+            'soil_data': soil_data,
+            'et_data': et_data,
+            'demand_data': demand_data,
+            'reuse_settings': reuse_settings,
+            'direction': base_config.grid.direction
+        }
 
         # Run all cases
         all_results = scenario_manager.run_scenarios(
-            model_runner=model_runner,
+            model_data=model_data,
             base_params=model_params,
             base_forcing=forcing_data,
             n_jobs=args.n_jobs
@@ -86,23 +89,30 @@ def main() -> None:
 
         for case_name, results in all_results.items():
             out_base = Path(base_config.output.directory) / case_name
-            process_outputs(results, forcing_data, flow_paths, out_base, base_config, args)
+            process_outputs(results, flow_paths, out_base, base_config, args)
 
     else:
         # Single base case
-        distribute_irrigation(model_params)
-        model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data,
-                               demand_data, reuse_settings, base_config.grid.direction)
-        results = run_water_balance(model, forcing_data, check=args.check)
+        scenario_data = (args.env, model_params, forcing_data, {
+            'flow_paths': flow_paths,
+            'soil_data': soil_data,
+            'et_data': et_data,
+            'demand_data': demand_data,
+            'reuse_settings': reuse_settings,
+            'direction': base_config.grid.direction
+        })
+        results = run_scenario(scenario_data)
 
         out_base = Path(base_config.output.directory) / args.env
-        process_outputs(results, forcing_data, flow_paths, out_base, base_config, args)
+        process_outputs(results, flow_paths, out_base, base_config, args)
 
     logger.info("Simulation completed")
 
 
-def process_outputs(results, forcing_data, flow_paths, output_dir, config, args):
+def process_outputs(results, flow_paths, output_dir, config, args):
     """Process and save outputs based on arguments"""
+    scenario_name, scenario_results = results  # Unpack the tuple
+
     # Generate plots
     if args.plot:
         plot_dir = output_dir / 'figures'
@@ -111,9 +121,9 @@ def process_outputs(results, forcing_data, flow_paths, output_dir, config, args)
         for directory in [plot_dir, map_dir, flow_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
-        generate_plots(results['aggregated'],
-                       forcing_data,
-                       plot_dir)
+        generate_plots(scenario_results['aggregated'],
+                     scenario_results['forcing'],
+                     plot_dir)
         logger.info("Plots saved to %s", plot_dir)
 
         geo_dir = Path(config.geodata_directory)
@@ -133,7 +143,7 @@ def process_outputs(results, forcing_data, flow_paths, output_dir, config, args)
             background_shapefile = background_shapefile,
             feature_shapefiles = feature_shapefiles,
             geometry_geopackage = geo_file,
-            results = results,
+            results = scenario_results,
             output_dir = map_dir,
             flow_paths = flow_paths
         )
@@ -142,16 +152,16 @@ def process_outputs(results, forcing_data, flow_paths, output_dir, config, args)
 
         # Generate chord diagrams
         generate_chord(
-            results=results,
+            results=scenario_results,
             output_dir=flow_dir
         )
         # Generate sankey diagrams
         generate_alluvial(
-            results=results,
+            results=scenario_results,
             output_dir=flow_dir
         )
         generate_graph(
-            results=results,
+            results=scenario_results,
             output_dir=flow_dir
         )
         logger.info("Flow diagrams saved to %s", flow_dir)
@@ -161,7 +171,7 @@ def process_outputs(results, forcing_data, flow_paths, output_dir, config, args)
         gis_dir.mkdir(parents=True, exist_ok=True)
         export_geodata(
             geometry_geopackage = geo_file,
-            results = results,
+            results = scenario_results,
             forcing = forcing_data,
             output_dir = gis_dir,
             crs = config.output.crs,
@@ -173,7 +183,7 @@ def process_outputs(results, forcing_data, flow_paths, output_dir, config, args)
     if args.check:
         check_dir = output_dir / 'validation'
         check_dir.mkdir(parents=True, exist_ok=True)
-        check_results(results, check_dir)
+        check_results(scenario_results, check_dir)
         logger.info("Validation reports saved to %s", check_dir)
         #print_summary(results)
 

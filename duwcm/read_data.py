@@ -236,4 +236,4 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
     # Create flow paths
     flow_paths = create_flow_paths(urban_data, config.grid.direction)
 
-    return model_params, config.model.reuse, config.model.demand, soil_data, et_data, flow_paths
+    return model_params, pd.DataFrame([config.model.reuse]), pd.DataFrame([config.model.demand]), soil_data, et_data, flow_paths

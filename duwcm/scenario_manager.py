@@ -26,10 +26,13 @@ from typing import Dict, Optional
 from copy import deepcopy
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
 import concurrent.futures
 from dynaconf import Dynaconf
 import pandas as pd
+
+from duwcm.water_model import UrbanWaterModel
+from duwcm.water_balance import run_water_balance
 
 logger = logging.getLogger(__name__)
 
@@ -172,25 +175,40 @@ class ScenarioManager:
         """Get a scenario by name"""
         return self.scenarios.get(name)
 
-    def run_scenarios(self, model_runner, base_params: Dict, base_forcing: pd.DataFrame,
+    def run_scenarios(self, model_data: Dict, base_params: Dict, base_forcing: pd.DataFrame,
                       n_jobs: int = 4) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Run scenarios in parallel"""
         results = {}
+        scenario_params = []
 
-        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+        for name, scenario in self.scenarios.items():
+            modified_params = scenario.modify_params(base_params)
+            modified_forcing = scenario.modify_forcing(base_forcing)
+            scenario_params.append((name, modified_params, modified_forcing, model_data))
+
+        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
             futures = {
-                executor.submit(
-                    model_runner,
-                    scenario.modify_params(base_params),
-                    scenario.modify_forcing(base_forcing)
-                ): name
-                for name, scenario in self.scenarios.items()
+                executor.submit(run_scenario, params): params[0]
+                for params in scenario_params
             }
 
             for future in concurrent.futures.as_completed(futures):
                 name = futures[future]
-                logger.info("Running scenario: %s", name)
                 results[name] = future.result()
-                logger.info("Completed scenario: %s", name)
 
         return results
+
+def run_scenario(scenario_data):
+    name, modified_params, modified_forcing, shared_data = scenario_data
+    model = UrbanWaterModel(
+        params=modified_params,
+        path=shared_data['flow_paths'],
+        soil_data=shared_data['soil_data'],
+        et_data=shared_data['et_data'],
+        demand_settings=shared_data['demand_data'],
+        reuse_settings=shared_data['reuse_settings'],
+        direction=shared_data['direction']
+    )
+    results = run_water_balance(model, modified_forcing)
+    results['forcing'] = modified_forcing
+    return name, results

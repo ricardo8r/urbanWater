@@ -20,16 +20,16 @@ class ReuseConfig:
     @classmethod
     def from_settings(cls, settings: pd.Series) -> 'ReuseConfig':
         return cls(
-            kitchen_to_gray=settings.kitchen_to_graywater / 100,
-            bathroom_to_gray=settings.bathroom_to_graywater / 100,
-            laundry_to_gray=settings.laundry_to_graywater / 100,
-            rt_to_kitchen=settings.raintank_to_kitchen / 100,
-            rt_to_bathroom=settings.raintank_to_bathroom / 100,
-            rt_to_laundry=settings.raintank_to_laundry / 100,
-            rt_to_toilet=settings.raintank_to_toilet / 100,
-            rt_to_irrigation=settings.raintank_to_irrigation / 100,
-            wws_to_toilet=settings.wastewater_to_toilet / 100,
-            wws_to_irrigation=settings.wastewater_to_irrigation / 100
+            kitchen_to_gray=settings.kitchen_to_graywater.iloc[0] / 100,
+            bathroom_to_gray=settings.bathroom_to_graywater.iloc[0] / 100,
+            laundry_to_gray=settings.laundry_to_graywater.iloc[0] / 100,
+            rt_to_kitchen=settings.raintank_to_kitchen.iloc[0] / 100,
+            rt_to_bathroom=settings.raintank_to_bathroom.iloc[0] / 100,
+            rt_to_laundry=settings.raintank_to_laundry.iloc[0] / 100,
+            rt_to_toilet=settings.raintank_to_toilet.iloc[0] / 100,
+            rt_to_irrigation=settings.raintank_to_irrigation.iloc[0] / 100,
+            wws_to_toilet=settings.wastewater_to_toilet.iloc[0] / 100,
+            wws_to_irrigation=settings.wastewater_to_irrigation.iloc[0] / 100
         )
 
 class DemandClass:
@@ -77,7 +77,7 @@ class DemandClass:
             ]:
                 usage_factor = getattr(self.reuse_config, f'rt_to_{use}')
                 allocation, available = self._allocate_source(
-                    self.demands[use], available, usage_factor
+                    self.demands[use].iloc[0], available, usage_factor
                 )
                 getattr(data.internal_flows, rt_flow).set_amount(allocation, 'L')
 
@@ -103,7 +103,7 @@ class DemandClass:
             ('bathroom', self.reuse_config.bathroom_to_gray),
             ('laundry', self.reuse_config.laundry_to_gray)
         ]:
-            flow = self.demands[source] * gray_factor
+            flow = self.demands[source].item() * gray_factor
             flow_name = f"{source}_to_graywater"
             getattr(data.internal_flows, flow_name).set_amount(flow, 'L')
             graywater_flows.append(flow)
@@ -128,7 +128,7 @@ class DemandClass:
         data = self.demand_data
 
         # Calculate total wastewater and treatment
-        total_wastewater = sum(self.demands.values())
+        total_wastewater = sum(value.item() for value in self.demands.values())
         graywater_total = sum(
             getattr(data.internal_flows, f"{src}_to_graywater").get_amount('L')
             for src in ['kitchen', 'bathroom', 'laundry']
@@ -146,8 +146,8 @@ class DemandClass:
             available = data.ww_storage.get_amount('L')
 
             # Allocate to toilet
-            remaining_toilet = (self.demands['toilet'] -
-                              data.internal_flows.rt_to_toilet.get_amount('L'))
+            remaining_toilet = (self.demands['toilet'].iloc[0] -
+                                data.internal_flows.rt_to_toilet.get_amount('L'))
             allocation, available = self._allocate_source(
                 remaining_toilet, available, self.reuse_config.wws_to_toilet
             )
@@ -186,14 +186,14 @@ class DemandClass:
             ('laundry', 'rt_to_laundry', 'po_to_laundry')
         ]:
             remaining = (
-                self.demands[use] -
+                self.demands[use].item() -
                 getattr(data.internal_flows, rt_flow).get_amount('L')
             )
             getattr(data.internal_flows, po_flow).set_amount(remaining, 'L')
 
         # Calculate remaining toilet demand
-        remaining_toilet = (
-            self.demands['toilet'] -
+        remaining_toilet = float(
+            self.demands['toilet'].item() -
             data.internal_flows.rt_to_toilet.get_amount('L') -
             data.internal_flows.wws_to_toilet.get_amount('L')
         )
