@@ -24,10 +24,12 @@ Parameters for both scenarios are configurable through thresholds:
 from dataclasses import dataclass
 from typing import Dict, Optional
 from copy import deepcopy
+
 import logging
-import pandas as pd
+from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
 from dynaconf import Dynaconf
-from pqdm.processes import pqdm
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -170,23 +172,25 @@ class ScenarioManager:
         """Get a scenario by name"""
         return self.scenarios.get(name)
 
-
     def run_scenarios(self, model_runner, base_params: Dict, base_forcing: pd.DataFrame,
                       n_jobs: int = 4) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Run scenarios in parallel"""
-        def process_scenario(name):
-            scenario = self.scenarios[name]
-            logger.info("Running scenario: %s", name)
-            modified_forcing = scenario.modify_forcing(base_forcing)
-            modified_params = scenario.modify_params(base_params)
-            results = model_runner(modified_params, modified_forcing)
-            return results
-
         results = {}
-        for scenario in self.scenarios.keys():
-            results[scenario] = process_scenario(scenario)
 
-        #scenarios = ['default', 'dry']
-        #results = pqdm(scenarios, process_scenario, n_jobs=1)
+        with ThreadPoolExecutor(max_workers=n_jobs) as executor:
+            futures = {
+                executor.submit(
+                    model_runner,
+                    scenario.modify_params(base_params),
+                    scenario.modify_forcing(base_forcing)
+                ): name
+                for name, scenario in self.scenarios.items()
+            }
+
+            for future in concurrent.futures.as_completed(futures):
+                name = futures[future]
+                logger.info("Running scenario: %s", name)
+                results[name] = future.result()
+                logger.info("Completed scenario: %s", name)
 
         return results

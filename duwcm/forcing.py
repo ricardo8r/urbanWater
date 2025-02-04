@@ -42,15 +42,13 @@ def read_forcing(config: Dynaconf) -> pd.DataFrame:
 
     return forcing
 
-def distribute_irrigation(forcing: pd.DataFrame, params: Dict[int, Dict[str, float]]) -> pd.DataFrame:
+def distribute_irrigation(params: Dict[int, Dict[str, float]]) -> None:
     """
-    Distribute yearly irrigation amounts to daily values based on the irrigation index.sns.set_palette(palette)
+    Distribute yearly irrigation amounts to daily values based on the irrigation
 
     Args:
-        forcing (pd.DataFrame): Forcing data including the irrigation index
         params (Dict[int, Dict[str, float]]): Model parameters
     """
-
     for _, cell_data in params.items():
         if cell_data['pervious']['area'] != 0:
             cell_data['irrigation']['pervious'] = (cell_data['irrigation']['block_water_demand'] *

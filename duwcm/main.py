@@ -1,7 +1,11 @@
 from typing import Dict, List, Tuple, Any
-import logging
 from pathlib import Path
 import argparse
+
+import logging
+from concurrent.futures import ThreadPoolExecutor
+import concurrent.futures
+
 import pandas as pd
 from dynaconf import Dynaconf
 
@@ -21,126 +25,6 @@ from duwcm.plots import (export_geodata, generate_plots, generate_maps, generate
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
 logger = logging.getLogger(__name__)
-
-def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
-                                                        List[Dict[str, Any]], pd.DataFrame]:
-    """
-    Run the urban water balance simulation.
-
-    Args:
-        config (Dynaconf): Configuration object
-
-    Returns:
-        Tuple[Dict[str, pd.DataFrame], List[Dict[str, Any]], pd.DataFrame]: 
-            - Dictionary of DataFrames with results for each module
-            - List of parameter dictionaries for each grid cell
-            - DataFrame of forcing data
-    """
-    logger.info("Starting urban water balance simulation")
-    if check:
-        logger.info("Validation checks enabled")
-
-
-    # Read and process input data
-    logger.info("Preparing model parameters")
-    model_params, reuse_settings, demand_data, soil_data, et_data, flow_paths = read_data(config)
-
-    # Filter for selected cells if specified
-    selected_cells = getattr(config.grid, 'selected_cells', None)
-    if selected_cells is not None:
-        # Filter model parameters
-        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
-
-        # Filter flow paths and reset upstream connections for non-selected cells
-        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
-        # Reset upstream connections that aren't in selected cells
-        for col in flow_paths.columns:
-            if col != 'down':  # Don't modify downstream connections
-                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
-
-        # Ensure downstream connections are valid
-        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
-
-    logger.info("Reading forcing data")
-    forcing_data = read_forcing(config)
-    logger.info("Number of grid cells: %d", len(model_params))
-    logger.info("Simulation period: %s to %s",
-            forcing_data.index[0].strftime('%Y-%m-%d'),
-            forcing_data.index[-1].strftime('%Y-%m-%d'))
-
-    # Apply scenario modifications here
-    scenario_factor = getattr(config.simulation, 'precipitation_factor', 1.0)
-    if scenario_factor != 1.0:
-        logger.info(f"Applying precipitation factor: {scenario_factor}")
-        forcing_data['precipitation'] = forcing_data['precipitation'] * scenario_factor
-
-    # Indoor water use modification
-    indoor_factor = getattr(config.simulation, 'indoor_water_factor', 1.0)
-    if indoor_factor != 1.0:
-        logger.info(f"Applying indoor water factor: {indoor_factor}")
-        for cell_id in model_params:
-            model_params[cell_id]['general']['indoor_water_use'] *= indoor_factor
-
-    logger.info("Distributing irrigation")
-    distribute_irrigation(forcing_data, model_params)
-
-    # Initialize model
-    logger.info("Initializing water balance model")
-    model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data, demand_data,
-                            reuse_settings, config.grid.direction)
-
-    #logger.info("Initializing groundwater using %s method", config.simulation.init_method)
-    #initialize_model(model, forcing_data, config)
-
-    # Run simulation
-    logger.info("Running water balance simulation")
-    results = run_water_balance(model, forcing_data, check=check)
-
-    logger.info("Simulation completed")
-    return results, forcing_data, flow_paths
-
-def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
-    """Process and report validation results."""
-    validation_keys = ['validation_balance', 'validation_flows', 'validation_storage']
-
-    if not any(key in results for key in validation_keys):
-        logger.warning("No validation results found")
-        return
-
-    validation_results = {
-        'balance': results.get('validation_balance', pd.DataFrame()),
-        'flows': results.get('validation_flows', pd.DataFrame()),
-        'storage': results.get('validation_storage', pd.DataFrame())
-    }
-
-    if all(df.empty for df in validation_results.values()):
-        logger.warning("All validation DataFrames are empty")
-        return
-
-    # Log warnings for each type of issue
-    balance_df = validation_results['balance']
-    if not balance_df.empty:
-        significant_mask = abs(balance_df['balance_error_percent']) > 1.0
-        if significant_mask.any():
-            logger.warning("Found %d significant balance errors", len(balance_df[significant_mask]))
-
-    flows_df = validation_results['flows']
-    if not flows_df.empty:
-        logger.warning("Found %d flow validation issues", len(flows_df))
-        by_type = flows_df.groupby('issue_type').size()
-        for issue_type, count in by_type.items():
-            logger.warning("  %s: %d issues", issue_type, count)
-
-    storage_df = validation_results['storage']
-    if not storage_df.empty:
-        logger.warning("Found %d storage validation issues", len(storage_df))
-        by_component = storage_df.groupby(['component', 'issue_type']).size()
-        for (comp, issue_type), count in by_component.items():
-            logger.warning("  %s - %s: %d issues", comp, issue_type, count)
-
-    # Generate validation reports
-    generate_report(validation_results, check_dir)
-
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run Urban Water Model")
@@ -187,6 +71,7 @@ def main() -> None:
 
         # Setup model runner closure with all fixed parameters
         def model_runner(params, forcing):
+            distribute_irrigation(params)
             model = UrbanWaterModel(params, flow_paths, soil_data, et_data,
                                   demand_data, reuse_settings, base_config.grid.direction)
             return run_water_balance(model, forcing, check=args.check)
@@ -199,12 +84,13 @@ def main() -> None:
             n_jobs=args.n_jobs
         )
 
-        # Process each case's results
         for case_name, results in all_results.items():
             out_base = Path(base_config.output.directory) / case_name
             process_outputs(results, forcing_data, flow_paths, out_base, base_config, args)
+
     else:
         # Single base case
+        distribute_irrigation(model_params)
         model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data,
                                demand_data, reuse_settings, base_config.grid.direction)
         results = run_water_balance(model, forcing_data, check=args.check)
@@ -301,5 +187,100 @@ def process_outputs(results, forcing_data, flow_paths, output_dir, config, args)
 
         logger.info("Results and forcing data saved to %s", save_dir)
 
+def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
+    """Process and report validation results."""
+    validation_keys = ['validation_balance', 'validation_flows', 'validation_storage']
+
+    if not any(key in results for key in validation_keys):
+        logger.warning("No validation results found")
+        return
+
+    validation_results = {
+        'balance': results.get('validation_balance', pd.DataFrame()),
+        'flows': results.get('validation_flows', pd.DataFrame()),
+        'storage': results.get('validation_storage', pd.DataFrame())
+    }
+
+    if all(df.empty for df in validation_results.values()):
+        logger.warning("All validation DataFrames are empty")
+        return
+
+    # Log warnings for each type of issue
+    balance_df = validation_results['balance']
+    if not balance_df.empty:
+        significant_mask = abs(balance_df['balance_error_percent']) > 1.0
+        if significant_mask.any():
+            logger.warning("Found %d significant balance errors", len(balance_df[significant_mask]))
+
+    flows_df = validation_results['flows']
+    if not flows_df.empty:
+        logger.warning("Found %d flow validation issues", len(flows_df))
+        by_type = flows_df.groupby('issue_type').size()
+        for issue_type, count in by_type.items():
+            logger.warning("  %s: %d issues", issue_type, count)
+
+    storage_df = validation_results['storage']
+    if not storage_df.empty:
+        logger.warning("Found %d storage validation issues", len(storage_df))
+        by_component = storage_df.groupby(['component', 'issue_type']).size()
+        for (comp, issue_type), count in by_component.items():
+            logger.warning("  %s - %s: %d issues", comp, issue_type, count)
+
+    # Generate validation reports
+    generate_report(validation_results, check_dir)
+
 if __name__ == "__main__":
     main()
+
+def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
+                                                        List[Dict[str, Any]], pd.DataFrame]:
+
+    # Read and process input data
+    model_params, reuse_settings, demand_data, soil_data, et_data, flow_paths = read_data(config)
+
+    # Filter for selected cells if specified
+    selected_cells = getattr(config.grid, 'selected_cells', None)
+    if selected_cells is not None:
+        # Filter model parameters
+        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
+
+        # Filter flow paths and reset upstream connections for non-selected cells
+        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
+        # Reset upstream connections that aren't in selected cells
+        for col in flow_paths.columns:
+            if col != 'down':  # Don't modify downstream connections
+                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
+
+        # Ensure downstream connections are valid
+        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
+
+    forcing_data = read_forcing(config)
+    logger.info("Number of grid cells: %d", len(model_params))
+    logger.info("Simulation period: %s to %s",
+            forcing_data.index[0].strftime('%Y-%m-%d'),
+            forcing_data.index[-1].strftime('%Y-%m-%d'))
+
+    # Apply scenario modifications here
+    scenario_factor = getattr(config.simulation, 'precipitation_factor', 1.0)
+    if scenario_factor != 1.0:
+        forcing_data['precipitation'] = forcing_data['precipitation'] * scenario_factor
+
+    # Indoor water use modification
+    indoor_factor = getattr(config.simulation, 'indoor_water_factor', 1.0)
+    if indoor_factor != 1.0:
+        for cell_id in model_params:
+            model_params[cell_id]['general']['indoor_water_use'] *= indoor_factor
+
+    distribute_irrigation(model_params)
+
+    # Initialize model
+    model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data, demand_data,
+                            reuse_settings, config.grid.direction)
+
+    #logger.info("Initializing groundwater using %s method", config.simulation.init_method)
+    #initialize_model(model, forcing_data, config)
+
+    # Run simulation
+    results = run_water_balance(model, forcing_data, check=check)
+
+    return results, forcing_data, flow_paths
