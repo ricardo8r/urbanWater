@@ -26,13 +26,16 @@ from typing import Dict, Optional
 from copy import deepcopy
 
 import logging
-from concurrent.futures import ProcessPoolExecutor
-import concurrent.futures
+#from concurrent.futures import ProcessPoolExecutor
+#import concurrent.futures
+from joblib import Parallel, delayed
 from dynaconf import Dynaconf
 import pandas as pd
 
+from duwcm.forcing import distribute_irrigation
 from duwcm.water_model import UrbanWaterModel
 from duwcm.water_balance import run_water_balance
+from duwcm.functions import is_notebook
 
 logger = logging.getLogger(__name__)
 
@@ -176,39 +179,51 @@ class ScenarioManager:
         return self.scenarios.get(name)
 
     def run_scenarios(self, model_data: Dict, base_params: Dict, base_forcing: pd.DataFrame,
-                      n_jobs: int = 4) -> Dict[str, Dict[str, pd.DataFrame]]:
+                      n_jobs: int = 4, check: bool = False) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Run scenarios in parallel"""
-        results = {}
+        # Prepare scenario parameters as a list
+        scenario_names = []
         scenario_params = []
 
-        for name, scenario in self.scenarios.items():
+        if is_notebook():
+            backend='threading'
+            progress=True
+        else:
+            backend='loky'
+            progress=False
+
+        for idx, (name, scenario) in enumerate(self.scenarios.items()):
+            scenario_names.append(name)
             modified_params = scenario.modify_params(base_params)
             modified_forcing = scenario.modify_forcing(base_forcing)
-            scenario_params.append((name, modified_params, modified_forcing, model_data))
+            scenario_params.append((name, modified_params, modified_forcing,
+                                    model_data, check, idx, progress))
 
-        with ProcessPoolExecutor(max_workers=n_jobs) as executor:
-            futures = {
-                executor.submit(run_scenario, params): params[0]
-                for params in scenario_params
-            }
+        # Run scenarios in parallel while preserving argument structure
+        results_list = Parallel(n_jobs=n_jobs, backend=backend, verbose=0)(
+            delayed(run_scenario)(params) for params in scenario_params
+        )
 
-            for future in concurrent.futures.as_completed(futures):
-                name = futures[future]
-                results[name] = future.result()
+        # Directly map results to scenario names
+        results = dict(results_list)
 
         return results
 
+
 def run_scenario(scenario_data):
-    name, modified_params, modified_forcing, shared_data = scenario_data
+
+    name, modified_params, modified_forcing, model_data, check, idx, progress = scenario_data
+
+    distribute_irrigation(modified_params)
     model = UrbanWaterModel(
         params=modified_params,
-        path=shared_data['flow_paths'],
-        soil_data=shared_data['soil_data'],
-        et_data=shared_data['et_data'],
-        demand_settings=shared_data['demand_data'],
-        reuse_settings=shared_data['reuse_settings'],
-        direction=shared_data['direction']
+        path=model_data['flow_paths'],
+        soil_data=model_data['soil_data'],
+        et_data=model_data['et_data'],
+        demand_settings=model_data['demand_data'],
+        reuse_settings=model_data['reuse_settings'],
+        direction=model_data['direction']
     )
-    results = run_water_balance(model, modified_forcing)
+    results = run_water_balance(model, modified_forcing, check, idx, progress)
     results['forcing'] = modified_forcing
     return name, results

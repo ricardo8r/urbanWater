@@ -1,7 +1,6 @@
 # duwcm/__init__.py
 
 # Import main components
-from .main import run
 from .water_model import UrbanWaterModel
 from .water_balance import run_water_balance
 from .plots import plot_all
@@ -15,7 +14,6 @@ __version__ = "0.1.0"
 
 # Define all importable names
 __all__ = [
-    "run",
     "run_water_balance",
     "UrbanWaterModel"
 ]

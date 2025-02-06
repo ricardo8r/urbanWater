@@ -3,16 +3,10 @@ from pathlib import Path
 import argparse
 
 import logging
-from concurrent.futures import ThreadPoolExecutor
-import concurrent.futures
-
 import pandas as pd
-from dynaconf import Dynaconf
 
-from duwcm.water_model import UrbanWaterModel
 from duwcm.read_data import read_data
-from duwcm.forcing import read_forcing, distribute_irrigation
-from duwcm.water_balance import run_water_balance
+from duwcm.forcing import read_forcing
 from duwcm.scenario_manager import ScenarioManager, run_scenario
 
 from duwcm.initialization import initialize_model
@@ -52,15 +46,15 @@ def main() -> None:
              forcing_data.index[-1].strftime('%Y-%m-%d'))
 
     # Filter selected cells if specified
-    #selected_cells = getattr(base_config.grid, 'selected_cells', None)
-    #if selected_cells is not None:
-    #    model_params = {k: v for k, v in model_params.items() if k in selected_cells}
-    #    flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
-    #    for col in flow_paths.columns:
-    #        if col != 'down':
-    #            flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
-    #    flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
-    #    logger.info("Filtered to %d selected cells", len(model_params))
+    selected_cells = getattr(base_config.grid, 'selected_cells', None)
+    if selected_cells is not None:
+        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
+        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
+        for col in flow_paths.columns:
+            if col != 'down':
+                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
+        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
+        logger.info("Filtered to %d selected cells", len(model_params))
 
 
     if args.scenarios:
@@ -84,7 +78,8 @@ def main() -> None:
             model_data=model_data,
             base_params=model_params,
             base_forcing=forcing_data,
-            n_jobs=args.n_jobs
+            n_jobs=args.n_jobs,
+            check=args.check
         )
 
         for case_name, results in all_results.items():
@@ -100,7 +95,7 @@ def main() -> None:
             'demand_data': demand_data,
             'reuse_settings': reuse_settings,
             'direction': base_config.grid.direction
-        })
+        }, args.check, None, True)
         results = run_scenario(scenario_data)
 
         out_base = Path(base_config.output.directory) / args.env
@@ -111,7 +106,6 @@ def main() -> None:
 
 def process_outputs(results, flow_paths, output_dir, config, args):
     """Process and save outputs based on arguments"""
-    scenario_name, scenario_results = results  # Unpack the tuple
 
     # Generate plots
     if args.plot:
@@ -121,10 +115,9 @@ def process_outputs(results, flow_paths, output_dir, config, args):
         for directory in [plot_dir, map_dir, flow_dir]:
             directory.mkdir(parents=True, exist_ok=True)
 
-        generate_plots(scenario_results['aggregated'],
-                     scenario_results['forcing'],
-                     plot_dir)
-        logger.info("Plots saved to %s", plot_dir)
+        generate_plots(results['aggregated'],
+                       results['forcing'],
+                       plot_dir)
 
         geo_dir = Path(config.geodata_directory)
         geo_file = Path(config.input_directory) / Path(config.files.geo)
@@ -143,36 +136,34 @@ def process_outputs(results, flow_paths, output_dir, config, args):
             background_shapefile = background_shapefile,
             feature_shapefiles = feature_shapefiles,
             geometry_geopackage = geo_file,
-            results = scenario_results,
+            results = results,
             output_dir = map_dir,
             flow_paths = flow_paths
         )
 
-        logger.info("Maps saved to %s", map_dir)
-
         # Generate chord diagrams
         generate_chord(
-            results=scenario_results,
+            results = results,
             output_dir=flow_dir
         )
         # Generate sankey diagrams
         generate_alluvial(
-            results=scenario_results,
+            results = results,
             output_dir=flow_dir
         )
         generate_graph(
-            results=scenario_results,
+            results = results,
             output_dir=flow_dir
         )
-        logger.info("Flow diagrams saved to %s", flow_dir)
+        logger.info("Plots saved to %s", output_dir)
 
     if args.gis:
         gis_dir = output_dir / 'gis'
         gis_dir.mkdir(parents=True, exist_ok=True)
         export_geodata(
             geometry_geopackage = geo_file,
-            results = scenario_results,
-            forcing = forcing_data,
+            results = results,
+            forcing = results['forcing'],
             output_dir = gis_dir,
             crs = config.output.crs,
             file_format = 'gpkg'
@@ -183,7 +174,7 @@ def process_outputs(results, flow_paths, output_dir, config, args):
     if args.check:
         check_dir = output_dir / 'validation'
         check_dir.mkdir(parents=True, exist_ok=True)
-        check_results(scenario_results, check_dir)
+        check_results(results, check_dir)
         logger.info("Validation reports saved to %s", check_dir)
         #print_summary(results)
 
@@ -193,7 +184,7 @@ def process_outputs(results, flow_paths, output_dir, config, args):
         with pd.HDFStore(save_dir, mode='w') as store:
             for module, df in results.items():
                 store.put(module, df, format='table', data_columns=True)
-            store.put('forcing', forcing_data, format='table', data_columns=True)
+            store.put('forcing', results['forcing'], format='table', data_columns=True)
 
         logger.info("Results and forcing data saved to %s", save_dir)
 
@@ -241,56 +232,3 @@ def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
 
 if __name__ == "__main__":
     main()
-
-def run(config: Dynaconf, check: bool = False) -> Tuple[Dict[str, pd.DataFrame],
-                                                        List[Dict[str, Any]], pd.DataFrame]:
-
-    # Read and process input data
-    model_params, reuse_settings, demand_data, soil_data, et_data, flow_paths = read_data(config)
-
-    # Filter for selected cells if specified
-    selected_cells = getattr(config.grid, 'selected_cells', None)
-    if selected_cells is not None:
-        # Filter model parameters
-        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
-
-        # Filter flow paths and reset upstream connections for non-selected cells
-        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
-        # Reset upstream connections that aren't in selected cells
-        for col in flow_paths.columns:
-            if col != 'down':  # Don't modify downstream connections
-                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
-
-        # Ensure downstream connections are valid
-        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
-
-    forcing_data = read_forcing(config)
-    logger.info("Number of grid cells: %d", len(model_params))
-    logger.info("Simulation period: %s to %s",
-            forcing_data.index[0].strftime('%Y-%m-%d'),
-            forcing_data.index[-1].strftime('%Y-%m-%d'))
-
-    # Apply scenario modifications here
-    scenario_factor = getattr(config.simulation, 'precipitation_factor', 1.0)
-    if scenario_factor != 1.0:
-        forcing_data['precipitation'] = forcing_data['precipitation'] * scenario_factor
-
-    # Indoor water use modification
-    indoor_factor = getattr(config.simulation, 'indoor_water_factor', 1.0)
-    if indoor_factor != 1.0:
-        for cell_id in model_params:
-            model_params[cell_id]['general']['indoor_water_use'] *= indoor_factor
-
-    distribute_irrigation(model_params)
-
-    # Initialize model
-    model = UrbanWaterModel(model_params, flow_paths, soil_data, et_data, demand_data,
-                            reuse_settings, config.grid.direction)
-
-    #logger.info("Initializing groundwater using %s method", config.simulation.init_method)
-    #initialize_model(model, forcing_data, config)
-
-    # Run simulation
-    results = run_water_balance(model, forcing_data, check=check)
-
-    return results, forcing_data, flow_paths

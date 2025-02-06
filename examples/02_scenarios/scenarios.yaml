@@ -4,7 +4,6 @@ scenarios:
     - default
     - dry 
     - wet
-    - urban_greening
 
   default:
     description: "Dry scenario with reduced precipitation"

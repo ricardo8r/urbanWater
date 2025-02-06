@@ -13,24 +13,28 @@ The simulation process includes:
 6. Updating model states
 """
 
-from typing import Dict, List
+from typing import Dict, List, Optional
 from dataclasses import fields
+
 import pandas as pd
-from tqdm import tqdm
+from tqdm.auto import trange
 
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
 from duwcm.flow_manager import Flow, MultiSourceFlow
 from duwcm.checker import track_validation_results
 
-
-def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool = False) -> Dict[str, pd.DataFrame]:
+def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, 
+                      check: bool = False, process_idx: Optional[int] = None,
+                      progress: Optional[bool] = True) -> Dict[str, pd.DataFrame]:
     """
     Run the full simulation for all timesteps with validation tracking.
 
     Args:
         model: UrbanWaterModel instance
         forcing: DataFrame with forcing data
+        check: Enable validation tracking
+        process_idx: Process index for parallel runs
 
     Returns:
         Dict containing:
@@ -38,6 +42,8 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
             - Aggregated results
             - Validation results for balance, flows, and storage
     """
+
+
     num_timesteps = len(forcing)
 
     # Initialize results as dictionaries of lists
@@ -73,7 +79,9 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, check: bool
             'storage': []
         }
 
-    for t in tqdm(range(1, num_timesteps), desc="Water balance", leave=False):
+    desc = f"Water balance (Scenario {process_idx})" if process_idx is not None else "Water balance"
+    iterator = trange(1, num_timesteps, desc=desc, position=process_idx, leave=progress)
+    for t in iterator:
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
 
