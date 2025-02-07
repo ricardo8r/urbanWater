@@ -11,7 +11,7 @@ from duwcm.scenario_manager import ScenarioManager, run_scenario
 
 from duwcm.initialization import initialize_model
 from duwcm.summary import print_summary
-from duwcm.functions import load_config
+from duwcm.functions import load_config, select_cells
 from duwcm.checker import generate_report
 from duwcm.plots import (export_geodata, generate_plots, generate_maps, generate_system_maps,
                          generate_chord, generate_alluvial, generate_graph)
@@ -29,7 +29,7 @@ def main() -> None:
     parser.add_argument("--check", action="store_true", help="Check water balance")
     parser.add_argument("--scenarios", action="store_true", help="Run multiple scenarios")
     parser.add_argument("--save", action="store_true", help="Save results")
-    parser.add_argument("--n-jobs", type=int, default=4, help="Number of parallel jobs")
+    parser.add_argument("--n-jobs", type=int, default=-1, help="Number of parallel jobs")
     args = parser.parse_args()
 
     logger.info("Distributed Urban Water Balance Model")
@@ -48,14 +48,8 @@ def main() -> None:
     # Filter selected cells if specified
     selected_cells = getattr(base_config.grid, 'selected_cells', None)
     if selected_cells is not None:
-        model_params = {k: v for k, v in model_params.items() if k in selected_cells}
-        flow_paths = flow_paths.loc[flow_paths.index.isin(selected_cells)].copy()
-        for col in flow_paths.columns:
-            if col != 'down':
-                flow_paths[col] = flow_paths[col].apply(lambda x: x if x in selected_cells else 0)
-        flow_paths['down'] = flow_paths['down'].apply(lambda x: x if x in selected_cells else 0)
+        model_params, flow_paths = select_cells(model_params, flow_paths, selected_cells)
         logger.info("Filtered to %d selected cells", len(model_params))
-
 
     if args.scenarios:
         # Load base and scenario configs separately
@@ -96,7 +90,7 @@ def main() -> None:
             'reuse_settings': reuse_settings,
             'direction': base_config.grid.direction
         }, args.check, None, True)
-        results = run_scenario(scenario_data)
+        _, results = run_scenario(scenario_data)
 
         out_base = Path(base_config.output.directory) / args.env
         process_outputs(results, flow_paths, out_base, base_config, args)

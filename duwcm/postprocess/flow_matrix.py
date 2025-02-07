@@ -15,6 +15,9 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], nodes: List[str]) ->
     """
     flow_matrix = pd.DataFrame(0, index=nodes, columns=nodes, dtype=float)
 
+    #print(results['demand'])
+    #print(results['raintank'])
+    #input('*')
     # Process component connections
     for (src_comp, source_flow), (trg_comp, target_flow) in UrbanWaterData.FLOW_CONNECTIONS.items():
         if src_comp in UrbanWaterData.COMPONENTS and trg_comp in UrbanWaterData.COMPONENTS:
@@ -74,6 +77,7 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], nodes: List[str]) ->
     # Remove any non-node columns/rows and NaN values
     valid_cols = [col for col in flow_matrix.columns if col in nodes]
     flow_matrix = flow_matrix.loc[valid_cols, valid_cols]
+#    print(flow_matrix)
 
     # Remove empty rows/columns
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)

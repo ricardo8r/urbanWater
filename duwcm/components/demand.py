@@ -92,6 +92,11 @@ class DemandClass:
             data.internal_flows.rt_to_irrigation.set_amount(allocation, 'L')
             data.rt_storage.set_amount(available, 'L')
 
+            data.flows.set_flow('from_raintank', sum(
+                getattr(data.internal_flows, f'rt_to_{use}').get_amount('L')
+                for use in ['kitchen', 'bathroom', 'laundry', 'toilet', 'irrigation']
+            ), 'L')
+
     def _process_graywater_generation(self) -> None:
         """Process graywater generation and allocation."""
         data = self.demand_data

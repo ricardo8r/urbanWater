@@ -359,7 +359,7 @@ class ComponentFlows:
             raise ValueError("Capacity unit must be 'm3', 'L', or 'mm'")
 
         value = WaterUnit.convert(capacity, unit, WaterUnit.CUBIC_METER,
-                                area=self._area if unit == 'mm' else 1)
+                                  area=self._area if unit == 'mm' else 1)
         self._type_capacities[flow_type] = value
 
     def get_capacity(self, flow_type: FlowProcess, unit: str = 'm3') -> float:
@@ -369,7 +369,7 @@ class ComponentFlows:
 
         value = self._type_capacities.get(flow_type, float('inf'))
         return WaterUnit.convert(value, WaterUnit.CUBIC_METER, unit,
-                               area=self._area if unit == 'mm' else 1)
+                                 area=self._area if unit == 'mm' else 1)
 
     def set_flow(self, name: str, value: float, unit: Optional[str] = None, additive: bool = False) -> float:
         """Set flow amount respecting type-specific capacity."""
@@ -557,7 +557,8 @@ class RainTankFlows(ComponentFlows):
             _process=FlowProcess.PRECIPITATION,
             _quality=WaterQuality.RAINWATER,
             _use=WaterUse.ENVIRONMENTAL,
-            _direction=FlowDirection.IN
+            _direction=FlowDirection.IN,
+            _volume_only=True
         ))
 
     evaporation: Flow = field(
@@ -565,7 +566,8 @@ class RainTankFlows(ComponentFlows):
             _process=FlowProcess.EVAPORATION,
             _quality=WaterQuality.RAINWATER,
             _use=WaterUse.ENVIRONMENTAL,
-            _direction=FlowDirection.OUT
+            _direction=FlowDirection.OUT,
+            _volume_only=True
         ))
 
     # Collection inputs
@@ -574,7 +576,8 @@ class RainTankFlows(ComponentFlows):
             _process=FlowProcess.RUNOFF,
             _quality=WaterQuality.RAINWATER,
             _use=WaterUse.DOMESTIC,
-            _direction=FlowDirection.IN
+            _direction=FlowDirection.IN,
+            _volume_only=True
         ))
 
     # Distribution/overflow outputs
@@ -583,7 +586,8 @@ class RainTankFlows(ComponentFlows):
             _process=FlowProcess.RUNOFF,
             _quality=WaterQuality.RAINWATER,
             _use=WaterUse.OVERFLOW,
-            _direction=FlowDirection.OUT
+            _direction=FlowDirection.OUT,
+            _volume_only=True
         ))
 
     to_stormwater: Flow = field(
@@ -591,7 +595,8 @@ class RainTankFlows(ComponentFlows):
             _process=FlowProcess.RUNOFF,
             _quality=WaterQuality.RAINWATER,
             _use=WaterUse.OVERFLOW,
-            _direction=FlowDirection.OUT
+            _direction=FlowDirection.OUT,
+            _volume_only=True
         ))
 
     # Supply outputs (linked to demand)
@@ -600,7 +605,8 @@ class RainTankFlows(ComponentFlows):
             _process=None,
             _quality=WaterQuality.RAINWATER,
             _use=WaterUse.DOMESTIC,
-            _direction=FlowDirection.OUT
+            _direction=FlowDirection.OUT,
+            _volume_only=True
         ))
 
 @dataclass

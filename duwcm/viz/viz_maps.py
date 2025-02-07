@@ -1,6 +1,5 @@
 from typing import Dict, List, Optional, Union
 from pathlib import Path
-from dynaconf import Dynaconf
 import pandas as pd
 import geopandas as gpd
 import plotly.graph_objects as go

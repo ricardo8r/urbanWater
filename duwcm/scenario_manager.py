@@ -50,10 +50,11 @@ class Scenario:
     evaporation_factor: float = 1.0
     irrigation_factor: float = 1.0
     open_water_factor: float = 1.0
-    indoor_water_factor: float = 1.0
+    demand_factor: float = 1.0
+    groundwater_factor: float = 1.0
 
     # Urban modifications
-    pervious_ratio: Optional[float] = None  # For urban greening/development
+    pervious_ratio: Optional[float] = None
     raintank_adoption: Optional[float] = None
 
     # Infrastructure thresholds
@@ -85,9 +86,9 @@ class Scenario:
         modified = deepcopy(params)
 
         # Modify indoor water use
-        if self.indoor_water_factor != 1.0:
+        if self.demand_factor != 1.0:
             for cell_id in modified:
-                modified[cell_id]['general']['indoor_water_use'] *= self.indoor_water_factor
+                modified[cell_id]['general']['indoor_water_use'] *= self.demand_factor
 
         # Apply urban transformations if specified
         if self.pervious_ratio or self.raintank_adoption:

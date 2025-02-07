@@ -82,12 +82,14 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
         if cell_id in altwater_data.index:
             altwater_params = altwater_data.loc[cell_id, :]
         else:
-            altwater_params = altwater_data.iloc[-1, :]
+            altwater_params = altwater_data.iloc[0, :]
+
 
         if urban_data.Blk_TIF[cell_id] < 0.05 * 0.01: #Total impervious fraction
             runoff_to_wastewater = 5
         else:
             runoff_to_wastewater = calibration_params.wastewater_inflow
+            _volume_only=True
 
         # Create parameter dictionary for each cell
         params[cell_id] = {
@@ -120,10 +122,10 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
             },
             'raintank': {
                 'is_open': altwater_params.RTop,
-                'area': altwater_params.ART,
-                'capacity': altwater_params.RTc,
-                'first_flush': altwater_params.RTff,
-                'initial_storage': altwater_params.RT0,
+                'area': roof_area, #altwater_params.ART,
+                'capacity': altwater_params.RTc * roof_area,
+                'first_flush': altwater_params.RTff * roof_area,
+                'initial_storage': 0.0,#altwater_params.RT0,
                 'effective_area': calibration_params.effective_raintank_area,
                 'install_ratio': altwater_params.pRT
             },
@@ -219,10 +221,12 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
     dbf = Dbf5(os.path.join(input_dir, files.urban_beats), codec='utf-8')
     urban_data = dbf.to_dataframe()
     urban_data.set_index('BlockID', inplace=True)
+    urban_data.fillna(0, inplace=True)
 
     altwater_data = pd.read_csv(os.path.join(input_dir, files.alternative_water))
     altwater_data.loc[len(altwater_data)] = np.zeros(len(altwater_data.columns))
     altwater_data.set_index('id', inplace=True)
+    altwater_data.fillna(0, inplace=True)
 
     groundwater_data = pd.read_csv(os.path.join(input_dir, files.groundwater)).set_index('BlockID')
     soil_data = pd.read_csv(os.path.join(input_dir, files.soil), header=0)
