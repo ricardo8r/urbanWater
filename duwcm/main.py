@@ -1,6 +1,7 @@
 from typing import Dict, List, Tuple, Any
 from pathlib import Path
 import argparse
+from joblib import Parallel, delayed
 
 import logging
 import pandas as pd
@@ -76,9 +77,16 @@ def main() -> None:
             check=args.check
         )
 
-        for case_name, results in all_results.items():
-            out_base = Path(base_config.output.directory) / case_name
-            process_outputs(results, flow_paths, out_base, base_config, args)
+        Parallel(n_jobs=args.n_jobs, backend='loky', verbose=0)(
+            delayed(process_outputs)(
+                results,
+                flow_paths,
+                Path(base_config.output.directory) / case_name,
+                base_config,
+                args
+            )
+            for case_name, results in all_results.items()
+        )
 
     else:
         # Single base case

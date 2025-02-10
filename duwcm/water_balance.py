@@ -116,6 +116,7 @@ def solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], f
         for component_name, component in cell_data.iter_components():
             component_class = model.classes[cell_id][component_name]
             component_class.solve(forcing)
+        for component_name, component in cell_data.iter_components():
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
 
