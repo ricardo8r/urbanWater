@@ -2,10 +2,9 @@ import ipywidgets as widgets
 import geopandas as gpd
 import plotly.graph_objects as go
 from IPython.display import display
-from duwcm.functions.cell_selector import select_cells
 from duwcm.viz import create_map_base
 
-def interactive_cell_selection(config, geo_file, background_file, flow_paths, model_params):
+def interactive_cell_selection(config, geo_file, background_file, flow_paths):
     """
     Creates an interactive cell selection tool with a selectable map and action buttons.
 
@@ -14,22 +13,22 @@ def interactive_cell_selection(config, geo_file, background_file, flow_paths, mo
     - geo_file: Path to the spatial grid file.
     - background_file: Path to the background shapefile.
     - flow_paths: Flow paths used in visualization.
-    - model_params: Dictionary containing model parameters.
 
     Returns:
-    - filtered_params: Dictionary of model parameters for selected cells.
-    - filtered_paths: DataFrame of flow paths for selected cells.
+    - selected_cells (set): A set of selected cell IDs.
     """
-    selected_cells = set(config.grid.get("selected_cells", []))  # Ensure persistence
+    selected_cells = set()
     selection_output = widgets.Output()
 
     def create_selectable_map():
         gdf_geometry = gpd.read_file(geo_file)
         fig = create_map_base(geo_file, background_file, flow_paths)
 
+        # Set proper customdata for selection
         fig.data[0].customdata = gdf_geometry['BlockID'].values
         fig.data[0].hovertemplate = "Cell ID: %{customdata}<extra></extra>"
 
+        # Proper styling for selection state
         fig.data[0].selected = {'marker': {'opacity': 1.0}}
         fig.data[0].unselected = {'marker': {'opacity': 0.3}}
 
@@ -44,25 +43,31 @@ def interactive_cell_selection(config, geo_file, background_file, flow_paths, mo
 
     def selection_fn(trace, points, _):
         if points.point_inds:
-            selected_cells.update(int(trace.customdata[i]) for i in points.point_inds)
+            selected_cells.clear()  # Clear previous selection
+            for i in points.point_inds:
+                cell_id = int(trace.customdata[i])
+                selected_cells.add(cell_id)
 
     def apply_selection(_):
         with selection_output:
             selection_output.clear_output()
             if selected_cells:
-                config.grid["selected_cells"] = sorted(selected_cells)  # Persist selection
+                config.grid['selected_cells'] = sorted(selected_cells)
                 print(f"Selected cells: {config.grid['selected_cells']}")
             else:
-                config.grid.pop("selected_cells", None)
-                print("No cells selected - using all cells")
+                if 'selected_cells' in config.grid:
+                    del config.grid['selected_cells']
+                print("No cells selected - will use all cells")
 
     def clear_selection(_):
         selected_cells.clear()
-        config.grid.pop("selected_cells", None)
+        if 'selected_cells' in config.grid:
+            del config.grid['selected_cells']
         with selection_output:
             selection_output.clear_output()
             print("Selection cleared")
 
+    # Create buttons
     apply_button = widgets.Button(description='Apply Selection', button_style='success')
     clear_button = widgets.Button(description='Clear Selection', button_style='danger')
 
@@ -79,4 +84,4 @@ def interactive_cell_selection(config, geo_file, background_file, flow_paths, mo
         selection_output
     ]))
 
-    return select_cells(model_params, flow_paths, config.grid.get("selected_cells", []))
+    return selected_cells
