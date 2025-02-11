@@ -11,11 +11,8 @@ from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 def create_flow_visualization(results: Dict[str, pd.DataFrame],
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:
     """Create flow visualization (Sankey or Chord) of water flows between components."""
-    nodes = (['imported', 'precipitation', 'irrigation'] +
-             UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation', 'runoff'])
 
-    flow_matrix = calculate_flow_matrix(results, nodes)
+    flow_matrix = calculate_flow_matrix(results)
 
     if viz_type == 'sankey':
         return _create_sankey_diagram(flow_matrix)

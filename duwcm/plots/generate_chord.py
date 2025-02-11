@@ -11,10 +11,7 @@ def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
     """Generate a chord diagram showing water flows between components."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    nodes = (['imported', 'precipitation', 'irrigation'] +
-             UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation', 'runoff'])
-    flow_matrix = calculate_flow_matrix(results, nodes)
+    flow_matrix = calculate_flow_matrix(results)
     flow_matrix[flow_matrix != 0] = np.log10(flow_matrix[flow_matrix != 0]) + 1e-10
 
     # Initialize from matrix

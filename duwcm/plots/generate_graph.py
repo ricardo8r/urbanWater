@@ -34,12 +34,7 @@ def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         'runoff': (0.75,0.8)
     }
 
-    # Get nodes and calculate flow matrix using utils function
-    nodes = (['imported', 'precipitation', 'irrigation'] +
-             UrbanWaterData.COMPONENTS +
-             ['seepage', 'baseflow', 'evaporation', 'runoff'])
-
-    flow_matrix = calculate_flow_matrix(results, nodes)
+    flow_matrix = calculate_flow_matrix(results)
 
     # Create directed graph
     graph = nx.DiGraph()

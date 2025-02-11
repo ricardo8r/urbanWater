@@ -1,9 +1,8 @@
 from typing import Dict, List, Tuple, Any
 from pathlib import Path
 import argparse
-from joblib import Parallel, delayed
-
 import logging
+from joblib import Parallel, delayed
 import pandas as pd
 
 from duwcm.read_data import read_data
@@ -14,8 +13,10 @@ from duwcm.initialization import initialize_model
 from duwcm.summary import print_summary
 from duwcm.functions import load_config, select_cells
 from duwcm.checker import generate_report
-from duwcm.plots import (export_geodata, generate_plots, generate_maps, generate_system_maps,
-                         generate_chord, generate_alluvial, generate_graph)
+from duwcm.plots import (export_geodata, generate_plots, generate_maps,
+                         generate_system_maps, generate_chord,
+                         generate_alluvial_total, generate_alluvial_reuse,
+                         generate_alluvial_cells, generate_graph)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -143,13 +144,8 @@ def process_outputs(results, flow_paths, output_dir, config, args):
             flow_paths = flow_paths
         )
 
-        # Generate chord diagrams
+        # Generate flow diagrams
         generate_chord(
-            results = results,
-            output_dir=flow_dir
-        )
-        # Generate sankey diagrams
-        generate_alluvial(
             results = results,
             output_dir=flow_dir
         )
@@ -157,6 +153,22 @@ def process_outputs(results, flow_paths, output_dir, config, args):
             results = results,
             output_dir=flow_dir
         )
+        generate_alluvial_total(
+            results = results,
+            output_dir=flow_dir
+        )
+        generate_alluvial_reuse(
+            results = results,
+            output_dir=flow_dir
+        )
+        selected_cells = getattr(config.grid, 'selected_cells', None)
+        if selected_cells is not None:
+            generate_alluvial_cells(
+                results = results,
+                flow_paths = flow_paths,
+                selected_cells = selected_cells,
+                output_dir=flow_dir
+            )
         logger.info("Plots saved to %s", output_dir)
 
     if args.gis:
