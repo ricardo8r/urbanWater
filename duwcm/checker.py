@@ -10,15 +10,18 @@ This module provides comprehensive validation and checking capabilities:
 from typing import Dict
 from pathlib import Path
 import pandas as pd
+import pint
+import pint_pandas
+
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import Storage
 
+ureg = pint.UnitRegistry()
+pint_pandas.PintType.ureg = ureg
 ZERO_THRESHOLD = 1e-10
 
 def check_balance(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFrame:
-    """
-    Track water balance for all cells and components at a given timestep.
-    """
+    """Track water balance for all cells and components at a given timestep."""
     balance_data = {
         'timestep': [],
         'cell': [],
@@ -37,17 +40,19 @@ def check_balance(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.Data
             balance_data['timestep'].append(current_date)
             balance_data['cell'].append(cell_id)
             balance_data['component'].append(comp_name)
-            balance_data['inflow'].append(values['inflow'])
-            balance_data['outflow'].append(values['outflow'])
-            balance_data['storage_change'].append(values['total_storage_change'])
-            balance_data['balance'].append(values['balance'])
+            balance_data['inflow'].append(values['inflow'].pint.to('meter^3').magnitude)
+            balance_data['outflow'].append(values['outflow'].pint.to('meter^3').magnitude)
+            balance_data['storage_change'].append(values['total_storage_change'].pint.to('meter^3').magnitude)
+            balance_data['balance'].append(values['balance'].pint.to('meter^3').magnitude)
 
-            if abs(values['balance']) < ZERO_THRESHOLD:
+            if abs(values['balance'].pint.to('meter^3').magnitude) < ZERO_THRESHOLD:
                 error_percent = 0
             else:
-                total_magnitude = abs(values['inflow']) + abs(values['outflow']) + abs(values['total_storage_change'])
+                total_magnitude = (abs(values['inflow'].pint.to('meter^3').magnitude) +
+                                 abs(values['outflow'].pint.to('meter^3').magnitude) +
+                                 abs(values['total_storage_change'].pint.to('meter^3').magnitude))
                 if total_magnitude > ZERO_THRESHOLD:
-                    error_percent = (values['balance'] / total_magnitude) * 100
+                    error_percent = (values['balance'].pint.to('meter^3').magnitude / total_magnitude) * 100
                 else:
                     error_percent = 0
             balance_data['balance_error_percent'].append(error_percent)
@@ -55,9 +60,7 @@ def check_balance(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.Data
     return pd.DataFrame(balance_data)
 
 def check_flows(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFrame:
-    """
-    Check flow connections between components for all cells at given timestep.
-    """
+    """Check flow connections between components for all cells at given timestep."""
     flow_data = {
         'timestep': [],
         'cell': [],
@@ -72,7 +75,6 @@ def check_flows(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFr
     }
 
     for cell_id, data in model.data.items():
-        # Use validate_flows from UrbanWaterData
         validation = data.validate_flows()
 
         # Process unlinked flows
@@ -101,6 +103,10 @@ def check_flows(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFr
             src_amount = float(src_detail.strip(')'))
             tgt_amount = float(tgt_detail.strip(')'))
 
+            # Convert to pint quantities in meter^3
+            src_amount = src_amount * ureg.meter**3
+            tgt_amount = tgt_amount * ureg.meter**3
+
             flow_data['timestep'].append(current_date)
             flow_data['cell'].append(cell_id)
             flow_data['issue_type'].append('mismatched')
@@ -109,29 +115,13 @@ def check_flows(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFr
             flow_data['target_component'].append(tgt_comp.split('.')[0])
             flow_data['source_flow'].append(src_comp.split('.')[1])
             flow_data['target_flow'].append(tgt_comp.split('.')[1])
-            flow_data['source_amount'].append(src_amount)
-            flow_data['target_amount'].append(tgt_amount)
+            flow_data['source_amount'].append(src_amount.pint.to('meter^3').magnitude)
+            flow_data['target_amount'].append(tgt_amount.pint.to('meter^3').magnitude)
 
     return pd.DataFrame(flow_data)
 
 def check_storage(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.DataFrame:
-    """
-    Check if any storage in any component violates physical constraints.
-
-    Args:
-        model: The water model instance
-        current_date: Current simulation timestep
-
-    Returns:
-        DataFrame with columns:
-        - timestep: When violation occurred
-        - cell: Which grid cell
-        - component: Which component (roof, groundwater etc)
-        - storage_name: Name of the storage variable
-        - issue_type: 'exceeds_capacity' or 'negative_storage'
-        - current_value: The problematic storage value
-        - capacity: The storage capacity (or 0 for negative checks)
-    """
+    """Check if any storage in any component violates physical constraints."""
     violations = []
 
     for cell_id, data in model.data.items():
@@ -140,30 +130,31 @@ def check_storage(model: UrbanWaterModel, current_date: pd.Timestamp) -> pd.Data
             # Check each storage attribute in the component
             for attr_name, attr_value in vars(component).items():
                 if isinstance(attr_value, Storage):
-                    current_storage = attr_value.get_amount('m3')
-                    capacity = attr_value.get_capacity('m3')
+                    current_storage = attr_value.get_amount('meter^3') * ureg.meter**3
+                    capacity = attr_value.get_capacity('meter^3') * ureg.meter**3
 
                     # Check if storage exceeds capacity
-                    if current_storage > capacity * 1.001:  # Small tolerance
+                    if (current_storage.pint.to('meter^3').magnitude >
+                            capacity.pint.to('meter^3').magnitude * 1.0001):
                         violations.append({
                             'timestep': current_date,
                             'cell': cell_id,
                             'component': comp_name,
                             'storage_name': attr_name,
                             'issue_type': 'exceeds_capacity',
-                            'current_value': current_storage,
-                            'capacity': capacity
+                            'current_value': current_storage.pint.to('meter^3').magnitude,
+                            'capacity': capacity.pint.to('meter^3').magnitude
                         })
 
                     # Check for negative storage
-                    if current_storage < 0:
+                    if current_storage.pint.to('meter^3').magnitude < 0:
                         violations.append({
                             'timestep': current_date,
                             'cell': cell_id,
                             'component': comp_name,
                             'storage_name': attr_name,
                             'issue_type': 'negative_storage',
-                            'current_value': current_storage,
+                            'current_value': current_storage.pint.to('meter^3').magnitude,
                             'capacity': 0
                         })
 

@@ -174,6 +174,7 @@ def process_outputs(results, flow_paths, output_dir, config, args):
     if args.gis:
         gis_dir = output_dir / 'gis'
         gis_dir.mkdir(parents=True, exist_ok=True)
+        geo_file = Path(config.input_directory) / Path(config.files.geo)
         export_geodata(
             geometry_geopackage = geo_file,
             results = results,

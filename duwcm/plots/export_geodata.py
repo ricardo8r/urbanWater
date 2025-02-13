@@ -31,7 +31,8 @@ def export_geodata(geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
         crs = gdf_geometry.crs
 
     local_results = extract_local_results(results)
-    units = local_results.attrs.get('units', {})
+    local_results = local_results.applymap(lambda x: x.magnitude if hasattr(x, 'magnitude') else x)
+
     statistics_file = output_dir / f'statistics_results.{file_format}'
     temporal_file = output_dir / f'temporal_results.{file_format}'
 

@@ -4,7 +4,6 @@ import numpy as np
 import pandas as pd
 from pycirclize import Circos
 
-from duwcm.data_structures import UrbanWaterData
 from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
 def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:

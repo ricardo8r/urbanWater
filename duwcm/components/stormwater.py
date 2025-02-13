@@ -62,7 +62,8 @@ class StormwaterClass:
 
         demand_overflow = data.flows.get_flow('from_demand', 'm3')
 
-        total_runoff = raintank_runoff + roof_runoff + impervious_runoff + pervious_runoff + upstream_inflow + demand_overflow
+        total_runoff = (raintank_runoff + roof_runoff + impervious_runoff +
+                        pervious_runoff + upstream_inflow + demand_overflow)
         combined_sewer_inflow = self.wastewater_runoff_ratio * total_runoff
         runoff = total_runoff - combined_sewer_inflow
 
@@ -78,14 +79,14 @@ class StormwaterClass:
         first_flush = min(runoff, data.first_flush)
         inflow = runoff - first_flush
         if data.is_open:
-            data.flows.set_flow('precipitation', forcing['precipitation'], 'mm')
+            data.flows.set_flow('precipitation', forcing['precipitation'] * data.area, 'L')
             inflow += data.flows.get_flow('precipitation', 'm3')
 
         # Calculate storage and evaporation
         current_storage = min(data.storage.get_capacity('m3'), max(0.0, data.storage.get_previous('m3') + inflow))
         data.flows.set_flow('evaporation', 0)
         if data.is_open:
-            data.flows.set_flow('evaporation', forcing['potential_evaporation'], 'mm')
+            data.flows.set_flow('evaporation', forcing['potential_evaporation'] * data.area, 'L')
             data.flows.set_flow('evaporation', min(data.flows.get_flow('evaporation', 'm3'), current_storage), 'm3')
 
         # Calculate final storage and overflow

@@ -42,12 +42,12 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
 
     results.index = forcing.index
     plot_data = pd.DataFrame({
-        'Precipitation': forcing['precipitation'],
-        'PotentialEvaporation': forcing['potential_evaporation'],
-        'Evapotranspiration': (results['evaporation'] + results['transpiration']),
-        'Runoff': results['stormwater'],
-        'Sewerage': results['sewerage'],
-        'Baseflow': results['baseflow']
+        'Precipitation': forcing['precipitation'].pint.to('millimeter').pint.magnitude,
+        'PotentialEvaporation': forcing['potential_evaporation'].pint.to('millimeter').pint.magnitude,
+        'Evapotranspiration': (results['evaporation'] + results['transpiration']).pint.to('millimeter').pint.magnitude,
+        'Runoff': results['stormwater'].pint.to('meter^3').pint.magnitude,
+        'Sewerage': results['sewerage'].pint.to('meter^3').pint.magnitude,
+        'Baseflow': results['baseflow'].pint.to('meter^3').pint.magnitude
     })
 
     plot_configs = [

@@ -1,8 +1,11 @@
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 from dynaconf import Dynaconf
+
 import numpy as np
 import pandas as pd
+import pint
+import pint_pandas
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -11,6 +14,9 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
 
 from duwcm.postprocess import extract_local_results
+
+ureg = pint.UnitRegistry()
+pint_pandas.PintType.ureg = ureg
 
 def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Path],
                          geometry_geopackage: Path, flow_paths: pd.DataFrame,
@@ -137,9 +143,6 @@ def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Pa
 def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
                   geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
                   output_dir: Path, flow_paths: pd.DataFrame) -> None:
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
-
     variables_to_plot = {
         'evapotranspiration': ('Greens', None),
         'imported_water': ('YlOrRd', None),
@@ -151,9 +154,7 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
         'vadose_moisture': ('YlGnBu', None)
     }
 
-    # Get local results with units
     local_results = extract_local_results(results)
-    units = local_results.attrs.get('units', {})
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
         if variable_name == 'vadose_moisture':
@@ -162,7 +163,6 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
             data = local_results['groundwater'].groupby(level='cell').last()
         else:
             data = local_results[variable_name].groupby(level='cell').sum()
-        data.attrs['unit'] = units.get(variable_name, 'm3')
 
         output_path = output_dir / f'{variable_name}_map.png'
         plot_variable(background_shapefile, feature_shapefiles, geometry_geopackage,
@@ -183,15 +183,13 @@ def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.Dat
     cmap_obj = plt.get_cmap(cmap)
 
     def get_line_width(value):
-        # Scale line width between 0.5 and 3 based on absolute value
         abs_min, abs_max = min(abs(vmin), abs(vmax)), max(abs(vmin), abs(vmax))
         return np.interp(abs(value), [abs_min, abs_max], [1.5, 5])
 
     cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
 
-    # Only plot flows for cells that have data
     for cell_id, row in cell_data.items():
-        if pd.notna(row[variable_name]):  # Only process cells with data
+        if pd.notna(row[variable_name]):
             downstream_id = flow_paths.loc[cell_id, 'down']
             if downstream_id in cell_data:
                 start_point = row.geometry.centroid
@@ -210,11 +208,11 @@ def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.Dat
 def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
                   geometry_geopackage: Path, data: pd.Series, variable_name: str,
                   output_path: Path, cmap: str, flow_paths: Optional[pd.DataFrame] = None) -> None:
-    gdf_geometry = gpd.read_file(geometry_geopackage)
 
-    # Remove 0 values and add data to the geometry GeoDataFrame
-    data = data[abs(data) > 0]
-    gdf_geometry[variable_name] = gdf_geometry['BlockID'].map(data)
+    data_values = data.pint.magnitude
+    gdf_geometry = gpd.read_file(geometry_geopackage)
+    gdf_geometry[variable_name] = gdf_geometry['BlockID'].map(data_values)
+
     gdf_background = gpd.read_file(background_shapefile)
     if gdf_background.crs != gdf_geometry.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
@@ -222,24 +220,12 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     _, ax = plt.subplots(figsize=(12, 10))
     plot_background_map(ax, gdf_background, feature_shapefiles, gdf_geometry)
 
-    # Get unit from data attributes if available
-    unit = data.attrs.get('unit', 'm3')
-    unit_label = {
-        'm3': r'm³',
-        'mm': 'mm',
-        'm': 'm',
-        'L': 'L'
-    }.get(unit, unit)
-
-    # Plot data
     if variable_name in ['stormwater_runoff', 'sewerage_discharge']:
         sm = plot_linear(ax, gdf_geometry, flow_paths, variable_name, cmap)
     else:
         values = gdf_geometry[variable_name].dropna()
         if not values.empty:
-            # Determine if we should reverse the colormap based on data
-            mean_value = values.mean()
-            if mean_value < 0:
+            if values.mean() < 0:  # Now working with float values
                 cmap = cmap + "_r"
 
             vmin = values.min()
@@ -247,7 +233,6 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
             sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
             sm.set_array([])
 
-            # Plot only cells with data
             gdf_geometry[gdf_geometry[variable_name].notnull()].plot(
                 column=variable_name,
                 ax=ax,
@@ -260,24 +245,22 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     ax.set_title(f'{variable_name.replace("_", " ").capitalize()}')
     ax.axis('off')
 
+    # Format label using the pint unit
+    unit = data.pint.units
+    if unit == ureg.meter**3:
+        label = fr'{variable_name.replace("_", " ").capitalize()} [m³/yr]'
+    else:
+        label = fr'{variable_name.replace("_", " ").capitalize()} [{unit:~P}]'
+
     divider = make_axes_locatable(ax)
     cax = divider.append_axes("right", size="3%", pad=0.1)
     cbar = plt.colorbar(sm, cax=cax)
-
-    # Format with scientific notation
     cbar.formatter.set_powerlimits((0, 0))
     cbar.ax.yaxis.set_offset_position('right')
     cbar.ax.yaxis.offsetText.set_fontsize(8)
     cbar.ax.yaxis.offsetText.set_position((0, 1.05))
     cbar.update_ticks()
-
-    # Set label with proper unit
-    if unit in ['m3', 'L']:
-        cbar.set_label(fr'{variable_name.replace("_", " ").capitalize()} [{unit_label}/yr]',
-                       rotation=270, labelpad=15)
-    else:
-        cbar.set_label(fr'{variable_name.replace("_", " ").capitalize()} [{unit_label}]',
-                       rotation=270, labelpad=15)
+    cbar.set_label(label, rotation=270, labelpad=15)
 
     plt.tight_layout()
     plt.savefig(output_path, dpi=300, bbox_inches='tight')

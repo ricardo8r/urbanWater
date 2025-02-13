@@ -17,12 +17,18 @@ from typing import Dict, List, Optional
 from dataclasses import fields
 
 import pandas as pd
+import pint
+import pint_pandas
+from pint import UnitRegistry
 from tqdm.auto import trange
 
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
 from duwcm.flow_manager import Flow, MultiSourceFlow
 from duwcm.checker import track_validation_results
+
+ureg = pint.UnitRegistry()
+pint_pandas.PintType.ureg = ureg
 
 def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, 
                       check: bool = False, process_idx: Optional[int] = None,
@@ -99,7 +105,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
 
         model.update_states()
 
-    df_results = results_to_dataframes(results, results_agg)
+    df_results = results_to_dataframes(results, results_agg, forcing)
 
     # Process validation results if validation was enabled
     if check and validation_tracking:
@@ -119,6 +125,43 @@ def solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], f
         for component_name, component in cell_data.iter_components():
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
+
+def _collect_component_results(cell_id: int, date: pd.Timestamp, component: object) -> dict:
+    """Collect flattened results from a component."""
+    results = {
+        'cell': cell_id,
+        'date': date
+    }
+
+    # Add attributes
+    for attr_name, attr_value in vars(component).items():
+        if not attr_name.startswith('_'):
+            if attr_name == 'area':
+                results['area'] = attr_value
+            elif isinstance(attr_value, Storage):
+                # Special handling for groundwater levels and vadose moisture
+                if attr_name in ['water_level', 'surface_water_level']:
+                    results[attr_name] = attr_value.get_amount('m')
+                elif attr_name == 'moisture':
+                    results[attr_name] = attr_value.get_amount('mm')
+                else:
+                    results[attr_name] = attr_value.get_amount('m3')
+            #elif isinstance(attr_value, (int, float, bool, str)):
+            #    results[attr_name] = attr_value
+
+    if hasattr(component, 'flows'):
+        flows = component.flows
+        for flow_name, flow in vars(flows).items():
+            if isinstance(flow, (Flow, MultiSourceFlow)):
+                results[flow_name] = flow.get_amount('m3')
+
+    if hasattr(component, 'internal_flows'):
+        internal_flows = component.internal_flows
+        for flow_name, flow in vars(internal_flows).items():
+            if isinstance(flow, (Flow, MultiSourceFlow)):
+                results[flow_name] = flow.get_amount('m3')
+
+    return results
 
 def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current_date: pd.Timestamp) -> None:
     """Aggregate results across all cells for the current timestep."""
@@ -174,80 +217,82 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
     results_agg.append(aggregated)
 
 def results_to_dataframes(results_var: Dict[str, List[Dict]],
-                         results_agg: List[Dict]) -> Dict[str, pd.DataFrame]:
+                          results_agg: List[Dict],
+                          forcing: pd.DataFrame) -> Dict[str, pd.DataFrame]:
     """Convert results dictionaries to DataFrames."""
+
     dataframe_results = {}
 
-    # Define units for different column types
-    flow_units = {
-        'water_level': 'm',
-        'surface_water_level': 'm',
-        'moisture': 'mm',
+    forcing_units = {
+        'precipitation': 'millimeter',
+        'potential_evaporation': 'millimeter',
+        'open_water_level': 'meter',
+        'pervious_irrigation': 'millimeter',
+        'impervious_irrigation': 'millimeter',
+        'roof_irrigation': 'millimeter'
     }
 
-    # Convert component results to DataFrames
+    # Add this after handling aggregated results but before returning
+    forcing_df = forcing.copy()
+    for col, unit in forcing_units.items():
+        if col in forcing_df.columns:
+            forcing_df[col] = forcing_df[col].astype(f"pint[{unit}]")
+    dataframe_results['forcing'] = forcing_df
+
+    flow_units = {
+        'water_level': 'meter',
+        'surface_water_level': 'meter', 
+        'moisture': 'millimeter',
+        'area': 'meter^2',
+        'storage': 'meter^3',
+        'imported_water': 'meter^3',
+        'seepage': 'meter^3',
+        'baseflow': 'meter^3',
+        'to_': 'meter^3',
+        'from_': 'meter^3',
+        'precipitation': 'meter^3',
+        'evaporation': 'meter^3',
+        'transpiration': 'meter^3',
+        'irrigation': 'meter^3',
+    }
+
     for key, values in results_var.items():
         df = pd.DataFrame(values)
         if not df.empty:
             df = df.set_index(['cell', 'date'])
 
-            # Set units for each column
+            # Add units to each column using pint-pandas
             for col in df.columns:
-                if col in flow_units:
-                    df[col].attrs['unit'] = flow_units[col]
-                elif col == 'area':
-                    df[col].attrs['unit'] = 'm2'
+                if col == 'area':
+                    df[col] = df[col].astype(f"pint[{flow_units['area']}]")
                 elif 'storage' in col:
-                    df[col].attrs['unit'] = 'm3'
+                    df[col] = df[col].astype(f"pint[{flow_units['storage']}]")
                 elif any(col.startswith(prefix) for prefix in ['to_', 'from_']):
-                    df[col].attrs['unit'] = 'm3'
+                    df[col] = df[col].astype(f"pint[{flow_units['to_']}]")
+                elif col in flow_units:
+                    df[col] = df[col].astype(f"pint[{flow_units[col]}]")
 
             dataframe_results[key] = df
 
-    # Create aggregated results DataFrame
+    # Create aggregated results DataFrame with units
     df_agg = pd.DataFrame(results_agg)
     df_agg = df_agg.set_index('date')
 
-    # Set units for aggregated columns
-    for col in df_agg.columns:
-        df_agg[col].attrs['unit'] = 'm3'
+    agg_units = {
+        'stormwater': 'meter^3',
+        'sewerage': 'meter^3',
+        'baseflow': 'meter^3',
+        'total_seepage': 'meter^3',
+        'imported_water': 'meter^3',
+        'transpiration': 'millimeter',
+        'evaporation': 'millimeter'
+    }
+
+    for col, unit in agg_units.items():
+        if col in df_agg.columns:
+            df_agg[col] = df_agg[col].astype(f"pint[{unit}]")
 
     df_agg.attrs['total_area'] = dataframe_results['groundwater']['area'].iloc[0].sum()
     dataframe_results['aggregated'] = df_agg
 
     return dataframe_results
-
-def _collect_component_results(cell_id: int, date: pd.Timestamp, component: object) -> dict:
-    """Collect flattened results from a component."""
-    results = {
-        'cell': cell_id,
-        'date': date
-    }
-
-    # Add attributes
-    for attr_name, attr_value in vars(component).items():
-        if not attr_name.startswith('_'):
-            if isinstance(attr_value, (int, float, bool, str)):
-                results[attr_name] = attr_value
-            elif isinstance(attr_value, Storage):
-                # Special handling for groundwater levels and vadose moisture
-                if attr_name in ['water_level', 'surface_water_level']:
-                    results[attr_name] = attr_value.get_amount('m')
-                elif attr_name == 'moisture':
-                    results[attr_name] = attr_value.get_amount('mm')
-                else:
-                    results[attr_name] = attr_value.get_amount('m3')
-
-    if hasattr(component, 'flows'):
-        flows = component.flows
-        for flow_name, flow in vars(flows).items():
-            if isinstance(flow, (Flow, MultiSourceFlow)):
-                results[flow_name] = flow.get_amount('m3')
-
-    if hasattr(component, 'internal_flows'):
-        internal_flows = component.internal_flows
-        for flow_name, flow in vars(internal_flows).items():
-            if isinstance(flow, (Flow, MultiSourceFlow)):
-                results[flow_name] = flow.get_amount('m3')
-
-    return results

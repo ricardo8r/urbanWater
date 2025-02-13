@@ -226,5 +226,4 @@ def run_scenario(scenario_data):
         direction=model_data['direction']
     )
     results = run_water_balance(model, modified_forcing, check, idx, progress)
-    results['forcing'] = modified_forcing
     return name, results
