@@ -194,12 +194,22 @@ def process_outputs(results, flow_paths, output_dir, config, args):
         #print_summary(results)
 
     if args.save:
+        output_dir.mkdir(parents=True, exist_ok=True)
         save_dir = output_dir / 'simulation_results.h5'
 
         with pd.HDFStore(save_dir, mode='w') as store:
             for module, df in results.items():
-                store.put(module, df, format='table', data_columns=True)
-            store.put('forcing', results['forcing'], format='table', data_columns=True)
+                units_dict = {col: str(df[col].pint.units) for col in df.columns if hasattr(df[col], "pint")}
+
+                # Convert Pint DataFrame to a regular Pandas DataFrame
+                df_regular = df.copy()
+                for col in units_dict.keys():
+                    df_regular[col] = df[col].pint.magnitude
+
+                # Save DataFrame to HDF5
+                store.put(module, df_regular, format='table', data_columns=True)
+                if units_dict:
+                    store.get_storer(module).attrs.units = units_dict
 
         logger.info("Results and forcing data saved to %s", save_dir)
 

@@ -76,11 +76,16 @@ class UrbanWaterModel:
         # Initialize submodels
         self._init_submodels()
 
-        self.sewerage_cells = [i for i, p in self.params.items() if p['sewerage']['capacity'] > 0]
-        self.stormwater_cells = [i for i, p in self.params.items() if p['stormwater']['capacity'] > 0]
+        # Filter cells for sewerage and stormwater based on selected cells
+        selected_cells = set(params.keys())
+        self.sewerage_cells = [i for i in self.params.keys()
+                               if i in selected_cells and params[i]['sewerage']['capacity'] > 0]
+        self.stormwater_cells = [i for i in self.params.keys()
+                                 if i in selected_cells and params[i]['stormwater']['capacity'] > 0]
 
-        # Calculate the order of cells
-        self.cell_order = find_order(self.path, direction)
+        # Calculate the order of cells, filtering for selected cells
+        self.cell_order = [cell for cell in find_order(self.path, direction) if cell in selected_cells]
+
 
     def _init_submodels(self) -> Dict[int, Dict[str, Any]]:
         """Initialize submodels for each grid cell."""
@@ -108,8 +113,8 @@ class UrbanWaterModel:
 
         # Connect upstream flows for both stormwater and sewerage
         for cell_id in self.params:
-            for up in self.path.loc[cell_id].iloc[1:]:
-                if up != 0:
+            for up in self.path.loc[cell_id].iloc[1:]:  # Start from u1 onwards
+                if up != 0 and up in self.params:  # Check if upstream cell exists and is in selected cells
                     # Link stormwater flows
                     self.data[cell_id].stormwater.flows.from_upstream.add_source(
                         self.data[up].stormwater.flows.to_downstream

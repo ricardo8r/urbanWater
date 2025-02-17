@@ -792,7 +792,6 @@ class GroundwaterFlows(ComponentFlows):
 
     Tracks:
     - Natural inflows from vadose zone percolation
-    - Infiltration from surfaces (impervious)
     - Leakage inputs from infrastructure
     - Baseflow to surface water
     - Deep seepage losses

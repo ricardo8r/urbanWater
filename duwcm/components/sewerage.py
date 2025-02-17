@@ -46,6 +46,7 @@ class SewerageClass:
             to_downstream: sewerage sewer discharge [m³]
         """
         data = self.sewerage_data
+
         total_inflow = (data.flows.get_flow('from_demand', 'm3') +
                         data.flows.get_flow('from_groundwater', 'm3') +
                         data.flows.get_flow('from_stormwater', 'm3') +

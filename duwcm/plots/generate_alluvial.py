@@ -31,7 +31,7 @@ def generate_alluvial_cells(results: Dict[str, pd.DataFrame], flow_paths: pd.Dat
     """Generate an alluvial diagram for each cell."""
     output_dir.mkdir(parents=True, exist_ok=True)
     for cell_id in selected_cells:
-        flow_matrix = calculate_flow_matrix(results)
+        flow_matrix = calculate_flow_matrix(results, cell_id)
         fig = generate_alluvial(flow_matrix)
         output_file = output_dir / f'cell_{cell_id}_internal.png'
         fig.write_image(output_file, scale=2)

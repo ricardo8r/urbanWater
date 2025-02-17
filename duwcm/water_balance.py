@@ -58,11 +58,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
 
     # Add initial conditions to results at t=0
     initial_date = forcing.index[0] - pd.Timedelta(days=1)
-    for cell_id, data in model.data.items():
-        for component_name, component in data.iter_components():
-            results[component_name].append(
-                _collect_component_results(cell_id, initial_date, component)
-            )
 
     # Initialize aggregated results for t=0
     results_agg.append({
@@ -119,9 +114,11 @@ def solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], f
     """Solve the water balance for a single timestep for all cells in the specified order."""
     for cell_id in model.cell_order:
         cell_data = model.data[cell_id]
+
         for component_name, component in cell_data.iter_components():
             component_class = model.classes[cell_id][component_name]
             component_class.solve(forcing)
+
         for component_name, component in cell_data.iter_components():
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)

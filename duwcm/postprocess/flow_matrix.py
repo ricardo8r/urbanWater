@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
 import pint
@@ -11,7 +11,7 @@ ureg = UnitRegistry()
 pint_pandas.PintType.ureg = ureg  # Ensures pandas uses the same registry globally
 
 
-def calculate_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+def calculate_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: Optional[float] = None) -> pd.DataFrame:
     """
     Calculate flow matrix between model components.
 
@@ -22,6 +22,15 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Matrix of flows between components
     """
+    if cell_id:
+        filtered_results = {
+            component: df.xs(cell_id, level='cell').copy()
+            for component, df in results.items()
+            if isinstance(df.index, pd.MultiIndex) and 'cell' in df.index.names
+        }
+    else:
+        filtered_results = results
+
     nodes = (['imported', 'precipitation', 'irrigation'] +
              UrbanWaterData.COMPONENTS +
              ['seepage', 'baseflow', 'evaporation', 'runoff'])
@@ -31,51 +40,51 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
     # Process component connections
     for (src_comp, source_flow), (trg_comp, target_flow) in UrbanWaterData.FLOW_CONNECTIONS.items():
         if src_comp in UrbanWaterData.COMPONENTS and trg_comp in UrbanWaterData.COMPONENTS:
-            flow_value = results[src_comp][source_flow].pint.magnitude.sum()
+            flow_value = filtered_results[src_comp][source_flow].pint.magnitude.sum()
             flow_matrix.loc[src_comp, trg_comp] = float(flow_value)
 
     # Add precipitation flows
     for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
-        if comp in results:
-            flow_value = results[comp]['precipitation'].pint.magnitude.sum()
+        if comp in filtered_results:
+            flow_value = filtered_results[comp]['precipitation'].pint.magnitude.sum()
             flow_matrix.loc['precipitation', comp] = float(flow_value)
 
     # Add evaporation flows
     for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
-        if comp in results:
-            flow_value = results[comp]['evaporation'].pint.magnitude.sum()
+        if comp in filtered_results:
+            flow_value = filtered_results[comp]['evaporation'].pint.magnitude.sum()
             flow_matrix.loc[comp, 'evaporation'] = float(flow_value)
 
     # Add transpiration
-    if 'vadose' in results:
-        flow_value = results['vadose']['transpiration'].pint.magnitude.sum()
+    if 'vadose' in filtered_results:
+        flow_value = filtered_results['vadose']['transpiration'].pint.magnitude.sum()
         flow_matrix.loc['vadose', 'evaporation'] = float(flow_value)
 
     # Add imported water flows
-    if 'demand' in results:
-        flow_value = results['demand']['imported_water'].pint.magnitude.sum()
+    if 'demand' in filtered_results:
+        flow_value = filtered_results['demand']['imported_water'].pint.magnitude.sum()
         flow_matrix.loc['imported', 'demand'] = float(flow_value)
 
     # Add baseflow and seepage
-    if 'groundwater' in results:
-        flow_value = results['groundwater']['seepage'].pint.magnitude.sum()
+    if 'groundwater' in filtered_results:
+        flow_value = filtered_results['groundwater']['seepage'].pint.magnitude.sum()
         if flow_value > 0:
             flow_matrix.loc['groundwater', 'seepage'] = float(flow_value)
         elif flow_value < 0:
             flow_matrix.loc['seepage', 'groundwater'] = abs(float(flow_value))
 
-        flow_value = results['groundwater']['baseflow'].pint.magnitude.sum()
+        flow_value = filtered_results['groundwater']['baseflow'].pint.magnitude.sum()
         if flow_value > 0:
             flow_matrix.loc['groundwater', 'baseflow'] = float(flow_value)
         elif flow_value < 0:
             flow_matrix.loc['baseflow', 'groundwater'] = abs(float(flow_value))
 
-    if 'stormwater' in results:
-        flow_value = results['stormwater']['to_downstream'].pint.magnitude.sum()
+    if 'stormwater' in filtered_results:
+        flow_value = filtered_results['stormwater']['to_downstream'].pint.magnitude.sum()
         flow_matrix.loc['stormwater', 'runoff'] = float(flow_value)
 
-    if 'sewerage' in results:
-        flow_value = results['sewerage']['to_downstream'].pint.magnitude.sum()
+    if 'sewerage' in filtered_results:
+        flow_value = filtered_results['sewerage']['to_downstream'].pint.magnitude.sum()
         flow_matrix.loc['sewerage', 'discharge'] = float(flow_value)
 
     # Remove any non-node columns/rows and NaN values
@@ -84,8 +93,8 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFrame:
 
     # Remove empty rows/columns
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
-
-    flow_matrix.to_csv('internal.csv', sep='\t', encoding='utf-8')
+    if cell_id==494:
+        filtered_results['sewerage'].pint.dequantify().to_csv('internal.csv', sep='\t', encoding='utf-8')
     return flow_matrix.loc[non_zero_mask, non_zero_mask]
 
 
@@ -148,8 +157,15 @@ def calculate_reuse_flow_matrix(results: Dict[str, pd.DataFrame]) -> pd.DataFram
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
     return flow_matrix.loc[non_zero_mask, non_zero_mask]
 
-def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, flow_paths: pd.DataFrame) -> pd.DataFrame:
+def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int,
+                               flow_paths: pd.DataFrame) -> pd.DataFrame:
     """Track flows between cells and external inputs/outputs."""
+    filtered_results = {
+        component: df.xs(cell_id, level='cell').copy()
+        for component, df in results.items()
+        if isinstance(df.index, pd.MultiIndex) and 'cell' in df.index.names
+    }
+
     upstream_cells = [col for col in flow_paths.columns if col.startswith('u')]
     upstream_ids = flow_paths.loc[cell_id, upstream_cells]
     upstream_ids = upstream_ids[upstream_ids != 0]
@@ -164,7 +180,7 @@ def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, f
 
     flow_terms = []
     for c in cells:
-        if c != cell_id:  # Only add flow terms for other cells
+        if c != cell_id:
             flow_terms.extend([f'sewerage_cell_{c}', f'runoff_cell_{c}'])
 
     terms = ([f'cell_{cell_id}'] +
@@ -179,8 +195,8 @@ def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, f
     # Track precipitation
     total_precip = 0
     for comp in ['roof', 'raintank', 'impervious', 'pervious', 'stormwater']:
-        if comp in results:
-            flow_value = results[comp]['precipitation'].pint.magnitude.sum()
+        if comp in filtered_results:
+            flow_value = filtered_results[comp]['precipitation'].pint.magnitude.sum()
             total_precip += flow_value
 
     flow_matrix.loc['precipitation', f'cell_{cell_id}'] = total_precip
@@ -188,31 +204,31 @@ def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, f
     # Track evaporation
     total_evap = 0
     for comp in ['roof', 'raintank', 'impervious', 'pervious', 'stormwater']:
-        if comp in results:
-            flow_value = results[comp]['evaporation'].pint.magnitude.sum()
+        if comp in filtered_results:
+            flow_value = filtered_results[comp]['evaporation'].pint.magnitude.sum()
             total_evap += flow_value
 
     # Add transpiration to evaporation
-    if 'vadose' in results:
-        flow_value = results['vadose']['transpiration'].pint.magnitude.sum()
+    if 'vadose' in filtered_results:
+        flow_value = filtered_results['vadose']['transpiration'].pint.magnitude.sum()
         total_evap += flow_value
 
     flow_matrix.loc[f'cell_{cell_id}', 'evaporation'] = total_evap
 
     # Add imported water flows
-    if 'demand' in results:
-        flow_value = results['demand']['imported_water'].pint.magnitude.sum()
+    if 'demand' in filtered_results:
+        flow_value = filtered_results['demand']['imported_water'].pint.magnitude.sum()
         flow_matrix.loc['imported', f'cell_{cell_id}'] = flow_value
 
     # Add baseflow and seepage
-    if 'groundwater' in results:
-        flow_value = results['groundwater']['seepage'].pint.magnitude.sum()
+    if 'groundwater' in filtered_results:
+        flow_value = filtered_results['groundwater']['seepage'].pint.magnitude.sum()
         if flow_value > 0:
             flow_matrix.loc[f'cell_{cell_id}', 'seepage'] = float(flow_value)
         elif flow_value < 0:
             flow_matrix.loc['seepage', f'cell_{cell_id}'] = abs(float(flow_value))
 
-        flow_value = results['groundwater']['baseflow'].pint.magnitude.sum()
+        flow_value = filtered_results['groundwater']['baseflow'].pint.magnitude.sum()
         if flow_value > 0:
             flow_matrix.loc[f'cell_{cell_id}', 'baseflow'] = float(flow_value)
         elif flow_value < 0:
@@ -220,28 +236,34 @@ def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, f
 
     # Track upstream inflows
     for up_id in upstream_ids:
-        if 'sewerage' in results:
-            flow_value = results['sewerage']['from_upstream'].pint.magnitude.sum()
+        up_results = {
+            component: df.xs(up_id, level='cell').copy()
+            for component, df in results.items()
+            if isinstance(df.index, pd.MultiIndex) and 'cell' in df.index.names
+        }
+        if 'sewerage' in up_results:
+            flow_value = up_results['sewerage']['to_downstream'].pint.magnitude.sum()
             flow_matrix.loc[f'sewerage_cell_{up_id}', f'cell_{cell_id}'] = flow_value
-        if 'stormwater' in results:
-            flow_value = results['stormwater']['from_upstream'].pint.magnitude.sum()
+        if 'stormwater' in up_results:
+            flow_value = up_results['stormwater']['to_downstream'].pint.magnitude.sum()
             flow_matrix.loc[f'runoff_cell_{up_id}', f'cell_{cell_id}'] = flow_value
 
     # Track downstream outflows
     if downstream_id:
-        if 'sewerage' in results:
-            flow_value = results['sewerage']['to_downstream'].pint.magnitude.sum()
+        if 'sewerage' in filtered_results:
+            flow_value = filtered_results['sewerage']['to_downstream'].pint.magnitude.sum()
             flow_matrix.loc[f'cell_{cell_id}', f'sewerage_cell_{downstream_id}'] = flow_value
-        if 'stormwater' in results:
-            flow_value = results['stormwater']['to_downstream'].pint.magnitude.sum()
+        if 'stormwater' in filtered_results:
+            flow_value = filtered_results['stormwater']['to_downstream'].pint.magnitude.sum()
             flow_matrix.loc[f'cell_{cell_id}', f'runoff_cell_{downstream_id}'] = flow_value
     else:
-        if 'sewerage' in results:
-            flow_value = results['sewerage']['to_downstream'].pint.magnitude.sum()
+        if 'sewerage' in filtered_results:
+            flow_value = filtered_results['sewerage']['to_downstream'].pint.magnitude.sum()
             flow_matrix.loc[f'cell_{cell_id}', 'discharge'] = flow_value
-        if 'stormwater' in results:
-            flow_value = results['stormwater']['to_downstream'].pint.magnitude.sum()
+        if 'stormwater' in filtered_results:
+            flow_value = filtered_results['stormwater']['to_downstream'].pint.magnitude.sum()
             flow_matrix.loc[f'cell_{cell_id}', 'runoff'] = flow_value
+
 
     # Track storage changes by component
     storage_components = {
@@ -257,19 +279,21 @@ def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, f
 
 
     for storage_name, (comp, col_name) in storage_components.items():
-        if comp in results:
-            storage_unit = results[comp][col_name[0]].pint.units
+        if comp in filtered_results:
+            storage_unit = filtered_results[comp][col_name[0]].pint.units
             storage_unit = ureg.parse_units(str(storage_unit))
             storage_value = 0
             if storage_unit == ureg('millimeter'):
                 for col in col_name:
-                    storage_value += (results[comp][col] * results[comp]['area']).pint.to('meter^3').diff().sum()
+                    storage_value += (filtered_results[comp][col] *
+                                      filtered_results[comp]['area']).pint.to('meter^3').diff().sum()
             elif storage_unit == ureg('meter'):
                 for col in col_name:
-                    storage_value += (results[comp][col] * results[comp]['area']).pint.to('meter^3').diff().sum()
+                    storage_value += (filtered_results[comp][col] *
+                                      filtered_results[comp]['area']).pint.to('meter^3').diff().sum()
             else:
                 for col in col_name:
-                    storage_value += results[comp][col].pint.to('meter^3').diff().sum()
+                    storage_value += filtered_results[comp][col].pint.to('meter^3').diff().sum()
 
             storage_value = storage_value.magnitude
             if storage_value > 0:
@@ -279,5 +303,6 @@ def calculate_cell_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: int, f
 
     # Remove empty rows and columns
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
-    flow_matrix.to_csv('external.csv', sep='\t', encoding='utf-8')
+    if cell_id==494:
+        filtered_results['sewerage'].pint.dequantify().to_csv('external.csv', sep='\t', encoding='utf-8')
     return flow_matrix.loc[non_zero_mask, non_zero_mask]
