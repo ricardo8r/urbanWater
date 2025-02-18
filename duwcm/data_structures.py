@@ -1,59 +1,14 @@
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Any, Union, Optional
+
+from duwcm.units import BaseUnit
 from duwcm.flow_manager import (
     Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, ImperviousFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
     SewerageFlows, DemandFlows, DemandInternalFlows
 )
-
-TO_METER = 0.001
-TO_MM = 1000
-
-class StorageUnit(Enum):
-    LITER = 'L'
-    CUBIC_METER = 'm3'
-    MILLIMETER = 'mm'
-    METER = 'm'
-
-    @staticmethod
-    def convert(value: float, from_unit: Union['StorageUnit', str],
-                to_unit: Union['StorageUnit', str],
-                area: Optional[float] = None) -> float:
-        """Convert between units using m³ as base unit."""
-        if isinstance(from_unit, str):
-            from_unit = StorageUnit(from_unit)
-        if isinstance(to_unit, str):
-            to_unit = StorageUnit(to_unit)
-
-        if from_unit == to_unit:
-            return value
-
-        if not area:
-            return 0.0
-
-        # Convert to m³
-        match from_unit:
-            case StorageUnit.CUBIC_METER:
-                value_m3 = value
-            case StorageUnit.LITER:
-                value_m3 = value * TO_METER
-            case StorageUnit.MILLIMETER:
-                value_m3 = value * area * TO_METER
-            case StorageUnit.METER:
-                value_m3 = value * area
-
-        # Convert from m³
-        match to_unit:
-            case StorageUnit.CUBIC_METER:
-                return value_m3
-            case StorageUnit.LITER:
-                return value_m3 * TO_MM
-            case StorageUnit.MILLIMETER:
-                return value_m3 * TO_MM / area
-            case StorageUnit.METER:
-                return value_m3 / area
 
 @dataclass
 class Storage:
@@ -65,47 +20,47 @@ class Storage:
     _capacity: float = 0.0
     _previous: float = 0.0
     _area: Optional[float] = None
-    _default_unit: StorageUnit = StorageUnit.CUBIC_METER
+    _default_unit: BaseUnit = BaseUnit.CUBIC_METER
 
-    def get_amount(self, unit: Optional[StorageUnit] = None) -> float:
+    def get_amount(self, unit: Optional[BaseUnit] = None) -> float:
         """Get current storage amount in specified unit"""
         unit = unit or self._default_unit
-        return StorageUnit.convert(self._amount, StorageUnit.CUBIC_METER, unit, self._area)
+        return BaseUnit.convert(self._amount, BaseUnit.CUBIC_METER, unit, self._area)
 
-    def set_amount(self, value: float, unit: Optional[StorageUnit] = None) -> None:
+    def set_amount(self, value: float, unit: Optional[BaseUnit] = None) -> None:
         """Set current storage amount from specified unit"""
         unit = unit or self._default_unit
-        self._amount = StorageUnit.convert(value, unit, StorageUnit.CUBIC_METER, self._area)
+        self._amount = BaseUnit.convert(value, unit, BaseUnit.CUBIC_METER, self._area)
 
-    def get_capacity(self, unit: Optional[StorageUnit] = None) -> float:
+    def get_capacity(self, unit: Optional[BaseUnit] = None) -> float:
         """Get storage capacity in specified unit"""
         unit = unit or self._default_unit
-        return StorageUnit.convert(self._capacity, StorageUnit.CUBIC_METER, unit, self._area)
+        return BaseUnit.convert(self._capacity, BaseUnit.CUBIC_METER, unit, self._area)
 
-    def set_capacity(self, value: float, unit: Optional[StorageUnit] = None) -> None:
+    def set_capacity(self, value: float, unit: Optional[BaseUnit] = None) -> None:
         """Set storage capacity from specified unit"""
         unit = unit or self._default_unit
-        self._capacity = StorageUnit.convert(value, unit, StorageUnit.CUBIC_METER, self._area)
+        self._capacity = BaseUnit.convert(value, unit, BaseUnit.CUBIC_METER, self._area)
 
-    def get_previous(self, unit: Optional[StorageUnit] = None) -> float:
+    def get_previous(self, unit: Optional[BaseUnit] = None) -> float:
         """Get previous storage amount in specified unit"""
         unit = unit or self._default_unit
-        return StorageUnit.convert(self._previous, StorageUnit.CUBIC_METER, unit, self._area)
+        return BaseUnit.convert(self._previous, BaseUnit.CUBIC_METER, unit, self._area)
 
-    def set_previous(self, value: float, unit: Optional[StorageUnit] = None) -> None:
+    def set_previous(self, value: float, unit: Optional[BaseUnit] = None) -> None:
         """Set previous storage amount from specified unit"""
         unit = unit or self._default_unit
-        self._previous = StorageUnit.convert(value, unit, StorageUnit.CUBIC_METER, self._area)
+        self._previous = BaseUnit.convert(value, unit, BaseUnit.CUBIC_METER, self._area)
 
     def set_area(self, area: float) -> None:
         """Set the area used for unit conversions"""
         self._area = area
 
-    def set_default_unit(self, unit: StorageUnit) -> None:
+    def set_default_unit(self, unit: BaseUnit) -> None:
         """Set the default unit for this storage instance"""
         self._default_unit = unit
 
-    def get_change(self, unit: Optional[StorageUnit] = None) -> float:
+    def get_change(self, unit: Optional[BaseUnit] = None) -> float:
         """Calculate storage change from previous timestep in specified unit"""
         unit = unit or self._default_unit
         return self.get_amount(unit) - self.get_previous(unit)
@@ -120,7 +75,7 @@ class RoofData:
     """Roof component"""
     flows: RoofFlows = field(default_factory=RoofFlows)
     storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -131,7 +86,7 @@ class RainTankData:
     """Rain tank component"""
     flows: RainTankFlows = field(default_factory=RainTankFlows)
     storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -145,7 +100,7 @@ class ImperviousData:
     """Imperviouys component"""
     flows: ImperviousFlows = field(default_factory=ImperviousFlows)
     storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -156,14 +111,14 @@ class PerviousData:
     """Pervious surface component"""
     flows: PerviousFlows = field(default_factory=PerviousFlows)
     storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
     infiltration_capacity: float = field(default=0, metadata={'unit': 'mm/d'})
     irrigation_factor: float = field(default=0, metadata={'unit': '-'})
     vadose_moisture: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.MILLIMETER,
+        _default_unit=BaseUnit.MILLIMETER,
         _capacity=float('inf')
     ))
 
@@ -172,7 +127,7 @@ class VadoseData:
     """Vadose zone component"""
     flows: VadoseFlows = field(default_factory=VadoseFlows)
     moisture: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.MILLIMETER,
+        _default_unit=BaseUnit.MILLIMETER,
         _capacity=float('inf')
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -181,7 +136,7 @@ class VadoseData:
     transpiration_factor: float = field(default=0)
     max_capillary: float = field(default=0)
     groundwater_level: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.METER,
+        _default_unit=BaseUnit.METER,
         _capacity=float('inf')
     ))
 
@@ -191,11 +146,11 @@ class GroundwaterData:
     cell_id: float = field(default=0)
     flows: GroundwaterFlows = field(default_factory=GroundwaterFlows)
     water_level: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.METER,
+        _default_unit=BaseUnit.METER,
         _capacity=float('inf')
     ))
     surface_water_level: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.METER,
+        _default_unit=BaseUnit.METER,
         _capacity=float('inf')
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -212,7 +167,7 @@ class StormwaterData:
     """Stormwater component"""
     flows: StormwaterFlows = field(default_factory=StormwaterFlows)
     storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -224,7 +179,7 @@ class SewerageData:
     """Sewerage component"""
     flows: SewerageFlows = field(default_factory=SewerageFlows)
     storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
@@ -236,11 +191,11 @@ class DemandData:
     internal_flows: DemandInternalFlows = field(default_factory=DemandInternalFlows)
     area: float = field(default=0, metadata={'unit': 'm^2'})
     rt_storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
     ww_storage: Storage = field(default_factory=lambda: Storage(
-        _default_unit=StorageUnit.CUBIC_METER,
+        _default_unit=BaseUnit.CUBIC_METER,
         _capacity=0.0
     ))
 

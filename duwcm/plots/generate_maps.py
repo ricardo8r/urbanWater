@@ -4,8 +4,6 @@ from dynaconf import Dynaconf
 
 import numpy as np
 import pandas as pd
-import pint
-import pint_pandas
 
 import geopandas as gpd
 import matplotlib.pyplot as plt
@@ -13,10 +11,9 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
 
+from duwcm.units import ureg
 from duwcm.postprocess import extract_local_results
 
-ureg = pint.UnitRegistry()
-pint_pandas.PintType.ureg = ureg
 
 def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Path],
                          geometry_geopackage: Path, flow_paths: pd.DataFrame,

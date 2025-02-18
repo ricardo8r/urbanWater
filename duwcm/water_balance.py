@@ -17,18 +17,13 @@ from typing import Dict, List, Optional
 from dataclasses import fields
 
 import pandas as pd
-import pint
-import pint_pandas
-from pint import UnitRegistry
 from tqdm.auto import trange
 
+from duwcm.units import ureg
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
 from duwcm.flow_manager import Flow, MultiSourceFlow
 from duwcm.checker import track_validation_results
-
-ureg = pint.UnitRegistry()
-pint_pandas.PintType.ureg = ureg
 
 def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, 
                       check: bool = False, process_idx: Optional[int] = None,

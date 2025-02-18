@@ -1,15 +1,9 @@
 from typing import Dict, List, Optional
 import numpy as np
 import pandas as pd
-import pint
-import pint_pandas
-from pint import UnitRegistry
 
+from duwcm.units import ureg
 from duwcm.data_structures import UrbanWaterData
-
-ureg = UnitRegistry()
-pint_pandas.PintType.ureg = ureg  # Ensures pandas uses the same registry globally
-
 
 def calculate_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: Optional[float] = None) -> pd.DataFrame:
     """

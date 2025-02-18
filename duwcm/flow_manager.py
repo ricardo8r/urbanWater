@@ -3,8 +3,7 @@ from typing import Dict, List, Union, Optional
 from enum import Enum, auto, IntEnum
 from collections import defaultdict
 
-TO_METER = 0.001
-TO_MM = 1000
+from duwcm.units import BaseUnit
 
 class FlowProcess(Enum):
     """Physical processes affecting water movement"""
@@ -41,51 +40,6 @@ class WaterUse(Enum):
 class FlowDirection(IntEnum):
     IN = 1
     OUT = 2
-
-class WaterUnit(Enum):
-    """Units for water volumes and depths"""
-    CUBIC_METER = 'm3'  # Base unit
-    MILLIMETER = 'mm'
-    METER = 'm'
-    LITER = 'L'
-
-    @staticmethod
-    def convert(value: float, from_unit: Union['WaterUnit', str],
-                to_unit: Union['WaterUnit', str], area: Optional[float] = None) -> float:
-        """Convert between water units using m³ as base unit."""
-        if isinstance(from_unit, str):
-            from_unit = WaterUnit(from_unit)
-        if isinstance(to_unit, str):
-            to_unit = WaterUnit(to_unit)
-
-        if value == float('inf'):
-            return float('inf')
-        if from_unit == to_unit:
-            return value
-        if not area:
-            return 0.0
-
-        # Convert to m³
-        match from_unit:
-            case WaterUnit.CUBIC_METER:
-                value_m3 = value
-            case WaterUnit.LITER:
-                value_m3 = value * TO_METER
-            case WaterUnit.MILLIMETER:
-                value_m3 = value * area * TO_METER
-            case WaterUnit.METER:
-                value_m3 = value * area
-
-        # Convert from m³
-        match to_unit:
-            case WaterUnit.CUBIC_METER:
-                return value_m3
-            case WaterUnit.LITER:
-                return value_m3 * TO_MM
-            case WaterUnit.MILLIMETER:
-                return value_m3 * TO_MM / area
-            case WaterUnit.METER:
-                return value_m3 / area
 
 @dataclass
 class Flow:
@@ -154,22 +108,22 @@ class Flow:
 
     def get_amount(self, unit: str) -> float:
         """Get flow amount in specified unit"""
-        unit = WaterUnit(unit)
+        unit = BaseUnit(unit)
         if self._volume_only:
-            if unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+            if unit in [BaseUnit.MILLIMETER, BaseUnit.METER]:
                 raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
-            return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, area=1)
-        return WaterUnit.convert(self._amount, WaterUnit.CUBIC_METER, unit, self._area)
+            return BaseUnit.convert(self._amount, BaseUnit.CUBIC_METER, unit, area=1)
+        return BaseUnit.convert(self._amount, BaseUnit.CUBIC_METER, unit, self._area)
 
     def set_amount(self, value: float, unit: str) -> None:
         """Set flow amount from specified unit"""
-        unit = WaterUnit(unit)
+        unit = BaseUnit(unit)
         if self._volume_only:
-            if unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+            if unit in [BaseUnit.MILLIMETER, BaseUnit.METER]:
                 raise ValueError(f"Flow is volume-only. Cannot convert from {unit.value}")
-            self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, area=1)
+            self._amount = BaseUnit.convert(value, unit, BaseUnit.CUBIC_METER, area=1)
         else:
-            self._amount = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, self._area)
+            self._amount = BaseUnit.convert(value, unit, BaseUnit.CUBIC_METER, self._area)
         if self.linked_flow is not None:
             self.linked_flow.set_amount_no_sync(self._amount)
 
@@ -223,12 +177,12 @@ class MultiSourceFlow:
 
     def get_amount(self, unit: str) -> float:
         """Get total flow in specified unit"""
-        unit = WaterUnit(unit)
-        if self._volume_only and unit in [WaterUnit.MILLIMETER, WaterUnit.METER]:
+        unit = BaseUnit(unit)
+        if self._volume_only and unit in [BaseUnit.MILLIMETER, BaseUnit.METER]:
             raise ValueError(f"Flow is volume-only. Cannot convert to {unit.value}")
-        if self._volume_only and unit in [WaterUnit.CUBIC_METER, WaterUnit.LITER]:
-            return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit, 1)
-        return WaterUnit.convert(self.amount, WaterUnit.CUBIC_METER, unit, self._area)
+        if self._volume_only and unit in [BaseUnit.CUBIC_METER, BaseUnit.LITER]:
+            return BaseUnit.convert(self.amount, BaseUnit.CUBIC_METER, unit, 1)
+        return BaseUnit.convert(self.amount, BaseUnit.CUBIC_METER, unit, self._area)
 
     def add_source(self, source: Flow) -> None:
         """Add a source flow"""
@@ -358,7 +312,7 @@ class ComponentFlows:
         if unit not in ['m3', 'L', 'mm']:
             raise ValueError("Capacity unit must be 'm3', 'L', or 'mm'")
 
-        value = WaterUnit.convert(capacity, unit, WaterUnit.CUBIC_METER,
+        value = BaseUnit.convert(capacity, unit, BaseUnit.CUBIC_METER,
                                   area=self._area if unit == 'mm' else 1)
         self._type_capacities[flow_type] = value
 
@@ -368,7 +322,7 @@ class ComponentFlows:
             raise ValueError("Capacity unit must be 'm3', 'L', or 'mm'")
 
         value = self._type_capacities.get(flow_type, float('inf'))
-        return WaterUnit.convert(value, WaterUnit.CUBIC_METER, unit,
+        return BaseUnit.convert(value, BaseUnit.CUBIC_METER, unit,
                                  area=self._area if unit == 'mm' else 1)
 
     def set_flow(self, name: str, value: float, unit: Optional[str] = None, additive: bool = False) -> float:
@@ -382,7 +336,7 @@ class ComponentFlows:
 
         unit = unit or 'm3'
         conversion_area = 1 if flow.volume_only else self._area
-        value_m3 = WaterUnit.convert(value, unit, WaterUnit.CUBIC_METER, conversion_area)
+        value_m3 = BaseUnit.convert(value, unit, BaseUnit.CUBIC_METER, conversion_area)
         flow_value = value_m3
 
         if isinstance(flow, Flow):
@@ -405,12 +359,12 @@ class ComponentFlows:
                 flow.set_amount(flow_value, 'm3')
 
             excess = max(0, value_m3 - flow_value)
-            return WaterUnit.convert(excess, WaterUnit.CUBIC_METER, unit, conversion_area)
+            return BaseUnit.convert(excess, BaseUnit.CUBIC_METER, unit, conversion_area)
 
         raise ValueError(f"Invalid flow type for {name}")
 
 
-    def get_flow(self, name: str, unit: Optional[WaterUnit] = None) -> float:
+    def get_flow(self, name: str, unit: Optional[BaseUnit] = None) -> float:
         """Get flow amount by name in specified unit (defaults to m³)"""
         if not hasattr(self, name):
             return 0.0
@@ -460,7 +414,7 @@ class ComponentFlows:
                   if isinstance(flow, (Flow, MultiSourceFlow))
                   and flow.direction == FlowDirection.OUT)
 
-    def get_total_inflow(self, unit: Optional[WaterUnit] = None) -> float:
+    def get_total_inflow(self, unit: Optional[BaseUnit] = None) -> float:
         """Calculate total inflow in specified unit (defaults to m³)"""
         total = 0.0
         for name, flow in vars(self).items():
@@ -468,7 +422,7 @@ class ComponentFlows:
                 total += flow.get_amount(unit) if unit else flow.amount
         return total
 
-    def get_total_outflow(self, unit: Optional[WaterUnit] = None) -> float:
+    def get_total_outflow(self, unit: Optional[BaseUnit] = None) -> float:
         """Calculate total outflow in specified unit (defaults to m³)"""
         total = 0.0
         for name, flow in vars(self).items():
