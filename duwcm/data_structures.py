@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Any, Union, Optional
 
-from duwcm.units import BaseUnit
+from duwcm.utils import BaseUnit
 from duwcm.flow_manager import (
     Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, ImperviousFlows, PerviousFlows,
@@ -143,7 +143,6 @@ class VadoseData:
 @dataclass
 class GroundwaterData:
     """Groundwater component"""
-    cell_id: float = field(default=0)
     flows: GroundwaterFlows = field(default_factory=GroundwaterFlows)
     water_level: Storage = field(default_factory=lambda: Storage(
         _default_unit=BaseUnit.METER,
@@ -154,6 +153,8 @@ class GroundwaterData:
         _capacity=float('inf')
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
+    storage_coefficient: float = field(default=0.0, metadata={'unit': '-'})
+
     leakage_rate: float = field(default=0.0, metadata={'unit': '%'})
     seepage_model: float = field(default=0.0, metadata={'unit': '-'})
     drainage_resistance: float = field(default=0.0, metadata={'unit': 'd'})
@@ -346,20 +347,9 @@ class UrbanWaterData:
         return issues
 
     def validate_water_balance(self, include_components: Optional[List[str]] = None,
-                         skip_components: Optional[List[str]] = None) -> Dict[str, Dict[str, float]]:
-        """
-        Validate water balance for selected components.
-
-        Args:
-            include_components: List of component names to include in validation. If None, validate all except skipped.
-            skip_components: List of component names to skip in validation. If None, skip none.
-
-        Returns:
-            Dict with validation results for each component
-        """
+                         skip_components: Optional[List[str]] = None) -> Dict[str, Dict[str, Any]]:
         balance_results = {}
 
-        # Determine which components to validate
         components_to_validate = set(self.COMPONENTS)
         if include_components is not None:
             components_to_validate = set(include_components)
@@ -370,11 +360,24 @@ class UrbanWaterData:
             component = getattr(self, comp_name)
             flows = component.flows
 
-            # Calculate storage changes
+            # Track all flows by name
+            inflows = {}
+            outflows = {}
+
+            # Categorize each flow by its name
+            for flow_name, flow in vars(flows).items():
+                if not hasattr(flow, 'direction'):
+                    continue
+
+                amount = flow.get_amount('m3')
+                if flow.direction == 1:  # Inflow
+                    inflows[flow_name] = amount
+                else:  # Outflow
+                    outflows[flow_name] = amount
+
+            # Calculate storage changes with more detail
             storage_changes = {}
             total_storage_change = 0
-
-            # Get linked storages to skip for this component
             skip_storages = {
                 'pervious': {'vadose_moisture'},
                 'vadose': {'groundwater_level'},
@@ -384,21 +387,21 @@ class UrbanWaterData:
             for attr_name, attr_value in vars(component).items():
                 if isinstance(attr_value, Storage) and attr_name not in skip_storages:
                     change = attr_value.get_change('m3')
+                    if comp_name == 'groundwater':
+                        if attr_name == 'water_level':
+                            change *= component.storage_coefficient
+                        change = -1 * change
                     storage_changes[attr_name] = change
                     total_storage_change += change
 
-            # Calculate inflows and outflows using the flow's get_amount method
-            total_inflow = sum(flow.get_amount('m3') for flow in vars(flows).values()
-                             if hasattr(flow, 'direction') and flow.direction == 1)
-            total_outflow = sum(flow.get_amount('m3') for flow in vars(flows).values()
-                              if hasattr(flow, 'direction') and flow.direction == 2)
-
             balance_results[comp_name] = {
-                'inflow': total_inflow,
-                'outflow': total_outflow,
+                'inflows': inflows,
+                'outflows': outflows,
                 'storage_changes': storage_changes,
                 'total_storage_change': total_storage_change,
-                'balance': total_inflow - total_outflow - total_storage_change
+                'total_inflow': sum(inflows.values()),
+                'total_outflow': sum(outflows.values()),
+                'balance': sum(inflows.values()) - sum(outflows.values()) - total_storage_change
             }
 
         return balance_results

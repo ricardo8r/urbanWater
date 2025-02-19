@@ -10,13 +10,14 @@ from duwcm.forcing import read_forcing
 from duwcm.scenario_manager import ScenarioManager, run_scenario
 
 from duwcm.initialization import initialize_model
-from duwcm.summary import print_summary
-from duwcm.functions import load_config, select_cells
-from duwcm.checker import generate_report
+#from duwcm.summary import print_summary
+from duwcm.utils import load_config
+from duwcm.functions import select_cells
+from duwcm.diagnostics import DiagnosticTracker, generate_alluvial_cells
 from duwcm.plots import (export_geodata, generate_plots, generate_maps,
-                         generate_system_maps, generate_chord,
-                         generate_alluvial_total, generate_alluvial_reuse,
-                         generate_alluvial_cells, generate_graph)
+                         generate_system_maps, generate_chord, generate_graph,
+                         generate_alluvial_total, generate_alluvial_reuse
+                         )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%H:%M:%S')
@@ -35,8 +36,15 @@ def main() -> None:
     args = parser.parse_args()
 
     logger.info("Distributed Urban Water Balance Model")
-    if args.check:
-        logger.info("Validation checks enabled")
+
+    if args.check and not args.scenarios:
+        logger.info("Diagnostic checks enabled")
+        tracker = DiagnosticTracker()
+    else:
+        if args.check:
+            logger.warning("Diagnostic checks not available when running scenarios")
+            args.check = False
+        tracker = None
 
     # Load base config and data
     base_config = load_config(args.config, args.env, "config.yaml")
@@ -74,13 +82,13 @@ def main() -> None:
             model_data=model_data,
             base_params=model_params,
             base_forcing=forcing_data,
-            n_jobs=args.n_jobs,
-            check=args.check
+            n_jobs=args.n_jobs
         )
 
         Parallel(n_jobs=args.n_jobs, backend='loky', verbose=0)(
             delayed(process_outputs)(
                 results,
+                tracker,
                 flow_paths,
                 Path(base_config.output.directory) / case_name,
                 base_config,
@@ -98,16 +106,16 @@ def main() -> None:
             'demand_data': demand_data,
             'reuse_settings': reuse_settings,
             'direction': base_config.grid.direction
-        }, args.check, None, True)
+        }, tracker, None, True)
         _, results = run_scenario(scenario_data)
 
         out_base = Path(base_config.output.directory) / args.env
-        process_outputs(results, flow_paths, out_base, base_config, args)
+        process_outputs(results, tracker, flow_paths, out_base, base_config, args)
 
     logger.info("Simulation completed")
 
 
-def process_outputs(results, flow_paths, output_dir, config, args):
+def process_outputs(results, tracker, flow_paths, output_dir, config, args):
     """Process and save outputs based on arguments"""
 
     # Generate plots
@@ -161,14 +169,6 @@ def process_outputs(results, flow_paths, output_dir, config, args):
             results = results,
             output_dir=flow_dir
         )
-        selected_cells = getattr(config.grid, 'selected_cells', None)
-        if selected_cells is not None:
-            generate_alluvial_cells(
-                results = results,
-                flow_paths = flow_paths,
-                selected_cells = selected_cells,
-                output_dir=flow_dir
-            )
         logger.info("Plots saved to %s", output_dir)
 
     if args.gis:
@@ -187,10 +187,20 @@ def process_outputs(results, flow_paths, output_dir, config, args):
 
     # Check results and save water balance
     if args.check:
-        check_dir = output_dir / 'validation'
+        check_dir = output_dir / 'diagnostic'
         check_dir.mkdir(parents=True, exist_ok=True)
-        check_results(results, check_dir)
-        logger.info("Validation reports saved to %s", check_dir)
+        tracker.generate_report(check_dir)
+
+        selected_cells = getattr(config.grid, 'selected_cells', None)
+        if selected_cells is not None:
+            generate_alluvial_cells(
+                flow_paths = flow_paths,
+                selected_cells = selected_cells,
+                output_dir=check_dir,
+                tracker=tracker
+            )
+
+        logger.info("Diagnostic reports saved to %s", check_dir)
         #print_summary(results)
 
     if args.save:
@@ -213,47 +223,47 @@ def process_outputs(results, flow_paths, output_dir, config, args):
 
         logger.info("Results and forcing data saved to %s", save_dir)
 
-def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
-    """Process and report validation results."""
-    validation_keys = ['validation_balance', 'validation_flows', 'validation_storage']
-
-    if not any(key in results for key in validation_keys):
-        logger.warning("No validation results found")
-        return
-
-    validation_results = {
-        'balance': results.get('validation_balance', pd.DataFrame()),
-        'flows': results.get('validation_flows', pd.DataFrame()),
-        'storage': results.get('validation_storage', pd.DataFrame())
-    }
-
-    if all(df.empty for df in validation_results.values()):
-        logger.warning("All validation DataFrames are empty")
-        return
-
-    # Log warnings for each type of issue
-    balance_df = validation_results['balance']
-    if not balance_df.empty:
-        significant_mask = abs(balance_df['balance_error_percent']) > 1.0
-        if significant_mask.any():
-            logger.warning("Found %d significant balance errors", len(balance_df[significant_mask]))
-
-    flows_df = validation_results['flows']
-    if not flows_df.empty:
-        logger.warning("Found %d flow validation issues", len(flows_df))
-        by_type = flows_df.groupby('issue_type').size()
-        for issue_type, count in by_type.items():
-            logger.warning("  %s: %d issues", issue_type, count)
-
-    storage_df = validation_results['storage']
-    if not storage_df.empty:
-        logger.warning("Found %d storage validation issues", len(storage_df))
-        by_component = storage_df.groupby(['component', 'issue_type']).size()
-        for (comp, issue_type), count in by_component.items():
-            logger.warning("  %s - %s: %d issues", comp, issue_type, count)
-
-    # Generate validation reports
-    generate_report(validation_results, check_dir)
+#def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
+#    """Process and report diagnostic results."""
+#    diagnostic_keys = ['diagnostic_balance', 'diagnostic_flows', 'diagnostic_storage']
+#
+#    if not any(key in results for key in diagnostic_keys):
+#        logger.warning("No diagnostic results found")
+#        return
+#
+#    diagnostic_results = {
+#        'balance': results.get('diagnostic_balance', pd.DataFrame()),
+#        'flows': results.get('diagnostic_flows', pd.DataFrame()),
+#        'storage': results.get('diagnostic_storage', pd.DataFrame())
+#    }
+#
+#    if all(df.empty for df in diagnostic_results.values()):
+#        logger.warning("All diagnostic DataFrames are empty")
+#        return
+#
+#    # Log warnings for each type of issue
+#    balance_df = diagnostic_results['balance']
+#    if not balance_df.empty:
+#        significant_mask = abs(balance_df['balance_error_percent']) > 1.0
+#        if significant_mask.any():
+#            logger.warning("Found %d significant balance errors", len(balance_df[significant_mask]))
+#
+#    flows_df = diagnostic_results['flows']
+#    if not flows_df.empty:
+#        logger.warning("Found %d flow diagnostic issues", len(flows_df))
+#        by_type = flows_df.groupby('issue_type').size()
+#        for issue_type, count in by_type.items():
+#            logger.warning("  %s: %d issues", issue_type, count)
+#
+#    storage_df = diagnostic_results['storage']
+#    if not storage_df.empty:
+#        logger.warning("Found %d storage diagnostic issues", len(storage_df))
+#        by_component = storage_df.groupby(['component', 'issue_type']).size()
+#        for (comp, issue_type), count in by_component.items():
+#            logger.warning("  %s - %s: %d issues", comp, issue_type, count)
+#
+#    # Generate diagnostic reports
+#    generate_report(diagnostic_results, check_dir)
 
 if __name__ == "__main__":
     main()

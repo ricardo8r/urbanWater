@@ -3,9 +3,9 @@ from typing import Dict
 import pandas as pd
 import plotly.graph_objects as go
 
+from duwcm.diagnostics import DiagnosticTracker
 from duwcm.postprocess import (calculate_flow_matrix,
-                               calculate_reuse_flow_matrix,
-                               calculate_cell_flow_matrix
+                               calculate_reuse_flow_matrix
                                )
 
 def generate_alluvial_total(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
@@ -25,21 +25,6 @@ def generate_alluvial_reuse(results: Dict[str, pd.DataFrame], output_dir: Path) 
     flow_matrix = calculate_reuse_flow_matrix(results)
     fig = generate_alluvial(flow_matrix)
     fig.write_image(output_dir / "reuse_sankey.png", scale=2)
-
-def generate_alluvial_cells(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame,
-                            selected_cells: set, output_dir: Path) -> None:
-    """Generate an alluvial diagram for each cell."""
-    output_dir.mkdir(parents=True, exist_ok=True)
-    for cell_id in selected_cells:
-        flow_matrix = calculate_flow_matrix(results, cell_id)
-        fig = generate_alluvial(flow_matrix)
-        output_file = output_dir / f'cell_{cell_id}_internal.png'
-        fig.write_image(output_file, scale=2)
-
-        flow_matrix = calculate_cell_flow_matrix(results, cell_id, flow_paths)
-        fig = generate_alluvial(flow_matrix)
-        output_file = output_dir / f'cell_{cell_id}_external.png'
-        fig.write_image(output_file, scale=2)
 
 def generate_alluvial(flow_matrix: pd.DataFrame) -> go.Figure:
     """Generate an alluvial diagram."""

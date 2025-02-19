@@ -19,29 +19,30 @@ from dataclasses import fields
 import pandas as pd
 from tqdm.auto import trange
 
-from duwcm.units import ureg
+from duwcm.utils import ureg
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
 from duwcm.flow_manager import Flow, MultiSourceFlow
-from duwcm.checker import track_validation_results
+from duwcm.diagnostics import DiagnosticTracker
 
-def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame, 
-                      check: bool = False, process_idx: Optional[int] = None,
+def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
+                      tracker: Optional[DiagnosticTracker] = None,
+                      process_idx: Optional[int] = None,
                       progress: Optional[bool] = True) -> Dict[str, pd.DataFrame]:
     """
-    Run the full simulation for all timesteps with validation tracking.
+    Run the full simulation for all timesteps with diagnostic tracking.
 
     Args:
         model: UrbanWaterModel instance
         forcing: DataFrame with forcing data
-        check: Enable validation tracking
+        check: Enable diagnostic tracking
         process_idx: Process index for parallel runs
 
     Returns:
         Dict containing:
             - Component results
             - Aggregated results
-            - Validation results for balance, flows, and storage
+            - Diagnostic results for balance, flows, and storage
     """
 
 
@@ -66,14 +67,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
         'evaporation': 0
     })
 
-    # Initialize validation tracking if check is enabled
-    validation_tracking = None
-    if check:
-        validation_tracking = {
-            'balance': [],
-            'flows': [],
-            'storage': []
-        }
 
     desc = f"Water balance (Scenario {process_idx})" if process_idx is not None else "Water balance"
     iterator = trange(1, num_timesteps, desc=desc, position=process_idx, leave=progress)
@@ -87,20 +80,13 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
         model.distribute_stormwater()
         _aggregate_timestep(model, results_agg, current_date)
 
-        # Track validation for current timestep if enabled
-        if check:
-            timestep_validation = track_validation_results(model, current_date)
-            for key, value in timestep_validation.items():
-                validation_tracking[key].append(value)
+        # Track diagnostic for current timestep if enabled
+        if tracker is not None:
+            tracker.track_diagnostic_results(model, current_date)
 
         model.update_states()
 
     df_results = results_to_dataframes(results, results_agg, forcing)
-
-    # Process validation results if validation was enabled
-    if check and validation_tracking:
-        for key, checks in validation_tracking.items():
-            df_results[f'validation_{key}'] = pd.concat(checks)
 
     return df_results
 

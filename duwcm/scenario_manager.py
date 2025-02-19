@@ -26,8 +26,6 @@ from typing import Dict, Optional
 from copy import deepcopy
 
 import logging
-#from concurrent.futures import ProcessPoolExecutor
-#import concurrent.futures
 from joblib import Parallel, delayed
 from dynaconf import Dynaconf
 import pandas as pd
@@ -35,7 +33,8 @@ import pandas as pd
 from duwcm.forcing import distribute_irrigation
 from duwcm.water_model import UrbanWaterModel
 from duwcm.water_balance import run_water_balance
-from duwcm.functions import is_notebook
+from duwcm.diagnostics import DiagnosticTracker
+from duwcm.utils import is_notebook
 
 logger = logging.getLogger(__name__)
 
@@ -180,7 +179,7 @@ class ScenarioManager:
         return self.scenarios.get(name)
 
     def run_scenarios(self, model_data: Dict, base_params: Dict, base_forcing: pd.DataFrame,
-                      n_jobs: int = 4, check: bool = False) -> Dict[str, Dict[str, pd.DataFrame]]:
+                      n_jobs: int = -1) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Run scenarios in parallel"""
         # Prepare scenario parameters as a list
         scenario_names = []
@@ -198,7 +197,7 @@ class ScenarioManager:
             modified_params = scenario.modify_params(base_params)
             modified_forcing = scenario.modify_forcing(base_forcing)
             scenario_params.append((name, modified_params, modified_forcing,
-                                    model_data, check, idx, progress))
+                                    model_data, None, idx, progress))
 
         # Run scenarios in parallel while preserving argument structure
         results_list = Parallel(n_jobs=n_jobs, backend=backend, verbose=0)(
@@ -213,7 +212,7 @@ class ScenarioManager:
 
 def run_scenario(scenario_data):
 
-    name, modified_params, modified_forcing, model_data, check, idx, progress = scenario_data
+    name, modified_params, modified_forcing, model_data, tracker, idx, progress = scenario_data
 
     distribute_irrigation(modified_params)
     model = UrbanWaterModel(
@@ -225,5 +224,5 @@ def run_scenario(scenario_data):
         reuse_settings=model_data['reuse_settings'],
         direction=model_data['direction']
     )
-    results = run_water_balance(model, modified_forcing, check, idx, progress)
+    results = run_water_balance(model, modified_forcing, tracker, idx, progress)
     return name, results

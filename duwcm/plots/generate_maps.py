@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
 
-from duwcm.units import ureg
+from duwcm.utils import ureg
 from duwcm.postprocess import extract_local_results
 
 

@@ -3,7 +3,7 @@ from typing import Dict, List, Union, Optional
 from enum import Enum, auto, IntEnum
 from collections import defaultdict
 
-from duwcm.units import BaseUnit
+from duwcm.utils import BaseUnit
 
 class FlowProcess(Enum):
     """Physical processes affecting water movement"""

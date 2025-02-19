@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 import pandas as pd
-from duwcm.functions import load_results, load_config
+from duwcm.utils import load_results, load_config
 
 def save_cell():
     parser = argparse.ArgumentParser(description="Save results for a specific cell ID")
