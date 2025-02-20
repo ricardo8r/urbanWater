@@ -23,12 +23,13 @@ files:
 grid:
   cell_size: 200  # meters
   direction: 6    # number of neighbors (4, 6, or 8)
-    #selected_cells: []  # Optional list of cells to simulate
+    #selected_cells: [494,495]
+  selected_cells: [493, 494, 495, 528,529, 530, 531]
 
 # Simulation settings
 simulation:
-  start_year: 2017
-  end_year: 2017
+  start_year: 2018
+  end_year: 2018
   time_step: 1
   spinup_cycles: 10
   init_method: "cyclic"
@@ -49,7 +50,7 @@ model:
     seepage_model: 0
     effective_roof_area: 80        # Connected roof area percentage
     roof_storage: 0               # Maximum roof storage in mm
-    effective_raintank_area: 100   # Connected raintank area percentage
+    effective_raintank_area: 80   # Connected raintank area percentage
     effective_impervious_area: 50  # Connected impervious area percentage
     impervious_storage: 0         # Maximum impervious storage in mm
     pervious_storage: 8           # Maximum pervious storage in mm

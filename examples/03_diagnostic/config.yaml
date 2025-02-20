@@ -1,0 +1,114 @@
+# Input settings
+input_directory: 'input/'
+geodata_directory: 'input/geodata'
+files:
+  urban_beats: 'Fehraltorf_HexagonsNS_200m_Blocks.dbf'
+  calibration: 's0param.csv'
+  alternative_water: 'alternative0.csv'
+  groundwater: 'gw0m_IDW2Hex200fromswbi.csv'
+  soil: 'in_soilparameter_new.csv'
+  et: 'in_etparameter.csv'
+  climate: 'forcing.csv'
+  open_water: 'forcingOW.csv'
+  reuse_settings: 'settingreuse.csv'
+  demand: 'profile_percentage.csv'
+  geo: 'hex_geo.gpkg'
+  background_shapefile: 'Boundary_LV95.shp'
+  feature_shapefiles:
+    - 'Rivers_LV95.shp'
+    - 'Buildings_LV95.shp'
+    - 'CH_ARE_Bauzonen_LV95.shp'
+
+# Grid configuration
+grid:
+  cell_size: 200  # meters
+  direction: 6    # number of neighbors (4, 6, or 8)
+    #selected_cells: [494,495]
+  selected_cells: [493, 494, 495, 528,529, 530, 531]
+
+# Simulation settings
+simulation:
+  start_year: 2018
+  end_year: 2018
+  time_step: 1
+  spinup_cycles: 10
+  init_method: "cyclic"
+
+# Output configuration
+output:
+  directory: 'results'
+  detailed_results: true
+  crs: 'EPSG:2056'
+
+# Model parameters
+model:
+  # Calibration parameters
+  calibration:
+    timestep: 1
+    soil_type: 12
+    crop_type: 6
+    seepage_model: 0
+    effective_roof_area: 80        # Connected roof area percentage
+    roof_storage: 0               # Maximum roof storage in mm
+    effective_raintank_area: 80   # Connected raintank area percentage
+    effective_impervious_area: 50  # Connected impervious area percentage
+    impervious_storage: 0         # Maximum impervious storage in mm
+    pervious_storage: 8           # Maximum pervious storage in mm
+    impervious_infiltration: 5    # Impervious infiltration rate mm/day
+    pervious_infiltration: 35     # Pervious infiltration rate mm/day
+    leakage_rate: 2.5            # Groundwater leakage percentage
+    infiltration_coef: 0.0000015  # Infiltration recession coefficient
+    drainage_resistance: 25       # Drainage resistance in days
+    seepage_resistance: 200       # Vertical resistance in days
+    downward_seepage: 1.4        # Constant seepage rate mm/day
+    wastewater_inflow: 95        # Percentage runoff to wastewater
+    wastewater_pipe_capacity: 7000 # Wastewater pipe capacity
+    deep_resistance: 100         # Deep aquifer resistance in days
+
+  # Water reuse settings
+  reuse:
+    kitchen_to_graywater: 15     # Percentage of kitchen greywater for local reuse
+    bathroom_to_graywater: 25    # Percentage of bathroom greywater for local reuse
+    laundry_to_graywater: 15     # Percentage of laundry greywater for local reuse
+    wastewater_to_irrigation: 0  # Percentage of wastewater for irrigation
+    wastewater_to_toilet: 0      # Percentage of wastewater for toilet flushing
+    raintank_to_kitchen: 25      # Percentage of kitchen water to raintank
+    raintank_to_bathroom: 25     # Percentage of bathroom water to raintank
+    raintank_to_laundry: 25      # Percentage of laundry water to raintank
+    raintank_to_toilet: 25       # Percentage of raintank water for toilet
+    raintank_to_irrigation: 0    # Percentage of raintank water for irrigation
+    central_ww_to_toilet: 10     # Percentage of centralized wastewater for toilet
+    central_ww_to_irrigation: 10 # Percentage of centralized wastewater for irrigation
+    stormwater_to_toilet: 0      # Percentage of stormwater for toilet
+    stormwater_to_irrigation: 0  # Percentage of stormwater for reuse
+
+  # Water demand parameters
+  demand:
+    kitchen: 15.75    # Daily kitchen water use percentage
+    bathroom: 32.75   # Daily bathroom water use percentage
+    toilet: 30.75     # Daily toilet water use percentage
+    laundry: 20.75    # Daily laundry water use percentage
+
+  # Storage configuration
+  storage:
+    raintank:
+      open: []        # Is raintank open to atmosphere
+      area: []        # Raintank surface area m2
+      capacity: []    # Raintank storage volume L
+      first_flush: [] # Raintank first flush volume L
+      initial: []     # Raintank initial storage L
+      adoption: []    # Raintank implementation rate %
+    stormwater:
+      area: []        # Stormwater facility area m2
+      open: []        # Is facility open to atmosphere
+      capacity: []    # Stormwater storage volume L
+      initial: []     # Stormwater initial storage L
+      first_flush: [] # Stormwater first flush volume L
+    wastewater:
+      area: []        # Treatment area m2
+      capacity: []    # Treatment storage volume L
+      initial: []     # Treatment initial storage L
+    central:
+      area: []        # Central facility area m2
+      capacity: []    # Central storage volume L
+      initial: []     # Central initial storage L

@@ -6,9 +6,10 @@ import holoviews as hv
 from holoviews import opts, dim
 
 from duwcm.data_structures import UrbanWaterData
+from duwcm.diagnostics import DiagnosticTracker
 from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
-def create_flow_visualization(results: Dict[str, pd.DataFrame],
+def create_flows(results: Dict[str, pd.DataFrame],
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:
     """Create flow visualization (Sankey or Chord) of water flows between components."""
 
@@ -19,7 +20,7 @@ def create_flow_visualization(results: Dict[str, pd.DataFrame],
     if viz_type == 'chord':
         return _create_chord_diagram(flow_matrix)
 
-def create_reuse_visualization(results: Dict[str, pd.DataFrame],
+def create_reuse_flows(results: Dict[str, pd.DataFrame],
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:
     """Create flow visualization (Sankey or Chord) of water flows for demand/reuse."""
 
@@ -105,3 +106,16 @@ def _create_chord_diagram(flow_matrix: pd.DataFrame) -> hv.Element:
     )
 
     return chord
+
+def create_cell_flows(cell_id: int, tracker: DiagnosticTracker) -> tuple[go.Figure, go.Figure]:
+    """Create internal and external flow diagrams for a cell."""
+    internal_matrix = tracker.get_internal_flow_matrix(cell_id=cell_id)
+    external_matrix = tracker.get_external_flow_matrix(cell_id=cell_id)
+
+    internal_fig = _create_sankey_diagram(internal_matrix)
+    external_fig = _create_sankey_diagram(external_matrix)
+
+    internal_fig.update_layout(title=f"Cell {cell_id} - Internal Flows")
+    external_fig.update_layout(title=f"Cell {cell_id} - External Flows")
+
+    return internal_fig, external_fig

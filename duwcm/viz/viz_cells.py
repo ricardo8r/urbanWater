@@ -85,3 +85,4 @@ def interactive_cell_selection(config, geo_file, background_file, flow_paths):
     ]))
 
     return selected_cells
+
