@@ -6,13 +6,13 @@ def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFr
     """Create interactive plot with legend toggles for each data series."""
 
     plot_data = pd.DataFrame({
-        'Precipitation': forcing['precipitation'],
-        'Potential Evaporation': forcing['potential_evaporation'],
+        'Precipitation': forcing['precipitation'].pint.to('millimeter').pint.magnitude,
+        'Potential Evaporation': forcing['potential_evaporation'].pint.to('millimeter').pint.magnitude,
         'Evapotranspiration': (aggregated_results['evaporation'] +
-                               aggregated_results['transpiration']),
-        'Runoff': aggregated_results['stormwater'],
-        'Baseflow': aggregated_results['baseflow'],
-        'Sewerage': aggregated_results['sewerage']
+                              aggregated_results['transpiration']).pint.to('millimeter').pint.magnitude,
+        'Runoff': aggregated_results['stormwater'].pint.to('meter^3').pint.magnitude,
+        'Baseflow': aggregated_results['baseflow'].pint.to('meter^3').pint.magnitude,
+        'Sewerage': aggregated_results['sewerage'].pint.to('meter^3').pint.magnitude
     })
 
     colors = {

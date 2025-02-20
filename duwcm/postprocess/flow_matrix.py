@@ -2,6 +2,7 @@ from typing import Dict, List, Optional
 import pandas as pd
 
 from duwcm.data_structures import UrbanWaterData
+from duwcm.utils import ureg
 
 def calculate_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: Optional[float] = None) -> pd.DataFrame:
     """
@@ -85,8 +86,6 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], cell_id: Optional[fl
 
     # Remove empty rows/columns
     non_zero_mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
-    if cell_id==494:
-        filtered_results['sewerage'].pint.dequantify().to_csv('internal.csv', sep='\t', encoding='utf-8')
     return flow_matrix.loc[non_zero_mask, non_zero_mask]
 
 

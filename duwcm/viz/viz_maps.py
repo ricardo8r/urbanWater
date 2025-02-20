@@ -155,6 +155,7 @@ def create_dynamic_map(gdf_geometry: gpd.GeoDataFrame, background_shapefile: Pat
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2
 
     monthly_data = time_series_data.groupby(pd.Grouper(freq='ME')).mean()
+    monthly_data = monthly_data.pint.dequantify()
 
     # Calculate absolute global min/max across ALL variables
     global_min = monthly_data[variables].min().min()  # Min across all variables
