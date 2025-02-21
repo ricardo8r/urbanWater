@@ -362,6 +362,14 @@ class DiagnosticTracker:
         else:
             flow_matrix.loc['baseflow', 'groundwater'] = abs(net_baseflow)
 
+        # Flip direction of negative flows
+        negative_mask = flow_matrix < 0
+        if negative_mask.any().any():
+            # Add absolute values in opposite direction
+            flow_matrix.T[negative_mask] = abs(flow_matrix[negative_mask])
+            # Clear original negative values
+            flow_matrix[negative_mask] = 0
+
         # Remove empty rows and columns
         mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)
         return flow_matrix.loc[mask, mask]
@@ -434,6 +442,14 @@ class DiagnosticTracker:
             flow_matrix.loc[f'cell_{cell_id}', 'baseflow'] = net_baseflow
         else:
             flow_matrix.loc['baseflow', f'cell_{cell_id}'] = abs(net_baseflow)
+
+        # Flip direction of negative flows
+        negative_mask = flow_matrix < 0
+        if negative_mask.any().any():
+            # Add absolute values in opposite direction
+            flow_matrix.T[negative_mask] = abs(flow_matrix[negative_mask])
+            # Clear original negative values
+            flow_matrix[negative_mask] = 0
 
         # Remove empty rows and columns
         mask = (flow_matrix.sum(axis=0) != 0) | (flow_matrix.sum(axis=1) != 0)

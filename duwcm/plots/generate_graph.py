@@ -8,7 +8,7 @@ import networkx as nx
 from duwcm.data_structures import UrbanWaterData
 from duwcm.postprocess import calculate_flow_matrix
 
-def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
+def generate_graph(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, output_dir: Path) -> None:
     """Generate a directed graph showing water flows between components."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -25,16 +25,17 @@ def generate_graph(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
         'vadose': (0.5, 0.4),
         'groundwater': (0.75, 0.4),
         'stormwater': (0.5, 0.7),
-        'sewerage': (0.75, 0.7),
+        'sewerage': (0.7, 0.7),
         'demand': (0.5, 0.1),
         'evaporation': (1, 0.8),
         'transpiration': (1, 0.6),
         'baseflow': (1, 0.4),
         'seepage': (1, 0.2),
-        'runoff': (0.75,0.8)
+        'runoff': (0.65,0.8),
+        'discharge': (0.85,0.8),
     }
 
-    flow_matrix = calculate_flow_matrix(results)
+    flow_matrix = calculate_flow_matrix(results, flow_paths)
 
     # Create directed graph
     graph = nx.DiGraph()

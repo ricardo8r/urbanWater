@@ -8,12 +8,12 @@ from duwcm.postprocess import (calculate_flow_matrix,
                                calculate_reuse_flow_matrix
                                )
 
-def generate_alluvial_total(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
+def generate_alluvial_total(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, output_dir: Path) -> None:
     """Generate total alluvial diagram."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Get nodes and calculate flow matrix
-    flow_matrix = calculate_flow_matrix(results)
+    flow_matrix = calculate_flow_matrix(results, flow_paths)
     fig = generate_alluvial(flow_matrix)
     fig.write_image(output_dir / "sankey.png", scale=2)
 

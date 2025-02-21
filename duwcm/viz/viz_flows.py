@@ -5,15 +5,14 @@ import plotly.graph_objects as go
 import holoviews as hv
 from holoviews import opts, dim
 
-from duwcm.data_structures import UrbanWaterData
 from duwcm.diagnostics import DiagnosticTracker
 from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
-def create_flows(results: Dict[str, pd.DataFrame],
+def create_flows(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame,
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:
     """Create flow visualization (Sankey or Chord) of water flows between components."""
 
-    flow_matrix = calculate_flow_matrix(results)
+    flow_matrix = calculate_flow_matrix(results, flow_paths)
 
     if viz_type == 'sankey':
         return _create_sankey_diagram(flow_matrix)

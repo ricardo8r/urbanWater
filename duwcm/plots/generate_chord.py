@@ -6,11 +6,11 @@ from pycirclize import Circos
 
 from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
-def generate_chord(results: Dict[str, pd.DataFrame], output_dir: Path) -> None:
+def generate_chord(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, output_dir: Path) -> None:
     """Generate a chord diagram showing water flows between components."""
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    flow_matrix = calculate_flow_matrix(results)
+    flow_matrix = calculate_flow_matrix(results, flow_paths)
     flow_matrix[flow_matrix != 0] = np.log10(flow_matrix[flow_matrix != 0]) + 1e-10
 
     # Initialize from matrix

@@ -155,14 +155,17 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
         # Generate flow diagrams
         generate_chord(
             results = results,
+            flow_paths = flow_paths,
             output_dir=flow_dir
         )
         generate_graph(
             results = results,
+            flow_paths = flow_paths,
             output_dir=flow_dir
         )
         generate_alluvial_total(
             results = results,
+            flow_paths = flow_paths,
             output_dir=flow_dir
         )
         generate_alluvial_reuse(

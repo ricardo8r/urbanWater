@@ -1,0 +1,41 @@
+scenarios:
+  enabled: true
+  active_scenarios: 
+    - default
+    - dry 
+    - wet
+
+  default:
+    description: "Dry scenario with reduced precipitation"
+    precipitation_factor: 1.0
+    evaporation_factor: 1.0
+    irrigation_factor: 1.0
+    indoor_water_factor: 1.0
+
+  dry:
+    description: "Dry scenario with reduced precipitation"
+    precipitation_factor: 0.1
+    evaporation_factor: 1.0
+    irrigation_factor: 1.0
+    indoor_water_factor: 1.0
+
+  wet:
+    description: "Wet scenario with increased precipitation"
+    precipitation_factor: 5.0
+    evaporation_factor: 1.0
+    irrigation_factor: 1.0
+    indoor_water_factor: 1.0
+
+  water_saving:
+    description: "Wet scenario with increased precipitation"
+    precipitation_factor: 1.0
+    evaporation_factor: 1.0
+    irrigation_factor: 1.0
+    indoor_water_factor: 0.5
+
+  high_consumption:
+    description: "Wet scenario with increased precipitation"
+    precipitation_factor: 1.0
+    evaporation_factor: 1.0
+    irrigation_factor: 1.0
+    indoor_water_factor: 2.0
