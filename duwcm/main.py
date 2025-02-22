@@ -13,7 +13,7 @@ from duwcm.initialization import initialize_model
 from duwcm.summary import write_summary
 from duwcm.utils import load_config
 from duwcm.functions import select_cells
-from duwcm.diagnostics import DiagnosticTracker, generate_alluvial_cells
+from duwcm.diagnostics import DiagnosticTracker, alert, generate_alluvial_cells
 from duwcm.plots import (export_geodata, generate_plots, generate_maps,
                          generate_system_maps, generate_chord, generate_graph,
                          generate_alluvial_total, generate_alluvial_reuse
@@ -194,6 +194,7 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
         check_dir = output_dir / 'diagnostic'
         check_dir.mkdir(parents=True, exist_ok=True)
         tracker.generate_report(check_dir)
+        alert(tracker)
 
         selected_cells = getattr(config.grid, 'selected_cells', None)
         if selected_cells is not None:
@@ -228,47 +229,6 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
 
     summary_dir = output_dir / 'summary.txt'
     write_summary(results, flow_paths, summary_dir)
-#def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
-#    """Process and report diagnostic results."""
-#    diagnostic_keys = ['diagnostic_balance', 'diagnostic_flows', 'diagnostic_storage']
-#
-#    if not any(key in results for key in diagnostic_keys):
-#        logger.warning("No diagnostic results found")
-#        return
-#
-#    diagnostic_results = {
-#        'balance': results.get('diagnostic_balance', pd.DataFrame()),
-#        'flows': results.get('diagnostic_flows', pd.DataFrame()),
-#        'storage': results.get('diagnostic_storage', pd.DataFrame())
-#    }
-#
-#    if all(df.empty for df in diagnostic_results.values()):
-#        logger.warning("All diagnostic DataFrames are empty")
-#        return
-#
-#    # Log warnings for each type of issue
-#    balance_df = diagnostic_results['balance']
-#    if not balance_df.empty:
-#        significant_mask = abs(balance_df['balance_error_percent']) > 1.0
-#        if significant_mask.any():
-#            logger.warning("Found %d significant balance errors", len(balance_df[significant_mask]))
-#
-#    flows_df = diagnostic_results['flows']
-#    if not flows_df.empty:
-#        logger.warning("Found %d flow diagnostic issues", len(flows_df))
-#        by_type = flows_df.groupby('issue_type').size()
-#        for issue_type, count in by_type.items():
-#            logger.warning("  %s: %d issues", issue_type, count)
-#
-#    storage_df = diagnostic_results['storage']
-#    if not storage_df.empty:
-#        logger.warning("Found %d storage diagnostic issues", len(storage_df))
-#        by_component = storage_df.groupby(['component', 'issue_type']).size()
-#        for (comp, issue_type), count in by_component.items():
-#            logger.warning("  %s - %s: %d issues", comp, issue_type, count)
-#
-#    # Generate diagnostic reports
-#    generate_report(diagnostic_results, check_dir)
 
 if __name__ == "__main__":
     main()
