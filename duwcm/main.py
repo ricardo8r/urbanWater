@@ -10,7 +10,7 @@ from duwcm.forcing import read_forcing
 from duwcm.scenario_manager import ScenarioManager, run_scenario
 
 from duwcm.initialization import initialize_model
-#from duwcm.summary import print_summary
+from duwcm.summary import write_summary
 from duwcm.utils import load_config
 from duwcm.functions import select_cells
 from duwcm.diagnostics import DiagnosticTracker, generate_alluvial_cells
@@ -118,6 +118,7 @@ def main() -> None:
 def process_outputs(results, tracker, flow_paths, output_dir, config, args):
     """Process and save outputs based on arguments"""
 
+    output_dir.mkdir(parents=True, exist_ok=True)
     # Generate plots
     if args.plot:
         plot_dir = output_dir / 'figures'
@@ -207,7 +208,6 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
         #print_summary(results)
 
     if args.save:
-        output_dir.mkdir(parents=True, exist_ok=True)
         save_dir = output_dir / 'simulation_results.h5'
 
         with pd.HDFStore(save_dir, mode='w') as store:
@@ -226,6 +226,8 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
 
         logger.info("Results and forcing data saved to %s", save_dir)
 
+    summary_dir = output_dir / 'summary.txt'
+    write_summary(results, flow_paths, summary_dir)
 #def check_results(results: Dict[str, pd.DataFrame], check_dir: Path) -> None:
 #    """Process and report diagnostic results."""
 #    diagnostic_keys = ['diagnostic_balance', 'diagnostic_flows', 'diagnostic_storage']

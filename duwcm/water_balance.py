@@ -19,7 +19,6 @@ from dataclasses import fields
 import pandas as pd
 from tqdm.auto import trange
 
-from duwcm.utils import ureg
 from duwcm.water_model import UrbanWaterModel
 from duwcm.data_structures import UrbanWaterData, Storage
 from duwcm.flow_manager import Flow, MultiSourceFlow
@@ -87,7 +86,6 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
         model.update_states()
 
     df_results = results_to_dataframes(results, results_agg, forcing)
-
     return df_results
 
 def solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], forcing: pd.Series,
@@ -99,7 +97,6 @@ def solve_timestep(model: UrbanWaterModel, results_var: Dict[str, List[Dict]], f
         for component_name, component in cell_data.iter_components():
             component_class = model.classes[cell_id][component_name]
             component_class.solve(forcing)
-
         for component_name, component in cell_data.iter_components():
             results = _collect_component_results(cell_id, current_date, component)
             results_var[component_name].append(results)
@@ -108,7 +105,8 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
     """Collect flattened results from a component."""
     results = {
         'cell': cell_id,
-        'date': date
+        'date': date,
+        'storage_change': 0
     }
 
     # Add attributes
@@ -116,16 +114,23 @@ def _collect_component_results(cell_id: int, date: pd.Timestamp, component: obje
         if not attr_name.startswith('_'):
             if attr_name == 'area':
                 results['area'] = attr_value
+            elif attr_name == 'storage_coefficient':
+                results[attr_name] = attr_value
             elif isinstance(attr_value, Storage):
-                # Special handling for groundwater levels and vadose moisture
-                if attr_name in ['water_level', 'surface_water_level']:
-                    results[attr_name] = attr_value.get_amount('m')
+                if attr_name in {'vadose_moisture', 'groundwater_level', 'rt_storage'}:
+                    continue
+                if attr_name == 'water_level':
+                    results[attr_name] = -1 * attr_value.get_amount('m')
+                    results['storage_change'] += -1 * attr_value.get_change('m3')
+                elif attr_name == 'surface_water_level':
+                    results[attr_name] = -1 * attr_value.get_amount('m')
+                    results['storage_change'] += -1 * attr_value.get_change('m3')
                 elif attr_name == 'moisture':
                     results[attr_name] = attr_value.get_amount('mm')
+                    results['storage_change'] = attr_value.get_change('m3')
                 else:
                     results[attr_name] = attr_value.get_amount('m3')
-            #elif isinstance(attr_value, (int, float, bool, str)):
-            #    results[attr_name] = attr_value
+                    results['storage_change'] = attr_value.get_change('m3')
 
     if hasattr(component, 'flows'):
         flows = component.flows
@@ -223,6 +228,8 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
         'moisture': 'millimeter',
         'area': 'meter^2',
         'storage': 'meter^3',
+        'storage_change': 'meter^3',
+        'storage_coefficient': '',
         'imported_water': 'meter^3',
         'seepage': 'meter^3',
         'baseflow': 'meter^3',
@@ -243,8 +250,6 @@ def results_to_dataframes(results_var: Dict[str, List[Dict]],
             for col in df.columns:
                 if col == 'area':
                     df[col] = df[col].astype(f"pint[{flow_units['area']}]")
-                elif 'storage' in col:
-                    df[col] = df[col].astype(f"pint[{flow_units['storage']}]")
                 elif any(col.startswith(prefix) for prefix in ['to_', 'from_']):
                     df[col] = df[col].astype(f"pint[{flow_units['to_']}]")
                 elif col in flow_units:

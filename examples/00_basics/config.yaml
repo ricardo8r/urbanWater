@@ -23,8 +23,8 @@ files:
 grid:
   cell_size: 200  # meters
   direction: 6    # number of neighbors (4, 6, or 8)
-    #selected_cells: [494,495]
-  selected_cells: [493, 494, 495, 528,529, 530, 531]
+    #selected_cells: [494]
+    #selected_cells: [493, 494, 495, 528,529, 530, 531]
 
 # Simulation settings
 simulation:
@@ -49,10 +49,10 @@ model:
     crop_type: 6
     seepage_model: 0
     effective_roof_area: 80        # Connected roof area percentage
-    roof_storage: 0               # Maximum roof storage in mm
+    roof_storage: 2               # Maximum roof storage in mm
     effective_raintank_area: 80   # Connected raintank area percentage
     effective_impervious_area: 50  # Connected impervious area percentage
-    impervious_storage: 0         # Maximum impervious storage in mm
+    impervious_storage: 2         # Maximum impervious storage in mm
     pervious_storage: 8           # Maximum pervious storage in mm
     impervious_infiltration: 5    # Impervious infiltration rate mm/day
     pervious_infiltration: 35     # Pervious infiltration rate mm/day

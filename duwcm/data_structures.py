@@ -376,6 +376,7 @@ class UrbanWaterData:
                     outflows[flow_name] = amount
 
             # Calculate storage changes with more detail
+            storages = {}
             storage_changes = {}
             total_storage_change = 0
             skip_storages = {
@@ -386,6 +387,7 @@ class UrbanWaterData:
 
             for attr_name, attr_value in vars(component).items():
                 if isinstance(attr_value, Storage) and attr_name not in skip_storages:
+                    storages[attr_name] = attr_value.get_amount('m3')
                     change = attr_value.get_change('m3')
                     if comp_name == 'groundwater':
                         if attr_name == 'water_level':
@@ -397,6 +399,7 @@ class UrbanWaterData:
             balance_results[comp_name] = {
                 'inflows': inflows,
                 'outflows': outflows,
+                'storages': storages,
                 'storage_changes': storage_changes,
                 'total_storage_change': total_storage_change,
                 'total_inflow': sum(inflows.values()),

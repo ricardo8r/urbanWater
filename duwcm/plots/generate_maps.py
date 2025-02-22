@@ -155,9 +155,9 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
 
     for variable_name, (cmap, paths) in variables_to_plot.items():
         if variable_name == 'vadose_moisture':
-            data = local_results['vadose_moisture'].groupby(level='cell').last()
+            data = local_results['vadose_moisture'].groupby(level='cell').mean()
         elif variable_name == 'groundwater':
-            data = local_results['groundwater'].groupby(level='cell').last()
+            data = local_results['groundwater'].groupby(level='cell').mean()
         else:
             data = local_results[variable_name].groupby(level='cell').sum()
 
