@@ -37,13 +37,10 @@ def main() -> None:
 
     logger.info("Distributed Urban Water Balance Model")
 
-    if args.check and not args.scenarios:
+    if args.check:
         logger.info("Diagnostic checks enabled")
         tracker = DiagnosticTracker()
     else:
-        if args.check:
-            logger.warning("Diagnostic checks not available when running scenarios")
-            args.check = False
         tracker = None
 
     # Load base config and data
@@ -82,6 +79,7 @@ def main() -> None:
             model_data=model_data,
             base_params=model_params,
             base_forcing=forcing_data,
+            tracker = tracker,
             n_jobs=args.n_jobs
         )
 

@@ -2,42 +2,75 @@ scenarios:
   enabled: true
   active_scenarios: 
     - default
-    - dry 
-    - wet
+    - dry_climate
+    - wet_climate
+    - low_groundwater
+    - high_groundwater
     - water_saving
     - high_consumption
+    - infrastructure
 
   default:
-    description: "Dry scenario with reduced precipitation"
+    description: "Base scenario with default parameters"
     precipitation_factor: 1.0
     evaporation_factor: 1.0
-    irrigation_factor: 1.0
-    indoor_water_factor: 1.0
+    groundwater_factor: 1.0
+    demand_factor: 1.0
 
-  dry:
-    description: "Dry scenario with reduced precipitation"
-    precipitation_factor: 0.1
-    evaporation_factor: 1.0
-    irrigation_factor: 1.0
-    indoor_water_factor: 1.0
+  dry_climate:
+    description: "Dry climate scenario"
+    precipitation_factor: 0.5
+    evaporation_factor: 1.2
+    groundwater_factor: 1.0
+    demand_factor: 1.0
 
-  wet:
-    description: "Wet scenario with increased precipitation"
-    precipitation_factor: 5.0
+  wet_climate:
+    description: "Wet climate scenario"
+    precipitation_factor: 1.5
+    evaporation_factor: 0.8
+    groundwater_factor: 1.0
+    demand_factor: 1.0
+
+  low_groundwater:
+    description: "Low initial groundwater levels"
+    precipitation_factor: 1.0
     evaporation_factor: 1.0
-    irrigation_factor: 1.0
-    indoor_water_factor: 1.0
+    groundwater_factor: 0.5
+    demand_factor: 1.0
+
+  high_groundwater:
+    description: "High initial groundwater levels"
+    precipitation_factor: 1.0
+    evaporation_factor: 1.0
+    groundwater_factor: 1.5
+    demand_factor: 1.0
 
   water_saving:
-    description: "Wet scenario with increased precipitation"
+    description: "Water demand reduction scenario"
     precipitation_factor: 1.0
     evaporation_factor: 1.0
-    irrigation_factor: 1.0
-    indoor_water_factor: 0.5
+    groundwater_factor: 1.0
+    demand_factor: 0.5
 
   high_consumption:
-    description: "Wet scenario with increased precipitation"
+    description: "Increased water consumption scenario"
     precipitation_factor: 1.0
     evaporation_factor: 1.0
-    irrigation_factor: 1.0
-    indoor_water_factor: 2.0
+    groundwater_factor: 1.0
+    demand_factor: 2.0
+
+  high_reuse:
+    description: "Maximum water reuse scenario"
+    precipitation_factor: 1.0
+    evaporation_factor: 1.0
+    groundwater_factor: 1.0
+    demand_factor: 1.0
+    greywater_reuse: 1.7
+
+  infrastructure:
+    description: "Enhanced infrastructure scenario"
+    precipitation_factor: 1.0
+    evaporation_factor: 1.0
+    groundwater_factor: 1.0
+    demand_factor: 1.0
+    wastewater_pipe_factor: 2.0

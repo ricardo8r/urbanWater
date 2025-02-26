@@ -80,9 +80,7 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], flow_paths: pd.DataF
     # Flip direction of negative flows
     negative_mask = flow_matrix < 0
     if negative_mask.any().any():
-        # Add absolute values in opposite direction
         flow_matrix.T[negative_mask] = abs(flow_matrix[negative_mask])
-        # Clear original negative values
         flow_matrix[negative_mask] = 0
 
     # Remove any non-node columns/rows and NaN values

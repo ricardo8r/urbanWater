@@ -316,7 +316,8 @@ class DiagnosticTracker:
         net_baseflow = baseflow_flows['amount'].sum()
 
         # Define special nodes
-        special_nodes = {'precipitation', 'imported_water', 'evaporation', 'transpiration', 'seepage', 'baseflow'}
+        special_nodes = {'precipitation', 'imported_water', 'evaporation', 'transpiration', 'seepage', 'baseflow',
+                         'sewerage_upstream', 'discharge', 'runoff_upstream', 'runoff'}
         all_nodes = list(components) + list(storage_nodes) + list(special_nodes)
         all_nodes = [node for node in all_nodes if node]
 
@@ -329,13 +330,23 @@ class DiagnosticTracker:
             if flow['flow_type'] == 'inflow':
                 if flow['flow_name'] in {'precipitation', 'imported_water'}:
                     src, dest = flow['flow_name'], flow['component']
+                elif flow['component'] == 'sewerage' and flow['flow_name'] == 'from_upstream':
+                    flow_matrix.loc['sewerage_upstream', 'sewerage'] += flow['amount']
+                elif flow['component'] == 'stormwater' and flow['flow_name'] == 'from_upstream':
+                    flow_matrix.loc['runoff_upstream', 'stormwater'] += flow['amount']
                 elif flow['flow_name'].startswith('from_'):
                     src = flow['flow_name'].replace('from_', '')
                     dest = flow['component'] if src in components else None
+
             elif flow['flow_type'] == 'outflow':
                 if flow['flow_name'] in {'evaporation', 'transpiration'}:
                     dest = flow['flow_name']
                     src = flow['component']
+                elif flow['component'] == 'sewerage' and flow['flow_name'] == 'to_downstream':
+                    flow_matrix.loc['sewerage', 'discharge'] += flow['amount']
+                elif flow['component'] == 'stormwater' and flow['flow_name'] == 'to_downstream':
+                    flow_matrix.loc['stormwater', 'runoff'] += flow['amount']
+
             if src and dest:
                 flow_matrix.loc[src, dest] += amount
 
@@ -365,9 +376,7 @@ class DiagnosticTracker:
         # Flip direction of negative flows
         negative_mask = flow_matrix < 0
         if negative_mask.any().any():
-            # Add absolute values in opposite direction
             flow_matrix.T[negative_mask] = abs(flow_matrix[negative_mask])
-            # Clear original negative values
             flow_matrix[negative_mask] = 0
 
         # Remove empty rows and columns

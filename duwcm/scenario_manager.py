@@ -51,6 +51,8 @@ class Scenario:
     open_water_factor: float = 1.0
     demand_factor: float = 1.0
     groundwater_factor: float = 1.0
+    wastewater_pipe_factor: float = 1.0
+    greywater_reuse: float = 1.0
 
     # Urban modifications
     pervious_ratio: Optional[float] = None
@@ -88,6 +90,42 @@ class Scenario:
         if self.demand_factor != 1.0:
             for cell_id in modified:
                 modified[cell_id]['general']['indoor_water_use'] *= self.demand_factor
+
+        # Modify groundwater level
+        if self.groundwater_factor != 1.0:
+            for cell_id in modified:
+                modified[cell_id]['groundwater']['initial_level'] *= self.groundwater_factor
+
+        # Modify pipe capacity
+        if self.wastewater_pipe_factor != 1.0:
+            for cell_id in modified:
+                modified[cell_id]['sewerage']['max_pipe_flow'] *= self.wastewater_pipe_factor
+
+        # Modify greywater reuse settings
+        #if self.greywater_reuse != 1.0:
+        #    for cell_id in modified:
+        #        current_kitchen = modified[cell_id]['reuse']['kitchen_to_graywater']
+        #        current_bathroom = modified[cell_id]['reuse']['bathroom_to_graywater']
+        #        current_laundry = modified[cell_id]['reuse']['laundry_to_graywater']
+
+        #        # Calculate new values with the modification factor
+        #        new_kitchen = current_kitchen * self.greywater_reuse
+        #        new_bathroom = current_bathroom * self.greywater_reuse
+        #        new_laundry = current_laundry * self.greywater_reuse
+
+        #        # Ensure total doesn't exceed 100%
+        #        total = new_kitchen + new_bathroom + new_laundry
+        #        if total > 100:
+        #            logger.warning("Greywater reuse total exceeds 100%% for cell %d (%.1f%%). Scaling down.",
+        #                          cell_id, total)
+        #            scale_factor = 100 / total
+        #            new_kitchen *= scale_factor
+        #            new_bathroom *= scale_factor
+        #            new_laundry *= scale_factor
+
+        #        modified[cell_id]['reuse']['kitchen_to_graywater'] = new_kitchen
+        #        modified[cell_id]['reuse']['bathroom_to_graywater'] = new_bathroom
+        #        modified[cell_id]['reuse']['laundry_to_graywater'] = new_laundry
 
         # Apply urban transformations if specified
         if self.pervious_ratio or self.raintank_adoption:
@@ -179,25 +217,28 @@ class ScenarioManager:
         return self.scenarios.get(name)
 
     def run_scenarios(self, model_data: Dict, base_params: Dict, base_forcing: pd.DataFrame,
-                      n_jobs: int = -1) -> Dict[str, Dict[str, pd.DataFrame]]:
+                      tracker: DiagnosticTracker, n_jobs: int = -1) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Run scenarios in parallel"""
         # Prepare scenario parameters as a list
         scenario_names = []
         scenario_params = []
 
         if is_notebook():
-            backend='threading'
-            progress=True
+            backend = 'threading'
+            progress = True
+        if tracker is not None:
+            backend = 'threading'
+            progress = False
         else:
-            backend='loky'
-            progress=False
+            backend = 'loky'
+            progress = False
 
         for idx, (name, scenario) in enumerate(self.scenarios.items()):
             scenario_names.append(name)
             modified_params = scenario.modify_params(base_params)
             modified_forcing = scenario.modify_forcing(base_forcing)
             scenario_params.append((name, modified_params, modified_forcing,
-                                    model_data, None, idx, progress))
+                                    model_data, tracker, idx, progress))
 
         # Run scenarios in parallel while preserving argument structure
         results_list = Parallel(n_jobs=n_jobs, backend=backend, verbose=0)(

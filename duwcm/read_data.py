@@ -125,7 +125,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'area': roof_area, #altwater_params.ART,
                 'capacity': altwater_params.RTc * roof_area,
                 'first_flush': altwater_params.RTff * roof_area,
-                'initial_storage': 0.0,#altwater_params.RT0,
+                'initial_storage': altwater_params.RT0,
                 'effective_area': calibration_params.effective_raintank_area,
                 'install_ratio': altwater_params.pRT
             },
@@ -240,4 +240,5 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
     # Create flow paths
     flow_paths = create_flow_paths(urban_data, config.grid.direction)
 
-    return model_params, pd.DataFrame([config.model.reuse]), pd.DataFrame([config.model.demand]), soil_data, et_data, flow_paths
+    return (model_params, pd.DataFrame([config.model.reuse]), pd.DataFrame([config.model.demand]),
+            soil_data, et_data, flow_paths)
