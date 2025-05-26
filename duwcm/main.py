@@ -9,6 +9,7 @@ from duwcm.read_data import read_data
 from duwcm.forcing import read_forcing
 from duwcm.scenario_manager import ScenarioManager, run_scenario
 
+from duwcm.water_model import UrbanWaterModel
 from duwcm.initialization import initialize_model
 from duwcm.summary import write_summary
 from duwcm.utils import load_config
@@ -32,6 +33,7 @@ def main() -> None:
     parser.add_argument("--check", action="store_true", help="Check water balance")
     parser.add_argument("--scenarios", action="store_true", help="Run multiple scenarios")
     parser.add_argument("--save", action="store_true", help="Save results")
+    parser.add_argument("--initialize", action="store_true", help="Run model initialization only")
     parser.add_argument("--n-jobs", type=int, default=-1, help="Number of parallel jobs")
     args = parser.parse_args()
 
@@ -57,6 +59,20 @@ def main() -> None:
     if selected_cells is not None:
         model_params, flow_paths = select_cells(model_params, flow_paths, selected_cells)
         logger.info("Filtered to %d selected cells", len(model_params))
+
+    if args.initialize:
+        model = UrbanWaterModel(
+            params=model_params,
+            path=flow_paths,
+            soil_data=soil_data,
+            et_data=et_data,
+            demand_settings=demand_data,
+            reuse_settings=reuse_settings,
+            direction=base_config.grid.direction
+        )
+        initialize_model(model, forcing_data, base_config)
+        logger.info("Model initialization completed")
+        return
 
     if args.scenarios:
         # Load base and scenario configs separately

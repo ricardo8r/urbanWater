@@ -5,6 +5,8 @@ This module provides methods for initializing groundwater and related states
 using either cyclic spinup or ensemble approaches.
 """
 
+import os
+import pandas as pd
 from typing import Dict
 import pandas as pd
 from tqdm import tqdm
@@ -29,6 +31,20 @@ def initialize_model(model: UrbanWaterModel, forcing_data: pd.DataFrame, config:
     )
 
     apply_states(model, final_states)
+
+    # Create filename for geo-distributed file
+    original_file = os.path.join(config.input_directory, config.files.groundwater)
+    geo_file = original_file.replace('.csv', '_geo.csv')
+
+    # Create geo-distributed groundwater file with initialized values
+    groundwater_data = pd.DataFrame({
+        'BlockID': list(final_states.keys()),
+        'gw0mSL': [cell_states['groundwater'] for cell_states in final_states.values()],
+        'gwmmSL': [cell_states['groundwater'] - 1.0 for cell_states in final_states.values()]
+    }).set_index('BlockID')
+
+    # Save as separate geo-distributed file
+    groundwater_data.to_csv(geo_file)
 
 def cyclic(model: UrbanWaterModel,
            forcing_data: pd.DataFrame,
@@ -92,18 +108,18 @@ def cyclic(model: UrbanWaterModel,
                     max_relative_change = max(max_relative_change, rel_change)
 
         if verbose:
-            print(f"Cycle {cycle+1} max relative change: {max_relative_change:.4f}")
+            iterator.set_postfix(residual=f"{max_relative_change:.4f}")
 
         if max_relative_change < convergence_threshold:
             converged = True
             if verbose:
-                print(f"Converged after {cycle+1} cycles")
+                iterator.set_postfix(residual=f"{max_relative_change:.4f}", status="Converged")
             break
 
         prev_states = current_states
 
     if not converged and verbose:
-        print("Warning: Maximum cycles reached without convergence")
+        iterator.set_postfix(residual=f"{max_relative_change:.4f}", status="Max cycles reached")
 
     return current_states
 

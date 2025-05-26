@@ -1,31 +1,59 @@
 name: duwcm
 channels:
-  - defaults
   - conda-forge
+  - defaults
 dependencies:
-  - python>=3.12.2
-  - contextily
-  - dynaconf
-  - geopandas
-  - geopandas-base
-  - geopy
-  - hdf5
-  - imageio
-  - jupyter
-  - matplotlib
-  - ncurses
-  - numpy
-  - pandas
+  # Core Python and tooling
+  - python>=3.12
   - pip
-  - pylint
-  - pytables
-  - scipy
-  - seaborn
   - setuptools
+
+  # Scientific computing
+  - numpy
+  - scipy
+  - pandas
+  - matplotlib
+  - matplotlib-scalebar
+  - seaborn
+  - scikit-learn
+  - numexpr
+  - pytables
+  - hdf5
+  - openblas
+  - libgfortran5
+
+  # Geospatial and mapping
+  - geopandas
   - shapely
+  - pyproj
+  - fiona
+  - rasterio
+  - contextily
+
+  # Data/config management
+  - dynaconf
   - sqlalchemy
+  - simpledbf
   - sqlite
   - tomli
   - tomlkit
+
+  # Notebook and Jupyter tools
+  - jupyter
+  - jupyterlab
+  - notebook
+  - ipykernel
+  - ipywidgets
+
+  # Utilities and development
   - tqdm
-  - typing-extensions
+  - pylint
+  - pipreqs
+  - pint
+  - pint-pandas
+
+  # pip-only dependencies
+  - pip:
+      - pycirclize
+      - kaleido
+

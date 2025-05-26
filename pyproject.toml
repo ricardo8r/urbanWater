@@ -16,12 +16,35 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
+
 dependencies = [
     "pandas",
     "numpy",
     "simpledbf",
     "matplotlib",
+    "matplotlib-scalebar",
+    "seaborn",
+    "scikit-learn",
+    "scipy",
+    "numexpr",
+    "tables",
+    "h5py",
+    "geopandas",
+    "shapely",
+    "pyproj",
+    "fiona",
+    "rasterio",
+    "contextily",
     "dynaconf",
+    "sqlalchemy",
+    "tomli",
+    "tomlkit",
+    "tqdm",
+    "pylint",
+    "pint",
+    "pint-pandas",
+    "pycirclize",
+    "kaleido"
 ]
 
 [project.scripts]

@@ -218,8 +218,9 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
     files = config.files
 
     # Read data files
-    dbf = Dbf5(os.path.join(input_dir, files.urban_beats), codec='utf-8')
+    dbf = Dbf5(os.path.join(input_dir, files.urban_beats), codec="windows-1252") #codec='utf-8')
     urban_data = dbf.to_dataframe()
+    urban_data.rename(columns={"HexID": "BlockID"}, inplace=True)
     urban_data.set_index('BlockID', inplace=True)
     urban_data.fillna(0, inplace=True)
 
@@ -228,9 +229,37 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
     altwater_data.set_index('id', inplace=True)
     altwater_data.fillna(0, inplace=True)
 
-    groundwater_data = pd.read_csv(os.path.join(input_dir, files.groundwater)).set_index('BlockID')
     soil_data = pd.read_csv(os.path.join(input_dir, files.soil), header=0)
     et_data = pd.read_csv(os.path.join(input_dir, files.et), header=0)
+
+    groundwater_file = os.path.join(input_dir, files.groundwater)
+    geo_groundwater_file = groundwater_file.replace('.csv', '_geo.csv')
+    if os.path.exists(groundwater_file):
+        # Read and check if it's time series or cell-distributed
+        gw_temp = pd.read_csv(groundwater_file)
+        if 'BlockID' in gw_temp.columns:
+            # Option 1: Cell-distributed groundwater file
+            groundwater_data = gw_temp.set_index('BlockID')
+        elif 'Date' in gw_temp.columns or len(gw_temp.columns) == 2:
+            # Option 2: Time series groundwater file - use average for all cells
+            avg_gw_level = gw_temp.iloc[:, -1].mean()  # Average of last column
+            groundwater_data = pd.DataFrame({
+                'BlockID': urban_data.index,
+                'gw0mSL': avg_gw_level,
+                'gwmmSL': avg_gw_level - 1.0
+            }).set_index('BlockID')
+        else:
+            raise ValueError("Groundwater file format not recognized")
+    else:
+        # Option 3: No file or file doesn't exist - use config default
+        default_gw_level = getattr(config.model.calibration, 'default_groundwater_level', 2.0)
+        groundwater_data = pd.DataFrame({
+            'BlockID': urban_data.index,
+            'gw0mSL': default_gw_level,
+            'gwmmSL': default_gw_level - 1.0
+        }).set_index('BlockID')
+
+
 
     # Process data and prepare model parameters
     model_params = prepare_model_parameters(urban_data, config.model.calibration,
