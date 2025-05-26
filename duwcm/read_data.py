@@ -39,16 +39,22 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
     for i, cell_id in enumerate(urban_data.index):
         #param_index = 1 if calibration_params.shape[1] == 1 else cell_id FOR CELL BY CELL DATA
 
+        # Column name mappings for different UrbanBEATS versions
+        active_col = 'Status' if 'Status' in urban_data.columns else 'Active'
+        wd_in_col = 'WD_Indoor' if 'WD_Indoor' in urban_data.columns else 'WD_In'
+        avg_elev_col = 'Elev_Avg' if 'Elev_Avg' in urban_data.columns else 'AvgElev'
+        wd_out_col = 'WD_Outdoor' if 'WD_Outdoor' in urban_data.columns else 'WD_Out'
+
         if direction == 6:
-            total_area = urban_data.Active[cell_id] * (1.5 * np.sqrt(3) * (grid_size**2))
+            total_area = urban_data[active_col][cell_id] * (1.5 * np.sqrt(3) * (grid_size**2))
         else:
-            total_area = urban_data.Active[cell_id] * (grid_size**2)
+            total_area = urban_data[active_col][cell_id] * (grid_size**2)
 
         roof_area = urban_data.Blk_RoofsA[cell_id]
         impervious_area = urban_data.Blk_TIA[cell_id] - roof_area #Block Total Impervious Area
         pervious_area = total_area - roof_area - impervious_area
         num_houses = urban_data.ResHouses[cell_id] + urban_data.HDRFlats[cell_id]
-        indoor_water_use = urban_data.WD_In[cell_id] * 1000.0  # kL/d/block --> L/day/block
+        indoor_water_use = urban_data[wd_in_col][cell_id] * 1000.0  # kL/d/block --> L/day/block
 
         if np.isnan(num_houses):
             num_houses = 0
@@ -101,7 +107,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'number_houses': num_houses,
                 'average_occupancy': average_occupancy,
                 'indoor_water_use': indoor_water_use,
-                'elevation': urban_data.AvgElev[cell_id],
+                'elevation': urban_data[avg_elev_col][cell_id],
                 'population': urban_data.Population[cell_id],
                 'direction': direction
             },
@@ -109,7 +115,7 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'roof': 0,
                 'impervious': 0,
                 'pervious': 0,
-                'block_water_demand': urban_data.WD_Out[cell_id] * 365.0
+                'block_water_demand': urban_data[wd_out_col][cell_id] * 365.0
             },
             'soil': {
                 'soil_type': soil_type,
@@ -194,7 +200,8 @@ def create_flow_paths(urban_data: pd.DataFrame, direction: int) -> pd.DataFrame:
         neighbors = urban_data.Neighbours[cell_id].split(',')
         downstream_id = urban_data.downID[cell_id] if urban_data.downID[cell_id] > 0.0 else 0.0
         cell_path = [cell_id, downstream_id]
-        upstream_cells = [int(neighbor) * (urban_data.downID[int(neighbor)] == cell_id) for neighbor in neighbors]
+        upstream_cells = [int(neighbor) * (urban_data.downID[int(neighbor)] == cell_id)
+                  for neighbor in neighbors if int(neighbor) in urban_data.index]
         upstream_cells.sort(reverse=True)
         cell_path.extend(upstream_cells)
         flow_paths.append(cell_path)

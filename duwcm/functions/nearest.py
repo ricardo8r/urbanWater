@@ -24,7 +24,7 @@ def find_nearest_downstream(df: pd.DataFrame, direction: int, cell_size: float) 
         downstream_id = df.downID[current_id]
 
         if downstream_id > df.index.min():
-            while df.pLU_WAT[downstream_id] < 0.0001:
+            while downstream_id in df.index and df.pLU_WAT[downstream_id] < 0.0001:
                 if direction == 6:
                     distance_counts[2] += 1
                 else:

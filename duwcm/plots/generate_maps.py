@@ -21,13 +21,19 @@ def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Pa
     """Create maps showing cell IDs, elevation and flow paths with background features."""
     gdf_geometry = gpd.read_file(geometry_geopackage)
     gdf_background = gpd.read_file(background_shapefile)
+
+    # Handle different ID column names
+    id_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+    elev_col = 'AvgElev' if 'AvgElev' in gdf_geometry.columns else 'Elev_Avg'
+
+
     if gdf_background.crs != gdf_geometry.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
 
     # Get selected cells from config
     selected_cells = getattr(config.grid, 'selected_cells', None)
     if selected_cells is not None:
-        selected = gdf_geometry['BlockID'].isin(selected_cells)
+        selected = gdf_geometry[id_col].isin(selected_cells)
     else:
         selected = pd.Series(True, index=gdf_geometry.index)
 
@@ -41,9 +47,9 @@ def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Pa
         gdf_geometry[selected].plot(ax=ax1, color='lightblue', edgecolor='none', alpha=0.3)
 
     for idx, row in gdf_geometry.iterrows():
-        if selected_cells is None or row['BlockID'] in selected_cells:
+        if selected_cells is None or row[id_col] in selected_cells:
             centroid = row.geometry.centroid
-            ax1.annotate(str(int(row['BlockID'])),
+            ax1.annotate(str(int(row[id_col])),
                         (centroid.x, centroid.y),
                         ha='center', va='center',
                         fontsize=8, color='black',
@@ -60,14 +66,14 @@ def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Pa
     _, ax2 = plt.subplots(figsize=(12, 10))
     plot_background_map(ax2, gdf_background, feature_shapefiles, gdf_geometry, selected_cells)
 
-    elevation = gdf_geometry['AvgElev']
+    elevation = gdf_geometry[elev_col]
     vmin, vmax = elevation.min(), elevation.max()
 
     if (~selected).any():
         gdf_geometry[~selected].plot(ax=ax2, color='lightgray', alpha=0.2)
 
     selected_geom = gdf_geometry[selected].copy() if selected.any() else gdf_geometry
-    selected_geom.plot(column='AvgElev',
+    selected_geom.plot(column=elev_col,
                       ax=ax2,
                       cmap='terrain',
                       alpha=0.7)
@@ -94,7 +100,7 @@ def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Pa
         gdf_geometry[selected].plot(ax=ax3, color='lightblue', edgecolor='none', alpha=0.3)
 
     # Draw flow paths using plot_linear approach
-    cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
+    cell_data = {row[id_col]: row for _, row in gdf_geometry.iterrows()}
 
     for cell_id, row in cell_data.items():
         if selected_cells is None or cell_id in selected_cells:
@@ -168,6 +174,10 @@ def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
 def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.DataFrame,
                 variable_name: str, cmap: str) -> Optional[plt.cm.ScalarMappable]:
     runoff_data = gdf_geometry[variable_name].dropna()
+
+    id_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+    elev_col = 'AvgElev' if 'AvgElev' in gdf_geometry.columns else 'Elev_Avg'
+
     if runoff_data.empty:
         return None
 
@@ -183,7 +193,7 @@ def plot_linear(ax: plt.Axes, gdf_geometry: gpd.GeoDataFrame, flow_paths: pd.Dat
         abs_min, abs_max = min(abs(vmin), abs(vmax)), max(abs(vmin), abs(vmax))
         return np.interp(abs(value), [abs_min, abs_max], [1.5, 5])
 
-    cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
+    cell_data = {row[id_col]: row for _, row in gdf_geometry.iterrows()}
 
     for cell_id, row in cell_data.items():
         if pd.notna(row[variable_name]):
@@ -208,7 +218,14 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
 
     data_values = data.pint.magnitude
     gdf_geometry = gpd.read_file(geometry_geopackage)
-    gdf_geometry[variable_name] = gdf_geometry['BlockID'].map(data_values)
+    id_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+    elev_col = 'AvgElev' if 'AvgElev' in gdf_geometry.columns else 'Elev_Avg'
+
+    gdf_geometry[variable_name] = gdf_geometry[id_col].map(data_values)
+    print(f"Data mapping for {variable_name}:")
+    print(f"Non-null values in geometry: {gdf_geometry[variable_name].notna().sum()}")
+    print(f"Data range in geometry: {gdf_geometry[variable_name].min():.1f} to {gdf_geometry[variable_name].max():.1f}")
+    print(f"Original data range: {data_values.min():.1f} to {data_values.max():.1f}")
 
     gdf_background = gpd.read_file(background_shapefile)
     if gdf_background.crs != gdf_geometry.crs:
@@ -227,6 +244,11 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
 
             vmin = values.min()
             vmax = values.max()
+            if vmin == vmax:
+                center = vmin
+                vmin = center - abs(center) * 0.01  # 1% below
+                vmax = center + abs(center) * 0.01  # 1% above
+
             sm = plt.cm.ScalarMappable(cmap=cmap, norm=plt.Normalize(vmin=vmin, vmax=vmax))
             sm.set_array([])
 
@@ -269,6 +291,9 @@ def plot_background_map(ax: plt.Axes, gdf_background: gpd.GeoDataFrame,
     """Plot background elements for all maps."""
     gdf_background.plot(ax=ax, color='none', edgecolor='gray', alpha=0.8)
 
+    id_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+    elev_col = 'AvgElev' if 'AvgElev' in gdf_geometry.columns else 'Elev_Avg'
+
     for shapefile in feature_shapefiles:
         gdf_feature = gpd.read_file(shapefile)
         if gdf_feature.crs != gdf_geometry.crs:
@@ -279,7 +304,7 @@ def plot_background_map(ax: plt.Axes, gdf_background: gpd.GeoDataFrame,
             gdf_feature.plot(ax=ax, color='none', edgecolor='gray', alpha=0.8, linewidth=1)
 
     if selected_cells is not None:
-        selected = gdf_geometry['BlockID'].isin(selected_cells)
+        selected = gdf_geometry[id_col].isin(selected_cells)
         if (~selected).any():
             gdf_geometry[~selected].plot(ax=ax, color='lightgray', edgecolor='none', alpha=0.2)
         if selected.any():
