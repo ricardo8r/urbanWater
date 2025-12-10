@@ -14,7 +14,7 @@ urbanWater is a distributed urban water balance model designed to simulate and a
 
 ## Installation
 
-To install DUWM, clone this repository and install the required dependencies:
+To install urbanWater, clone this repository and install the required dependencies:
 
 ```bash
 git clone https://github.com/urbanWater.git
@@ -48,7 +48,7 @@ conda env create -f environment.yml
 
 ## Usage
 
-To run a simulation using DUWM:
+To run a simulation using urbanWater:
 
 1. Prepare your input data files as specified in the `config.toml` file.
 2. Adjust the configuration in `config.toml` to match your simulation requirements.
