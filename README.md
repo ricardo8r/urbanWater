@@ -1,4 +1,4 @@
-# UrbanWater
+# urbanWater
 
 ## Overview
 
@@ -17,8 +17,8 @@ UrbanWater is a distributed urban water balance model designed to simulate and a
 To install DUWM, clone this repository and install the required dependencies:
 
 ```bash
-git clone https://github.com/urbanwater.git
-cd urbanwater
+git clone https://github.com/urbanWater.git
+cd urbanWater
 pip install -e .
 ```
 
@@ -55,14 +55,14 @@ To run a simulation using DUWM:
 3. Run the main simulation script:
 
 ```bash
-urbanwater --config path/to/your/config.toml --env default
+urbanWater --config path/to/your/config.toml --env default
 ```
 other bash options are:
 `--plot` for plotting aggregated values and maps
 `--gis` to export a geopackage
 
 You can also use the commands:
-`urbanwater-point --config path/to/your/config_file --results path/to/your/results_file --cell_id cell` to print the results for a specific cell in a .csv file
+`urbanWater-point --config path/to/your/config_file --results path/to/your/results_file --cell_id cell` to print the results for a specific cell in a .csv file
 
 ## Configuration
 
@@ -77,7 +77,7 @@ Modify this file to suit your specific simulation needs.
 
 ## Input Data
 
-UrbanWater requires several input data files:
+urbanWater requires several input data files:
 
 - Urban layout data (from UrbanBEATS or similar tools)
 - Calibration parameters
