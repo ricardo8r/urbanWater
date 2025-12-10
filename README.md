@@ -2,7 +2,7 @@
 
 ## Overview
 
-UrbanWater is a distributed urban water balance model designed to simulate and analyze water dynamics in urban environments. It includes various components of the urban water cycle: roofs, rain tanks, pavements, pervious surfaces, vadose zone, groundwater, stormwater, and wastewater systems.
+urbanWater is a distributed urban water balance model designed to simulate and analyze water dynamics in urban environments. It includes various components of the urban water cycle: roofs, rain tanks, pavements, pervious surfaces, vadose zone, groundwater, stormwater, and wastewater systems.
 
 ## Features
 
