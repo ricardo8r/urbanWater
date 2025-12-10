@@ -1,8 +1,8 @@
-# Distributed Urban Water Cycle Model (DUWCM)
+# UrbanWater
 
 ## Overview
 
-Distributed Urban Water Cycle Model (DUWCM) is a urban water balance model designed to simulate and analyze water dynamics in urban environments. It includes various components of the urban water cycle: roofs, rain tanks, pavements, pervious surfaces, vadose zone, groundwater, stormwater, and wastewater systems.
+UrbanWater is a distributed urban water balance model designed to simulate and analyze water dynamics in urban environments. It includes various components of the urban water cycle: roofs, rain tanks, pavements, pervious surfaces, vadose zone, groundwater, stormwater, and wastewater systems.
 
 ## Features
 
@@ -10,7 +10,7 @@ Distributed Urban Water Cycle Model (DUWCM) is a urban water balance model desig
 - Simulation of water flows and interactions between urban surfaces and water systems
 - Support for water reuse strategies
 - Configuration options for different urban layouts and water management scenarios
-- oGlobal and local outputs for water balance analysis and visualization
+- Global and local outputs for water balance analysis and visualization
 
 ## Installation
 
