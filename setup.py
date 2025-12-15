@@ -4,14 +4,14 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="duwcm",
+    name="urbanWater",
     version="0.1.0",
     author="Ricardo",
     author_email="ricardo.reyes@eawag.ch",
     description="Distributed urban water cycle model",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/ricardo8r/duwcm",
+    url="https://github.com/ricardo8r/urbanWater",
     packages=find_packages(),
     classifiers=[
         "Programming Language :: Python :: 3",

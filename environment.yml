@@ -1,4 +1,4 @@
-name: duwcm
+name: urbanWater
 channels:
   - conda-forge
   - defaults
@@ -33,7 +33,7 @@ dependencies:
   # Data/config management
   - dynaconf
   - sqlalchemy
-  - simpledbf
+    #  - simpledbf
   - sqlite
   - tomli
   - tomlkit
