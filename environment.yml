@@ -33,7 +33,6 @@ dependencies:
   # Data/config management
   - dynaconf
   - sqlalchemy
-    #  - simpledbf
   - sqlite
   - tomli
   - tomlkit
@@ -44,6 +43,9 @@ dependencies:
   - notebook
   - ipykernel
   - ipywidgets
+  - holoviews
+  - plotly
+  - anywidget
 
   # Utilities and development
   - tqdm

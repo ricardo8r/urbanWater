@@ -1,4 +1,4 @@
-# duwcm/viz/__init__.py
+# urbanWater/viz/__init__.py
 
 from .viz_plots import plot_aggregated_results
 from .viz_maps import create_map_base, create_dynamic_map

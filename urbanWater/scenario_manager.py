@@ -30,11 +30,11 @@ from joblib import Parallel, delayed
 from dynaconf import Dynaconf
 import pandas as pd
 
-from duwcm.forcing import distribute_irrigation
-from duwcm.water_model import UrbanWaterModel
-from duwcm.water_balance import run_water_balance
-from duwcm.diagnostics import DiagnosticTracker
-from duwcm.utils import is_notebook
+from urbanWater.forcing import distribute_irrigation
+from urbanWater.water_model import UrbanWaterModel
+from urbanWater.water_balance import run_water_balance
+from urbanWater.diagnostics import DiagnosticTracker
+from urbanWater.utils import is_notebook
 
 logger = logging.getLogger(__name__)
 

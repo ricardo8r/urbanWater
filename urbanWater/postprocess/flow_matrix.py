@@ -1,8 +1,8 @@
 from typing import Dict, List, Optional
 import pandas as pd
 
-from duwcm.data_structures import UrbanWaterData
-from duwcm.utils import ureg
+from urbanWater.data_structures import UrbanWaterData
+from urbanWater.utils import ureg
 
 def calculate_flow_matrix(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame) -> pd.DataFrame:
     """

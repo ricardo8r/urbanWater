@@ -1,4 +1,4 @@
-# duwcm/components/__init__.py
+# urbanWater/components/__init__.py
 
 from .roof import RoofClass
 from .raintank import RainTankClass

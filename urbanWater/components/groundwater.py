@@ -1,8 +1,8 @@
 from typing import Dict, Any, Tuple
 import numpy as np
 import pandas as pd
-from duwcm.data_structures import GroundwaterData
-from duwcm.functions import soil_selector, gw_levels
+from urbanWater.data_structures import GroundwaterData
+from urbanWater.functions import soil_selector, gw_levels
 
 # Constants
 MAX_SOIL_DEPTH = 10.0

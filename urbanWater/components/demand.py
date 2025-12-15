@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 from dataclasses import dataclass
 import pandas as pd
-from duwcm.data_structures import DemandData
+from urbanWater.data_structures import DemandData
 
 @dataclass
 class ReuseConfig:

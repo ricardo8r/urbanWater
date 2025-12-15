@@ -5,17 +5,17 @@ import logging
 from joblib import Parallel, delayed
 import pandas as pd
 
-from duwcm.read_data import read_data
-from duwcm.forcing import read_forcing
-from duwcm.scenario_manager import ScenarioManager, run_scenario
+from urbanWater.read_data import read_data
+from urbanWater.forcing import read_forcing
+from urbanWater.scenario_manager import ScenarioManager, run_scenario
 
-from duwcm.water_model import UrbanWaterModel
-from duwcm.initialization import initialize_model
-from duwcm.summary import write_summary
-from duwcm.utils import load_config
-from duwcm.functions import select_cells
-from duwcm.diagnostics import DiagnosticTracker, alert, generate_alluvial_cells
-from duwcm.plots import (export_geodata, generate_plots, generate_maps,
+from urbanWater.water_model import UrbanWaterModel
+from urbanWater.initialization import initialize_model
+from urbanWater.summary import write_summary
+from urbanWater.utils import load_config
+from urbanWater.functions import select_cells
+from urbanWater.diagnostics import DiagnosticTracker, alert, generate_alluvial_cells
+from urbanWater.plots import (export_geodata, generate_plots, generate_maps,
                          generate_system_maps, generate_chord, generate_graph,
                          generate_alluvial_total, generate_alluvial_reuse
                          )

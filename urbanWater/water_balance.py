@@ -19,10 +19,10 @@ from dataclasses import fields
 import pandas as pd
 from tqdm.auto import trange
 
-from duwcm.water_model import UrbanWaterModel
-from duwcm.data_structures import UrbanWaterData, Storage
-from duwcm.flow_manager import Flow, MultiSourceFlow
-from duwcm.diagnostics import DiagnosticTracker
+from urbanWater.water_model import UrbanWaterModel
+from urbanWater.data_structures import UrbanWaterData, Storage
+from urbanWater.flow_manager import Flow, MultiSourceFlow
+from urbanWater.diagnostics import DiagnosticTracker
 
 def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
                       tracker: Optional[DiagnosticTracker] = None,

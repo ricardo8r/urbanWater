@@ -1,4 +1,4 @@
-# duwcm/functions/__init__.py
+# urbanWater/functions/__init__.py
 
 from .diagnostics import DiagnosticTracker
 from .alert import alert

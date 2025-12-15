@@ -12,7 +12,7 @@ import pandas as pd
 from tqdm import tqdm
 from dynaconf import Dynaconf
 
-from duwcm.water_model import UrbanWaterModel
+from urbanWater.water_model import UrbanWaterModel
 
 
 def initialize_model(model: UrbanWaterModel, forcing_data: pd.DataFrame, config: Dynaconf) -> None:

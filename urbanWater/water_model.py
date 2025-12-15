@@ -29,10 +29,10 @@ from typing import Dict, Any
 import numpy as np
 import pandas as pd
 
-from duwcm.functions import find_order
-from duwcm.data_structures import UrbanWaterData
+from urbanWater.functions import find_order
+from urbanWater.data_structures import UrbanWaterData
 
-from duwcm.components import (
+from urbanWater.components import (
     roof, raintank, impervious, pervious, vadose,
     groundwater, stormwater, demand, sewerage
 )

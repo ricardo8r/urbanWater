@@ -2,7 +2,7 @@ import ipywidgets as widgets
 import geopandas as gpd
 import plotly.graph_objects as go
 from IPython.display import display
-from duwcm.viz import create_map_base
+from urbanWater.viz import create_map_base
 
 def interactive_cell_selection(config, geo_file, background_file, flow_paths):
     """

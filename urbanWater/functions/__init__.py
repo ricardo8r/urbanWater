@@ -1,4 +1,4 @@
-# duwcm/functions/__init__.py
+# urbanWater/functions/__init__.py
 
 from .nearest import find_nearest_downstream
 from .selector import soil_selector, et_selector

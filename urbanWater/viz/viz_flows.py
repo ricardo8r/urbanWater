@@ -5,8 +5,8 @@ import plotly.graph_objects as go
 import holoviews as hv
 from holoviews import opts, dim
 
-from duwcm.diagnostics import DiagnosticTracker
-from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
+from urbanWater.diagnostics import DiagnosticTracker
+from urbanWater.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
 def create_flows(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame,
                             viz_type: str = 'sankey') -> Union[go.Figure, hv.Element]:

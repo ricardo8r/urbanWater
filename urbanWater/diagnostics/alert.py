@@ -1,5 +1,5 @@
 import logging
-from duwcm.diagnostics import DiagnosticTracker
+from urbanWater.diagnostics import DiagnosticTracker
 
 logger = logging.getLogger(__name__)
 def alert(tracker: DiagnosticTracker) -> None:

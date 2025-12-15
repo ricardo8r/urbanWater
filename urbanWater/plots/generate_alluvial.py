@@ -3,8 +3,8 @@ from typing import Dict
 import pandas as pd
 import plotly.graph_objects as go
 
-from duwcm.diagnostics import DiagnosticTracker
-from duwcm.postprocess import (calculate_flow_matrix,
+from urbanWater.diagnostics import DiagnosticTracker
+from urbanWater.postprocess import (calculate_flow_matrix,
                                calculate_reuse_flow_matrix
                                )
 

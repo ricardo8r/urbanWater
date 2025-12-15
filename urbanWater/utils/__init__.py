@@ -1,4 +1,4 @@
-# duwcm/functions/__init__.py
+# urbanWater/functions/__init__.py
 
 from .load_files import load_config, load_results
 from .units import BaseUnit, ureg

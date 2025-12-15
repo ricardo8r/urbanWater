@@ -10,8 +10,8 @@ This module provides comprehensive diagnostic and checking capabilities:
 from typing import Dict, Optional
 from pathlib import Path
 import pandas as pd
-from duwcm.water_model import UrbanWaterModel
-from duwcm.data_structures import Storage
+from urbanWater.water_model import UrbanWaterModel
+from urbanWater.data_structures import Storage
 
 ZERO_THRESHOLD = 1e-10
 

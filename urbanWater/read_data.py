@@ -5,7 +5,7 @@ import numpy as np
 from simpledbf import Dbf5
 from dynaconf import Dynaconf
 
-from duwcm.functions import (
+from urbanWater.functions import (
     soil_selector, gw_levels, find_nearest_downstream
 )
 

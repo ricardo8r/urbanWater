@@ -1,6 +1,6 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import ImperviousData
+from urbanWater.data_structures import ImperviousData
 
 class ImperviousClass:
     """

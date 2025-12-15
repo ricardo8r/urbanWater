@@ -1,8 +1,8 @@
 import argparse
 from pathlib import Path
-from duwcm.read_data import read_data
-from duwcm.utils import load_results, load_config
-from duwcm.plots import (generate_plots, generate_maps, generate_chord,
+from urbanWater.read_data import read_data
+from urbanWater.utils import load_results, load_config
+from urbanWater.plots import (generate_plots, generate_maps, generate_chord,
                         generate_alluvial, generate_graph)
 
 def plot_all():

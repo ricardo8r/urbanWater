@@ -5,7 +5,7 @@ import warnings
 import geopandas as gpd
 import pandas as pd
 
-from duwcm.postprocess import extract_local_results
+from urbanWater.postprocess import extract_local_results
 
 def export_geodata(geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
                forcing: pd.DataFrame, output_dir: Path, crs: str, file_format: str = 'gpkg') -> None:

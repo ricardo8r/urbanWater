@@ -2,7 +2,7 @@ from pathlib import Path
 from typing import Dict
 import pandas as pd
 
-from duwcm.postprocess.flow_matrix import calculate_flow_matrix
+from urbanWater.postprocess.flow_matrix import calculate_flow_matrix
 
 def write_summary(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame,
                   output_file: Path) -> None:

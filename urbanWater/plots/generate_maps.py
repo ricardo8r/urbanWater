@@ -11,8 +11,8 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from shapely.geometry import LineString
 
-from duwcm.utils import ureg
-from duwcm.postprocess import extract_local_results
+from urbanWater.utils import ureg
+from urbanWater.postprocess import extract_local_results
 
 
 def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Path],

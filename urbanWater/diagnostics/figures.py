@@ -2,8 +2,8 @@ from pathlib import Path
 from typing import Dict
 import pandas as pd
 
-from duwcm.diagnostics import DiagnosticTracker
-from duwcm.plots import generate_alluvial
+from urbanWater.diagnostics import DiagnosticTracker
+from urbanWater.plots import generate_alluvial
 
 def generate_alluvial_cells(flow_paths: pd.DataFrame, selected_cells: set,
                             output_dir: Path, tracker: DiagnosticTracker) -> None:

@@ -1,4 +1,4 @@
-# duwcm/plots/__init__.py
+# urbanWater/plots/__init__.py
 
 from .export_geodata import export_geodata
 from .generate_plots import generate_plots

@@ -1,4 +1,4 @@
-# duwcm/__init__.py
+# urbanWater/__init__.py
 
 # Import main components
 from .water_model import UrbanWaterModel

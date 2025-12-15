@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import RainTankData
-from duwcm.flow_manager import FlowProcess
+from urbanWater.data_structures import RainTankData
+from urbanWater.flow_manager import FlowProcess
 
 class RainTankClass:
     """

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from pycirclize import Circos
 
-from duwcm.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
+from urbanWater.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
 def generate_chord(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, output_dir: Path) -> None:
     """Generate a chord diagram showing water flows between components."""

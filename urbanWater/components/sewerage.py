@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import SewerageData
-from duwcm.flow_manager import FlowProcess
+from urbanWater.data_structures import SewerageData
+from urbanWater.flow_manager import FlowProcess
 
 # Constants
 TO_METERS = 0.001

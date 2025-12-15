@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import PerviousData
-from duwcm.functions import soil_selector
+from urbanWater.data_structures import PerviousData
+from urbanWater.functions import soil_selector
 
 # Constants
 SATURATED_PERMEABILITY_FACTOR = 10

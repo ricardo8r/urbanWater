@@ -1,4 +1,4 @@
-# duwcm/functions/__init__.py
+# urbanWater/functions/__init__.py
 
 from .flow_matrix import (calculate_flow_matrix,
                           calculate_reuse_flow_matrix

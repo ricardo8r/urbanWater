@@ -1,7 +1,7 @@
 from typing import Dict, Any, Tuple
 import pandas as pd
-from duwcm.data_structures import VadoseData
-from duwcm.functions import soil_selector, et_selector, gw_levels
+from urbanWater.data_structures import VadoseData
+from urbanWater.functions import soil_selector, et_selector, gw_levels
 
 # Constants
 TO_METERS = 0.001

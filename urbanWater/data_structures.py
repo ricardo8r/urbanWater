@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Dict, List, Any, Union, Optional
 
-from duwcm.utils import BaseUnit
-from duwcm.flow_manager import (
+from urbanWater.utils import BaseUnit
+from urbanWater.flow_manager import (
     Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, ImperviousFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
