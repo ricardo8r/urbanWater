@@ -17,7 +17,7 @@ urbanWater is a distributed urban water balance model designed to simulate and a
 To install urbanWater, clone this repository and install the required dependencies:
 
 ```bash
-git clone https://github.com/urbanWater.git
+git clone https://github.com/ricardo8r/urbanWater.git
 cd urbanWater
 pip install -e .
 ```
