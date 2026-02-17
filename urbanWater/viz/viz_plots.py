@@ -5,6 +5,11 @@ import plotly.graph_objects as go
 def plot_aggregated_results(aggregated_results: pd.DataFrame, forcing: pd.DataFrame) -> go.Figure:
     """Create interactive plot with legend toggles for each data series."""
 
+    # Align on common dates (results has an extra initial-condition row)
+    common_index = aggregated_results.index.intersection(forcing.index)
+    aggregated_results = aggregated_results.loc[common_index]
+    forcing = forcing.loc[common_index]
+
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'].pint.to('millimeter').pint.magnitude,
         'Potential Evaporation': forcing['potential_evaporation'].pint.to('millimeter').pint.magnitude,

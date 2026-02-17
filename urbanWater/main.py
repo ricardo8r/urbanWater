@@ -17,7 +17,8 @@ from urbanWater.functions import select_cells
 from urbanWater.diagnostics import DiagnosticTracker, alert, generate_alluvial_cells
 from urbanWater.plots import (export_geodata, generate_plots, generate_maps,
                          generate_system_maps, generate_chord, generate_graph,
-                         generate_alluvial_total, generate_alluvial_reuse
+                         generate_alluvial_total, generate_alluvial_reuse,
+                         generate_scenario_comparison
                          )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s',
@@ -34,6 +35,7 @@ def main() -> None:
     parser.add_argument("--scenarios", action="store_true", help="Run multiple scenarios")
     parser.add_argument("--save", action="store_true", help="Save results")
     parser.add_argument("--initialize", action="store_true", help="Run model initialization only")
+    parser.add_argument("--comparison", action="store_true", help="Generate scenario comparison plots")
     parser.add_argument("--n-jobs", type=int, default=-1, help="Number of parallel jobs")
     args = parser.parse_args()
 
@@ -110,6 +112,10 @@ def main() -> None:
             )
             for case_name, results in all_results.items()
         )
+
+        if args.comparison:
+            comparison_dir = Path(base_config.output.directory) / 'comparison'
+            generate_scenario_comparison(all_results, comparison_dir)
 
     else:
         # Single base case

@@ -10,6 +10,7 @@ from .generate_alluvial import (
     generate_alluvial_reuse
 )
 from .generate_graph import generate_graph
+from .generate_scenario_comparison import generate_scenario_comparison
 from .plot_all import plot_all
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     "generate_alluvial_total",
     "generate_alluvial_reuse",
     "generate_graph",
+    "generate_scenario_comparison",
     "plot_all"
 ]

@@ -18,6 +18,10 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
     Returns:
         None (saves PDF and PGF files for each plot)
     """
+    # Align: drop initial-condition row from results, and first forcing row (no sim result)
+    common_index = results.index.intersection(forcing.index)
+    results = results.loc[common_index]
+    forcing = forcing.loc[common_index]
     custom_params = {"axes.spines.bottom": False, "axes.spines.top": False,
                      "axes.spines.right": False, "axes.spines.left": False}
     sns.set_theme(context='notebook', style='ticks', palette='colorblind',
@@ -40,7 +44,6 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    results.index = forcing.index
     plot_data = pd.DataFrame({
         'Precipitation': forcing['precipitation'].pint.to('millimeter').pint.magnitude,
         'PotentialEvaporation': forcing['potential_evaporation'].pint.to('millimeter').pint.magnitude,
