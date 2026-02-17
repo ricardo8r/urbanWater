@@ -63,8 +63,9 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
 
     fig, ax1 = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
     ax1.set_xlabel("Time")
-    ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+    locator = mdates.AutoDateLocator(minticks=4, maxticks=12)
+    ax1.xaxis.set_major_locator(locator)
+    ax1.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
     ax1.fill_between(index, 0, plot_data['Precipitation'], color='C0',
                      alpha=0.5,linewidth=0.1, label='Precipitation')
@@ -90,8 +91,9 @@ def generate_plots(results: pd.DataFrame, forcing: pd.DataFrame, output_dir: Pat
     for i, config in enumerate(plot_configs):
         fig, ax1 = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
         ax1.set_xlabel("Time")
-        ax1.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-        ax1.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+        locator = mdates.AutoDateLocator(minticks=4, maxticks=12)
+        ax1.xaxis.set_major_locator(locator)
+        ax1.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
         ax1.fill_between(index, 0, plot_data['Precipitation'], color='C0',
                          alpha=0.5,linewidth=0.1, label='Precipitation')

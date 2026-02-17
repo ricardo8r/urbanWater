@@ -128,6 +128,7 @@ class GroundwaterClass:
         if initial_level >= MAX_SOIL_DEPTH:
             return self.soil_params[MAX_SOIL_INDEX]['stor_coef']
 
+
         return (self.soil_params[id_low]['stor_coef'] +
                 (initial_level - gw_low) / (gw_up - gw_low) *
                 (self.soil_params[id_up]['stor_coef'] - self.soil_params[id_low]['stor_coef']))

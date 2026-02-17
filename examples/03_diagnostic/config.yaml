@@ -28,8 +28,8 @@ grid:
 
 # Simulation settings
 simulation:
-  start_year: 2018
-  end_year: 2018
+  start_date: '2018-01-01'
+  end_date: '2018-12-31'
   time_step: 1
   spinup_cycles: 10
   init_method: "cyclic"

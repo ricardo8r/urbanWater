@@ -37,6 +37,8 @@ def generate_scenario_comparison(all_results: Dict[str, Dict], output_dir: Path)
     sns.set_palette(color_palette)
 
     lw = 0.7
+    markers = ['o', 's', '^', 'D', 'v', 'P', 'X', 'p', 'h', '*']
+    marker_every = 30  # show a marker every N data points
     fig_width_cm = 18
     fig_height_cm = 12
     fig_width_inch = fig_width_cm / 2.54
@@ -64,8 +66,9 @@ def generate_scenario_comparison(all_results: Dict[str, Dict], output_dir: Path)
     for field_key, field_label in volume_fields.items():
         fig, ax = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
         ax.set_xlabel("Time")
-        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+        locator = mdates.AutoDateLocator(minticks=4, maxticks=12)
+        ax.xaxis.set_major_locator(locator)
+        ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
         for i, scenario in enumerate(scenario_names):
             agg = all_results[scenario]['aggregated']
@@ -73,7 +76,9 @@ def generate_scenario_comparison(all_results: Dict[str, Dict], output_dir: Path)
             values = agg[field_key].pint.to('meter^3').pint.magnitude
 
             color = color_palette[i % len(color_palette)]
-            ax.plot(index, values, color=color, linewidth=lw, label=scenario)
+            marker = markers[i % len(markers)]
+            ax.plot(index, values, color=color, linewidth=lw, label=scenario,
+                    marker=marker, markevery=marker_every, markersize=4)
 
         ax.set_ylabel(fr"{field_label} [$\mathrm{{m}}^3$/day]")
         ax.ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
@@ -91,8 +96,9 @@ def generate_scenario_comparison(all_results: Dict[str, Dict], output_dir: Path)
     # --- Evapotranspiration figure ---
     fig, ax = plt.subplots(figsize=(fig_width_inch, fig_height_inch))
     ax.set_xlabel("Time")
-    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=3))
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%b\n%Y'))
+    locator = mdates.AutoDateLocator(minticks=4, maxticks=12)
+    ax.xaxis.set_major_locator(locator)
+    ax.xaxis.set_major_formatter(mdates.ConciseDateFormatter(locator))
 
     for i, scenario in enumerate(scenario_names):
         agg = all_results[scenario]['aggregated']
@@ -100,7 +106,9 @@ def generate_scenario_comparison(all_results: Dict[str, Dict], output_dir: Path)
         et = (agg['evaporation'] + agg['transpiration']).pint.to('millimeter').pint.magnitude
 
         color = color_palette[i % len(color_palette)]
-        ax.plot(index, et, color=color, linewidth=lw, label=scenario)
+        marker = markers[i % len(markers)]
+        ax.plot(index, et, color=color, linewidth=lw, label=scenario,
+                marker=marker, markevery=marker_every, markersize=4)
 
     ax.set_ylabel("Evapotranspiration [mm/day]")
 

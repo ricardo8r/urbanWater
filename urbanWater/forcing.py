@@ -23,12 +23,12 @@ def read_forcing(config: Dynaconf) -> pd.DataFrame:
     water_data['Date'] = pd.to_datetime(water_data['Date'], format='%Y-%m-%d', errors='coerce')
     water_data.set_index('Date', inplace=True)
 
-    start_date = pd.Timestamp(f"{config.simulation.start_year}-01-01")
-    end_date = pd.Timestamp(f"{config.simulation.end_year}-12-31")
+    start_date = pd.Timestamp(config.simulation.start_date)
+    end_date = pd.Timestamp(config.simulation.end_date)
     date_mask = (climate_data.index >= start_date) & (climate_data.index <= end_date)
 
     if not date_mask.any():
-        raise ValueError(f"No data available for the specified period: {config.simulation.start_year} to {config.simulation.end_year}")
+        raise ValueError(f"No data available for the specified period: {start_date} to {end_date}")
 
     forcing = pd.DataFrame(index=climate_data.index[date_mask])
     forcing['precipitation'] = climate_data['P'][date_mask]

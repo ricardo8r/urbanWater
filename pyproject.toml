@@ -44,7 +44,15 @@ dependencies = [
     "pint",
     "pint-pandas",
     "pycirclize",
-    "kaleido"
+    "kaleido",
+    "pytest"
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-v"
+testpaths = [
+    "tests",
 ]
 
 [project.scripts]
