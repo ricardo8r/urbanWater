@@ -10,6 +10,10 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path,
     gdf_geometry = gpd.read_file(geometry_geopackage)
     gdf_background = gpd.read_file(background_shapefile)
 
+    # Handle column name differences between datasets
+    elev_col = 'AvgElev' if 'AvgElev' in gdf_geometry.columns else 'Elev_Avg'
+    block_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+
     if gdf_geometry.crs != gdf_background.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
 
@@ -43,7 +47,7 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path,
     fig.add_trace(go.Choroplethmapbox(
         geojson=gdf_geometry.__geo_interface__,
         locations=gdf_geometry.index,
-        z=gdf_geometry['AvgElev'],
+        z=gdf_geometry[elev_col],
         colorscale='viridis',
         showscale=True,
         marker_opacity=0.7,
@@ -57,7 +61,7 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path,
     lines_lons = []
     lines_lats = []
 
-    cell_data = {row['BlockID']: row for _, row in gdf_geometry.iterrows()}
+    cell_data = {row[block_col]: row for _, row in gdf_geometry.iterrows()}
     for cell_id, row in cell_data.items():
         downstream_id = flow_paths.loc[cell_id, 'down']
         if downstream_id in cell_data and downstream_id != 0:
@@ -80,7 +84,7 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path,
     ))
 
     # Add outlets with larger markers
-    outflow_cells = gdf_geometry[gdf_geometry['BlockID'].isin(flow_paths[flow_paths['down'] == 0].index)]
+    outflow_cells = gdf_geometry[gdf_geometry[block_col].isin(flow_paths[flow_paths['down'] == 0].index)]
     outflow_centroids = outflow_cells.geometry.centroid
     fig.add_trace(go.Scattermapbox(
         lon=outflow_centroids.x.tolist(),
@@ -149,7 +153,8 @@ def create_map_base(geometry_geopackage: Path, background_shapefile: Path,
 def create_dynamic_map(gdf_geometry: gpd.GeoDataFrame, background_shapefile: Path,
                        variables: List[str], time_series_data: pd.DataFrame) -> go.Figure:
     """Create interactive map with time slider and variable selector."""
-    gdf_geometry = gdf_geometry.set_index('BlockID')
+    block_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+    gdf_geometry = gdf_geometry.set_index(block_col)
     gdf_geometry = gdf_geometry.to_crs(epsg=4326)
     bounds = gdf_geometry.total_bounds
     center_lon, center_lat = (bounds[0] + bounds[2]) / 2, (bounds[1] + bounds[3]) / 2

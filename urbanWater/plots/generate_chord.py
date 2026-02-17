@@ -3,11 +3,14 @@ from typing import Dict
 import numpy as np
 import pandas as pd
 from pycirclize import Circos
+import logging
 
 from urbanWater.postprocess import calculate_flow_matrix, calculate_reuse_flow_matrix
 
 def generate_chord(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, output_dir: Path) -> None:
     """Generate a chord diagram showing water flows between components."""
+    logging.getLogger("choreographer").setLevel(logging.WARNING)
+    logging.getLogger("kaleido").setLevel(logging.WARNING)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     flow_matrix = calculate_flow_matrix(results, flow_paths)

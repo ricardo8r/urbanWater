@@ -1,4 +1,31 @@
+import atexit
 from setuptools import setup, find_packages
+from setuptools.command.develop import develop
+from setuptools.command.install import install
+
+
+def _post_install():
+    """Download Chromium for kaleido static image export."""
+    try:
+        import kaleido
+        kaleido.get_chrome_sync()
+        print("✓ Chromium downloaded for kaleido image export.")
+    except Exception as e:
+        print(f"⚠ Could not download Chromium for kaleido: {e}")
+        print("  Run 'python -c \"import kaleido; kaleido.get_chrome_sync()\"' manually.")
+
+
+class PostInstall(install):
+    def run(self):
+        install.run(self)
+        _post_install()
+
+
+class PostDevelop(develop):
+    def run(self):
+        develop.run(self)
+        _post_install()
+
 
 with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
@@ -26,6 +53,10 @@ setup(
         "matplotlib",
         "dynaconf",
     ],
+    cmdclass={
+        "install": PostInstall,
+        "develop": PostDevelop,
+    },
     entry_points={
         "console_scripts": [
             "duwcm=duwcm.main:main",

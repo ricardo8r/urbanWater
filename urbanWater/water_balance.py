@@ -68,7 +68,7 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
 
 
     desc = f"Water balance (Scenario {process_idx})" if process_idx is not None else "Water balance"
-    iterator = trange(1, num_timesteps, desc=desc, position=process_idx, leave=progress)
+    iterator = trange(1, num_timesteps, desc=desc, position=process_idx, leave=False, disable=not progress)
     for t in iterator:
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]

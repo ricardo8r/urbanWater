@@ -24,11 +24,14 @@ Parameters for both scenarios are configurable through thresholds:
 from dataclasses import dataclass
 from typing import Dict, Optional
 from copy import deepcopy
+import multiprocessing as mp
+import multiprocessing.pool
+import os
 
 import logging
-from joblib import Parallel, delayed
 from dynaconf import Dynaconf
 import pandas as pd
+from tqdm import tqdm
 
 from urbanWater.forcing import distribute_irrigation
 from urbanWater.water_model import UrbanWaterModel
@@ -37,6 +40,11 @@ from urbanWater.diagnostics import DiagnosticTracker
 from urbanWater.utils import is_notebook
 
 logger = logging.getLogger(__name__)
+
+
+def _init_tqdm_lock(lock):
+    """Initializer for worker processes to set shared tqdm lock."""
+    tqdm.set_lock(lock)
 
 @dataclass
 class Scenario:
@@ -219,36 +227,26 @@ class ScenarioManager:
     def run_scenarios(self, model_data: Dict, base_params: Dict, base_forcing: pd.DataFrame,
                       tracker: DiagnosticTracker, n_jobs: int = -1) -> Dict[str, Dict[str, pd.DataFrame]]:
         """Run scenarios in parallel"""
-        # Prepare scenario parameters as a list
-        scenario_names = []
         scenario_params = []
-
-        if is_notebook():
-            backend = 'threading'
-            progress = True
-        if tracker is not None:
-            backend = 'threading'
-            progress = False
-        else:
-            backend = 'loky'
-            progress = False
+        progress = True
 
         for idx, (name, scenario) in enumerate(self.scenarios.items()):
-            scenario_names.append(name)
+            scenario_tracker = tracker.get(name) if isinstance(tracker, dict) else tracker
             modified_params = scenario.modify_params(base_params)
             modified_forcing = scenario.modify_forcing(base_forcing)
             scenario_params.append((name, modified_params, modified_forcing,
-                                    model_data, tracker, idx, progress))
+                                    model_data, scenario_tracker, idx, progress))
 
-        # Run scenarios in parallel while preserving argument structure
-        results_list = Parallel(n_jobs=n_jobs, backend=backend, verbose=0)(
-            delayed(run_scenario)(params) for params in scenario_params
-        )
+        n_workers = os.cpu_count() if n_jobs == -1 else n_jobs
+        lock = mp.RLock()
 
-        # Directly map results to scenario names
-        results = dict(results_list)
+        # ThreadPool for notebooks (tqdm widgets need same process), mp.Pool for CLI
+        Pool = mp.pool.ThreadPool if is_notebook() else mp.Pool
 
-        return results
+        with Pool(n_workers, initializer=_init_tqdm_lock, initargs=(lock,)) as pool:
+            results_list = pool.map(run_scenario, scenario_params)
+
+        return dict(results_list)
 
 
 def run_scenario(scenario_data):

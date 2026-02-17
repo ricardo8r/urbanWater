@@ -24,8 +24,11 @@ def interactive_cell_selection(config, geo_file, background_file, flow_paths):
         gdf_geometry = gpd.read_file(geo_file)
         fig = create_map_base(geo_file, background_file, flow_paths)
 
+        # Handle column name differences between datasets
+        block_col = 'BlockID' if 'BlockID' in gdf_geometry.columns else 'HexID'
+
         # Set proper customdata for selection
-        fig.data[0].customdata = gdf_geometry['BlockID'].values
+        fig.data[0].customdata = gdf_geometry[block_col].values
         fig.data[0].hovertemplate = "Cell ID: %{customdata}<extra></extra>"
 
         # Proper styling for selection state

@@ -222,11 +222,6 @@ def plot_variable(background_shapefile: Path, feature_shapefiles: List[Path],
     elev_col = 'AvgElev' if 'AvgElev' in gdf_geometry.columns else 'Elev_Avg'
 
     gdf_geometry[variable_name] = gdf_geometry[id_col].map(data_values)
-    print(f"Data mapping for {variable_name}:")
-    print(f"Non-null values in geometry: {gdf_geometry[variable_name].notna().sum()}")
-    print(f"Data range in geometry: {gdf_geometry[variable_name].min():.1f} to {gdf_geometry[variable_name].max():.1f}")
-    print(f"Original data range: {data_values.min():.1f} to {data_values.max():.1f}")
-
     gdf_background = gpd.read_file(background_shapefile)
     if gdf_background.crs != gdf_geometry.crs:
         gdf_background = gdf_background.to_crs(gdf_geometry.crs)
