@@ -19,6 +19,7 @@ def generate_graph(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, o
         'imported': (0, 0.4),
         'irrigation': (0, 0),
         'roof': (0.25, 0.9),
+        'greenroof': (0.5, 0.9),
         'raintank': (0.25, 0.7),
         'impervious': (0.25, 0.5),
         'pervious': (0.25, 0.3),

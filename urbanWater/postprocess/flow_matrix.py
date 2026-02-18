@@ -28,13 +28,13 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], flow_paths: pd.DataF
             flow_matrix.loc[src_comp, trg_comp] = float(flow_value)
 
     # Add precipitation flows
-    for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
+    for comp in ['roof', 'greenroof', 'impervious', 'pervious', 'raintank', 'stormwater']:
         if comp in results:
             flow_value = results[comp]['precipitation'].pint.magnitude.sum()
             flow_matrix.loc['precipitation', comp] = float(flow_value)
 
     # Add evaporation flows
-    for comp in ['roof', 'impervious', 'pervious', 'raintank', 'stormwater']:
+    for comp in ['roof', 'greenroof', 'impervious', 'pervious', 'raintank', 'stormwater']:
         if comp in results:
             flow_value = results[comp]['evaporation'].pint.magnitude.sum()
             flow_matrix.loc[comp, 'evaporation'] = float(flow_value)
@@ -43,6 +43,11 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], flow_paths: pd.DataF
     if 'vadose' in results:
         flow_value = results['vadose']['transpiration'].pint.magnitude.sum()
         flow_matrix.loc['vadose', 'evaporation'] = float(flow_value)
+    
+    if 'greenroof' in results:
+        flow_value = results['greenroof']['transpiration'].pint.magnitude.sum()
+        # Add to existing evaporation flow
+        flow_matrix.loc['greenroof', 'evaporation'] += float(flow_value)
 
     # Add imported water flows
     if 'demand' in results:

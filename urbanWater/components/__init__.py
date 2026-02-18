@@ -1,6 +1,7 @@
 # urbanWater/components/__init__.py
 
 from .roof import RoofClass
+from .greenroof import GreenRoofClass
 from .raintank import RainTankClass
 from .impervious import ImperviousClass
 from .pervious import PerviousClass
@@ -12,6 +13,7 @@ from .demand import DemandClass
 
 __all__ = [
     "RoofClass",
+    "GreenRoofClass",
     "RainTankClass",
     "ImperviousClass",
     "PerviousClass",

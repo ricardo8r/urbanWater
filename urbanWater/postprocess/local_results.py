@@ -22,7 +22,9 @@ def extract_local_results(dataframe_results: Dict[str, pd.DataFrame]) -> pd.Data
         ('pervious', 'evaporation'),
         ('raintank', 'evaporation'),
         ('stormwater', 'evaporation'),
-        ('vadose', 'transpiration')
+        ('vadose', 'transpiration'),
+        ('greenroof', 'evaporation'),
+        ('greenroof', 'transpiration')
     ]
 
     results_dict = {}

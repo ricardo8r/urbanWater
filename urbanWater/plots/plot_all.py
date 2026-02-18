@@ -3,7 +3,7 @@ from pathlib import Path
 from urbanWater.read_data import read_data
 from urbanWater.utils import load_results, load_config
 from urbanWater.plots import (generate_plots, generate_maps, generate_chord,
-                        generate_alluvial, generate_graph)
+                        generate_alluvial_total, generate_graph)
 
 def plot_all():
     parser = argparse.ArgumentParser(description="Generate plots from simulation results")
@@ -39,8 +39,9 @@ def plot_all():
                   geo_file, results, map_dir, flow_paths)
 
     # Generate flow visualizations
-    generate_chord(results, flow_dir)
-    generate_alluvial(results, flow_dir)
-    generate_graph(results, flow_dir)
+    # Generate flow visualizations
+    generate_chord(results, flow_paths, flow_dir)
+    generate_alluvial_total(results, flow_paths, flow_dir)
+    generate_graph(results, flow_paths, flow_dir)
 
     print(f'All visualization outputs saved in {out_base}')

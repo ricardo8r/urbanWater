@@ -46,23 +46,17 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
     """
 
     num_timesteps = len(forcing)
-    
-    # Pre-allocate schema and array storage (Phase 1 discovery happens on first timestep)
+
     results_schemas: Dict[str, List[str]] = {}
     results_arrays: Dict[str, np.ndarray] = {}
-    
-    # Pre-calculate cell count and total rows for allocation
+
     cell_ids = list(model.cell_order)
     n_cells = len(cell_ids)
-    # Results are collected for t=1 to end (initial condition t=0 is agg-only)
     n_rows = max(0, (num_timesteps - 1) * n_cells)
 
     results_agg = []
-
-    # Add initial conditions to results at t=0
     initial_date = forcing.index[0] - pd.Timedelta(days=1)
 
-    # Initialize aggregated results for t=0
     results_agg.append({
         'date': initial_date,
         'stormwater': 0,
@@ -76,30 +70,28 @@ def run_water_balance(model: UrbanWaterModel, forcing: pd.DataFrame,
 
     desc = f"Water balance (Scenario {process_idx})" if process_idx is not None else "Water balance"
     iterator = trange(1, num_timesteps, desc=desc, position=process_idx, leave=False, disable=not progress)
-    
+
     for t in iterator:
         current_date = forcing.index[t]
         timestep_forcing = forcing.iloc[t]
 
-        # Solve timestep
         solve_timestep(model, results_schemas, results_arrays, n_rows, t, n_cells, timestep_forcing, current_date)
         model.distribute_sewerage()
         model.distribute_stormwater()
         _aggregate_timestep(model, results_agg, current_date)
 
-        # Track diagnostic for current timestep if enabled
         if tracker is not None:
             tracker.track_diagnostic_results(model, current_date)
 
         model.update_states()
 
-    df_results = results_to_dataframes(results_schemas, results_arrays, 
-                                     forcing.index[1:], cell_ids, 
+    df_results = results_to_dataframes(results_schemas, results_arrays,
+                                     forcing.index[1:], cell_ids,
                                      results_agg, forcing)
     return df_results
 
-def solve_timestep(model: UrbanWaterModel, 
-                   results_schemas: Dict[str, List[str]], 
+def solve_timestep(model: UrbanWaterModel,
+                   results_schemas: Dict[str, List[str]],
                    results_arrays: Dict[str, np.ndarray],
                    n_rows: int,
                    timestep_idx: int, # 1-based index from loop
@@ -107,48 +99,42 @@ def solve_timestep(model: UrbanWaterModel,
                    forcing: pd.Series,
                    current_date: pd.Timestamp) -> None:
     """Solve the water balance for a single timestep for all cells in the specified order."""
-    
-    # Calculate base row index for this timestep
-    # timestep_idx starts at 1, so offset by -1 for 0-based array index
+
     base_row_idx = (timestep_idx - 1) * n_cells
-    
+
     for cell_idx, cell_id in enumerate(model.cell_order):
         cell_data = model.data[cell_id]
-        
-        # Calculate exact row index for this cell
         row_idx = base_row_idx + cell_idx
 
         for component_name, component in cell_data.iter_components():
             component_class = model.classes[cell_id][component_name]
             component_class.solve(forcing)
-            
+
         for component_name, component in cell_data.iter_components():
-            # If schema not yet discovered (first encounter of this component type), discover and allocate
             if component_name not in results_schemas:
                 schema = _discover_component_schema(component)
                 results_schemas[component_name] = schema
-                # Allocate float64 array for values
                 results_arrays[component_name] = np.zeros((n_rows, len(schema)), dtype=np.float64)
-            
+
             # Write directly to array
             _collect_component_results_into_array(
-                component, 
-                results_arrays[component_name], 
-                row_idx, 
+                component,
+                results_arrays[component_name],
+                row_idx,
                 results_schemas[component_name]
             )
 
 def _discover_component_schema(component: object) -> List[str]:
     """Discover column names from component attributes."""
     schema = []
-    
+
     # Add attributes
     for attr_name, attr_value in vars(component).items():
         if not attr_name.startswith('_'):
             if attr_name in {'vadose_moisture', 'groundwater_level', 'rt_storage'}:
                 continue
             schema.append(attr_name)
-    
+
     # Explicitly ensure storage_change is present if not already
     if 'storage_change' not in schema:
         schema.append('storage_change')
@@ -164,24 +150,24 @@ def _discover_component_schema(component: object) -> List[str]:
         for flow_name, flow in vars(internal_flows).items():
             if isinstance(flow, (Flow, MultiSourceFlow)):
                 schema.append(flow_name)
-                
+
     return schema
 
-def _collect_component_results_into_array(component: object, 
-                                        array: np.ndarray, 
-                                        row_idx: int, 
+def _collect_component_results_into_array(component: object,
+                                        array: np.ndarray,
+                                        row_idx: int,
                                         schema: List[str]) -> None:
     """Collect results directly into pre-allocated array row."""
-    
+
     current_values = {}
     current_storage_change = 0.0
-    
+
     # 1. Attributes
     for attr_name, attr_value in vars(component).items():
         if not attr_name.startswith('_'):
             if attr_name in {'vadose_moisture', 'groundwater_level', 'rt_storage'}:
                 continue
-            
+
             if attr_name == 'area':
                 current_values[attr_name] = attr_value
             elif attr_name == 'storage_coefficient':
@@ -245,7 +231,8 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
 
     if total_transpiration_area > 0:
         total_transpiration_m3 = sum(
-            data.vadose.flows.get_flow('transpiration', 'L')
+            (data.vadose.flows.get_flow('transpiration', 'L') + 
+             data.greenroof.flows.get_flow('transpiration', 'L'))
             for cell_id, data in model.data.items()
         )
         aggregated['transpiration'] = total_transpiration_m3 / total_transpiration_area
@@ -254,13 +241,14 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
 
     total_evap_area = sum(
         data.roof.area + data.impervious.area + data.pervious.area +
-        data.raintank.area + data.stormwater.area
+        data.raintank.area + data.stormwater.area + data.greenroof.area
         for cell_id, data in model.data.items()
     )
 
     if total_evap_area > 0:
         total_evap_m3 = sum(
             (data.roof.flows.get_flow('evaporation', 'L') +
+             data.greenroof.flows.get_flow('evaporation', 'L') +
              data.impervious.flows.get_flow('evaporation', 'L') +
              data.pervious.flows.get_flow('evaporation', 'L') +
              data.raintank.flows.get_flow('evaporation', 'L') +
@@ -320,16 +308,13 @@ def results_to_dataframes(results_schemas: Dict[str, List[str]],
 
     # Create MultiIndex once for all components
     if len(dates) > 0 and len(cell_ids) > 0:
-         # Note: from_product order matters. 
-         # We simulated outer loop = dates, inner loop = cells.
-         # So flattened array corresponds to product([dates, cell_ids])
-         multi_index = pd.MultiIndex.from_product([dates, cell_ids], names=['date', 'cell'])
+        multi_index = pd.MultiIndex.from_product([dates, cell_ids], names=['date', 'cell'])
     else:
-         multi_index = pd.Index([])
+        multi_index = pd.Index([])
 
     for key, array in results_arrays.items():
         schema = results_schemas[key]
-        
+
         # Check if empty
         if array.size == 0:
             # Create empty DF with correct columns

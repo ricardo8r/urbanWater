@@ -33,7 +33,7 @@ from urbanWater.functions import find_order
 from urbanWater.data_structures import UrbanWaterData
 
 from urbanWater.components import (
-    roof, raintank, impervious, pervious, vadose,
+    roof, greenroof, raintank, impervious, pervious, vadose,
     groundwater, stormwater, demand, sewerage
 )
 
@@ -97,6 +97,7 @@ class UrbanWaterModel:
             #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else cell_id
             cell_submodels = {
                 'roof': roof.RoofClass(cell_params, self.data[cell_id].roof),
+                'greenroof': greenroof.GreenRoofClass(cell_params, self.data[cell_id].greenroof, et_data=self.et_data),
                 'raintank': raintank.RainTankClass(cell_params, self.data[cell_id].raintank),
                 'impervious': impervious.ImperviousClass(cell_params, self.data[cell_id].impervious),
                 'pervious': pervious.PerviousClass(cell_params, self.soil_data, self.et_data,

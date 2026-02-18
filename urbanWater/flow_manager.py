@@ -495,6 +495,80 @@ class RoofFlows(ComponentFlows):
         ))
 
 @dataclass
+class GreenRoofFlows(ComponentFlows):
+    """
+    Green Roof component flows.
+
+    Tracks:
+    - Precipitation input
+    - Irrigation input
+    - Infiltration to substrate
+    - Evaporation from surface
+    - Transpiration from substrate
+    - Surface runoff (overflow)
+    - Substrate drainage
+    """
+    # Inputs
+    precipitation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.PRECIPITATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.IN
+        ))
+
+    from_demand: Flow = field(
+        default_factory=lambda: Flow(
+            _process=None,
+            _quality=WaterQuality.TREATED,
+            _use=WaterUse.IRRIGATION,
+            _direction=FlowDirection.IN
+        ))
+
+    # Internal
+    to_substrate: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.INFILTRATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    # Outputs
+    evaporation: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+
+    transpiration: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.EVAPORATION,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.ENVIRONMENTAL,
+            _direction=FlowDirection.OUT
+        ))
+    
+    # Runoff (Combined Surface Overflow + Substrate Drainage)
+    to_stormwater: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
+    to_pervious: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.OUT
+        ))
+
+@dataclass
 class RainTankFlows(ComponentFlows):
     """
     Raintank component flows tracking water storage and distribution.
@@ -676,6 +750,14 @@ class PerviousFlows(ComponentFlows):
             _direction=FlowDirection.IN
         ))
 
+    from_greenroof: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
     from_impervious: Flow = field(
         default_factory=lambda: Flow(
             _process=FlowProcess.RUNOFF,
@@ -842,6 +924,14 @@ class StormwaterFlows(ComponentFlows):
             _direction=FlowDirection.IN
         ))
 
+    from_greenroof: Flow = field(
+        default_factory=lambda: Flow(
+            _process=FlowProcess.RUNOFF,
+            _quality=WaterQuality.RAINWATER,
+            _use=WaterUse.OVERFLOW,
+            _direction=FlowDirection.IN
+        ))
+
     from_impervious: Flow = field(
         default_factory=lambda: Flow(
             _process=FlowProcess.RUNOFF,
@@ -921,6 +1011,8 @@ class SewerageFlows(ComponentFlows):
             _use=WaterUse.LEAKAGE,
             _direction=FlowDirection.IN
         ))
+
+
 
     # Combined sewer inputs
     from_stormwater: Flow = field(

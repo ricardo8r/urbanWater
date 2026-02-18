@@ -7,7 +7,8 @@ from urbanWater.flow_manager import (
     Flow, MultiSourceFlow,
     RoofFlows, RainTankFlows, ImperviousFlows, PerviousFlows,
     VadoseFlows, GroundwaterFlows, StormwaterFlows,
-    SewerageFlows, DemandFlows, DemandInternalFlows
+    SewerageFlows, DemandFlows, DemandInternalFlows,
+    GreenRoofFlows
 )
 
 @dataclass
@@ -80,6 +81,24 @@ class RoofData:
     ))
     area: float = field(default=0, metadata={'unit': 'm^2'})
     effective_outflow: float = field(default=0.0, metadata={'unit': '%'})
+
+@dataclass
+class GreenRoofData:
+    """Green Roof component"""
+    flows: GreenRoofFlows = field(default_factory=GreenRoofFlows)
+    surface_storage: Storage = field(default_factory=lambda: Storage(
+        _default_unit=BaseUnit.CUBIC_METER,
+        _capacity=0.0
+    ))
+    substrate_storage: Storage = field(default_factory=lambda: Storage(
+        _default_unit=BaseUnit.CUBIC_METER,
+        _capacity=0.0
+    ))
+    area: float = field(default=0, metadata={'unit': 'm^2'})
+    substrate_depth: float = field(default=0, metadata={'unit': 'mm'})
+    effective_outflow: float = field(default=0.0, metadata={'unit': '%'})
+    crop_factor: float = field(default=1.0, metadata={'unit': '-'})
+    conductivity: float = field(default=10.0, metadata={'unit': 'mm/h'})
 
 @dataclass
 class RainTankData:
@@ -205,6 +224,7 @@ class DemandData:
 class UrbanWaterData:
     """Container for all urban water components"""
     roof: RoofData = field(default_factory=RoofData)
+    greenroof: GreenRoofData = field(default_factory=GreenRoofData)
     raintank: RainTankData = field(default_factory=RainTankData)
     impervious: ImperviousData = field(default_factory=ImperviousData)
     pervious: PerviousData = field(default_factory=PerviousData)
@@ -216,7 +236,7 @@ class UrbanWaterData:
 
     # Define components at class level
     COMPONENTS = [
-        'roof', 'raintank', 'impervious', 'pervious', 'vadose',
+        'roof', 'greenroof', 'raintank', 'impervious', 'pervious', 'vadose',
         'groundwater', 'demand', 'stormwater', 'sewerage'
     ]
 
@@ -226,6 +246,8 @@ class UrbanWaterData:
         ('roof', 'to_raintank'): ('raintank', 'from_roof'),
         ('roof', 'to_pervious'): ('pervious', 'from_roof'),
         ('roof', 'to_stormwater'): ('stormwater', 'from_roof'),
+        ('greenroof', 'to_pervious'): ('pervious', 'from_greenroof'),
+        ('greenroof', 'to_stormwater'): ('stormwater', 'from_greenroof'),
         ('raintank', 'to_impervious'): ('impervious', 'from_raintank'),
         ('raintank', 'to_stormwater'): ('stormwater', 'from_raintank'),
         ('raintank', 'to_demand'): ('demand', 'from_raintank'),

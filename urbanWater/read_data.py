@@ -50,9 +50,13 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
         else:
             total_area = urban_data[active_col][cell_id] * (grid_size**2)
 
-        roof_area = urban_data.Blk_RoofsA[cell_id]
-        impervious_area = urban_data.Blk_TIA[cell_id] - roof_area #Block Total Impervious Area
-        pervious_area = total_area - roof_area - impervious_area
+        roof_area_total = urban_data.Blk_RoofsA[cell_id]
+        greenroof_coverage = calibration_params.get('greenroof_coverage', 0.0) / 100.0
+        greenroof_area = roof_area_total * greenroof_coverage
+        roof_area = roof_area_total - greenroof_area
+
+        impervious_area = urban_data.Blk_TIA[cell_id] - roof_area_total #Block Total Impervious Area
+        pervious_area = total_area - roof_area_total - impervious_area
         num_houses = urban_data.ResHouses[cell_id] + urban_data.HDRFlats[cell_id]
         indoor_water_use = urban_data[wd_in_col][cell_id] * 1000.0  # kL/d/block --> L/day/block
 
@@ -125,6 +129,17 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
                 'area': roof_area,
                 'effective_area': calibration_params.effective_roof_area,
                 'max_storage': calibration_params.roof_storage
+            },
+            'greenroof': {
+                'area': greenroof_area,
+                'effective_area': calibration_params.effective_greenroof_area,
+                'max_storage': calibration_params.greenroof_storage,
+                'max_substrate_storage': calibration_params.greenroof_substrate_storage,
+                'substrate_depth': calibration_params.greenroof_depth,
+                'conductivity': calibration_params.greenroof_conductivity,
+                'crop_factor': calibration_params.greenroof_crop_factor,
+                'soil_type': soil_type,
+                'crop_type': crop_type
             },
             'raintank': {
                 'is_open': altwater_params.RTop,

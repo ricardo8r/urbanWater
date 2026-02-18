@@ -1,0 +1,61 @@
+==================================================
+
+Water Balance Summary
+==================================================
+
+Total Precipitation   : 3,597,612.66 m³
+Total Imported Water  : 157,856.22 m³
+Total Evaporation     : 765,351.39 m³
+Total Seepage         : 668,297.06 m³
+Total Baseflow        : 4,547,334.53 m³
+Total Runoff          : 35,349.07 m³
+Total Discharge       : 168,935.73 m³
+
+Water Balance Check
+-------------------------
+Total Input           : 3,755,468.88 m³
+Total Output          : 6,185,267.78 m³
+
+
+
+==================================================
+
+Water Balance Details
+==================================================
+
+
+Precipitation Breakdown
+-------------------------
+roof                  : 121,347.77 m³
+impervious            : 102,725.10 m³
+pervious              : 3,252,183.53 m³
+raintank              : 8.49 m³
+stormwater            : 0.00 m³
+
+Evaporation Breakdown
+-------------------------
+roof                  : 15,279.63 m³
+impervious            : 12,934.74 m³
+pervious              : 73,710.68 m³
+raintank              : 0.97 m³
+stormwater            : 0.00 m³
+
+Irrigation Breakdown
+-------------------------
+roof                  : 0.00 m³
+impervious            : 0.00 m³
+pervious              : 80,887.32 m³
+
+Storage Changes Breakdown
+-------------------------
+roof                  : -0.00 m³
+raintank              : -0.00 m³
+impervious            : -0.00 m³
+pervious              : 0.00 m³
+stormwater            : 0.00 m³
+sewerage              : 0.00 m³
+vadose                : -207,468.14 m³
+groundwater           : 2,308,825.87 m³
+
+Vadose avg moisture   : -4.32 mm
+Groundwater avg level : 0.22 m
