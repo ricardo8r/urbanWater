@@ -98,18 +98,34 @@ def solve_timestep(model: UrbanWaterModel,
                    n_cells: int,
                    forcing: pd.Series,
                    current_date: pd.Timestamp) -> None:
-    """Solve the water balance for a single timestep for all cells in the specified order."""
+    """
+    Solve the water balance for a single timestep using a dual-pass approach.
+    Pass 1: Runoff components (using runoff topology)
+    Pass 2: Sewerage components (using sewerage topology)
+    """
 
+    # Pass 1: Solve runoff-related components using runoff order
+    runoff_components = ['demand', 'roof', 'greenroof', 'raintank', 'impervious', 
+                        'pervious', 'vadose', 'groundwater', 'stormwater']
+    
+    for cell_id in model.runoff_order:
+        for comp_name in runoff_components:
+            if comp_name in model.classes[cell_id]:
+                model.classes[cell_id][comp_name].solve(forcing)
+
+    # Pass 2: Solve sewerage components using sewerage order
+    for cell_id in model.sewerage_order:
+        if 'sewerage' in model.classes[cell_id]:
+            model.classes[cell_id]['sewerage'].solve(forcing)
+
+    # Results Collection (iterate over registered cell order)
     base_row_idx = (timestep_idx - 1) * n_cells
 
     for cell_idx, cell_id in enumerate(model.cell_order):
         cell_data = model.data[cell_id]
         row_idx = base_row_idx + cell_idx
 
-        for component_name, component in cell_data.iter_components():
-            component_class = model.classes[cell_id][component_name]
-            component_class.solve(forcing)
-
+        # Collect results from all components
         for component_name, component in cell_data.iter_components():
             if component_name not in results_schemas:
                 schema = _discover_component_schema(component)
@@ -219,8 +235,10 @@ def _aggregate_timestep(model: UrbanWaterModel, results_agg: List[Dict], current
 
     for cell_id, data in model.data.items():
         # Aggregate end-point flows
-        if model.path.loc[cell_id, 'down'] == 0:
+        if model.runoff_path.loc[cell_id, 'down'] == 0:
             aggregated['stormwater'] += data.stormwater.flows.to_downstream.get_amount('m3')
+        
+        if model.sewerage_path.loc[cell_id, 'down'] == 0:
             aggregated['sewerage'] += data.sewerage.flows.to_downstream.get_amount('m3')
 
         aggregated['baseflow'] += data.groundwater.flows.baseflow.get_amount('m3')

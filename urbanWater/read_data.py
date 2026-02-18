@@ -199,22 +199,34 @@ def prepare_model_parameters(urban_data: pd.DataFrame, calibration_params: Dict,
 
     return params
 
-def create_flow_paths(urban_data: pd.DataFrame, direction: int) -> pd.DataFrame:
+def create_flow_paths(urban_data: pd.DataFrame, direction: int, topology_data: pd.DataFrame = None) -> pd.DataFrame:
     """
     Create flow paths for each cell based on UrbanBEATS output.
 
     Args:
-        urban_data (pd.DataFrame): UrbanBEATS output data
+        urban_data (pd.DataFrame): DataFrame containing flow information (downID)
         direction (int): Direction that is considered for neighborhoods (4, 6, or 8)
+        topology_data (pd.DataFrame, optional): DataFrame containing grid topology (Neighbours). 
+                                              If None, uses urban_data.
 
     Returns:
         pd.DataFrame: Flow paths for each cell
     """
     flow_paths = []
+    
+    # Use topology_data for neighbors if provided, otherwise use the flow data itself
+    grid_data = topology_data if topology_data is not None else urban_data
+
     for cell_id in urban_data.index:
-        neighbors = urban_data.Neighbours[cell_id].split(',')
+        if cell_id not in grid_data.index:
+            # Skip cells not in topology (shouldn't happen if grids match)
+            continue
+            
+        neighbors = grid_data.Neighbours[cell_id].split(',')
         downstream_id = urban_data.downID[cell_id] if urban_data.downID[cell_id] > 0.0 else 0.0
         cell_path = [cell_id, downstream_id]
+        
+        # Check which neighbors flow into this cell based on the flow data (urban_data)
         upstream_cells = [int(neighbor) * (urban_data.downID[int(neighbor)] == cell_id)
                   for neighbor in neighbors if int(neighbor) in urban_data.index]
         upstream_cells.sort(reverse=True)
@@ -223,7 +235,8 @@ def create_flow_paths(urban_data: pd.DataFrame, direction: int) -> pd.DataFrame:
 
     flow_paths_df = pd.DataFrame(flow_paths)
     flow_paths_df = flow_paths_df.fillna(0)
-    flow_paths_df.set_index(0, inplace=True)
+    if not flow_paths_df.empty:
+        flow_paths_df.set_index(0, inplace=True)
 
     if direction == 8:
         flow_paths_df.columns = ['down', 'u1', 'u2', 'u3', 'u4', 'u5', 'u6', 'u7', 'u8']
@@ -233,6 +246,7 @@ def create_flow_paths(urban_data: pd.DataFrame, direction: int) -> pd.DataFrame:
         flow_paths_df.columns = ['down', 'u1', 'u2', 'u3', 'u4']
 
     return flow_paths_df
+
 
 def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]], pd.DataFrame, pd.DataFrame]:
     """Read and process required data files."""
@@ -289,7 +303,47 @@ def read_data(config: Dynaconf) -> Tuple[Dict[int, Dict[str, Dict[str, float]]],
                                          config.grid.cell_size, config.grid.direction)
 
     # Create flow paths
-    flow_paths = create_flow_paths(urban_data, config.grid.direction)
+    sewerage_file = getattr(files, 'sewerage_flow', None)
+    if sewerage_file:
+        sewer_dbf = Dbf5(os.path.join(input_dir, sewerage_file), codec="windows-1252")
+        sewer_data = sewer_dbf.to_dataframe()
+        if "HexID" in sewer_data.columns:
+            sewer_data.rename(columns={"HexID": "BlockID"}, inplace=True)
+        elif "BlockID" not in sewer_data.columns:
+            # Fallback or assumption if no ID column found, though unlikely for these DBFs
+            pass
+        
+        if "BlockID" in sewer_data.columns:
+            sewer_data.set_index('BlockID', inplace=True)
+        
+        if "DownID" in sewer_data.columns:
+            sewer_data.rename(columns={"DownID": "downID"}, inplace=True)
+
+        sewer_data.fillna(0, inplace=True)
+        sewerage_paths = create_flow_paths(sewer_data, config.grid.direction, topology_data=urban_data)
+        # Ensure all cells are present
+        sewerage_paths = sewerage_paths.reindex(urban_data.index, fill_value=0)
+    else:
+        sewerage_paths = create_flow_paths(urban_data, config.grid.direction)
+
+    runoff_file = getattr(files, 'runoff_flow', None)
+    if runoff_file:
+        runoff_dbf = Dbf5(os.path.join(input_dir, runoff_file), codec="windows-1252")
+        runoff_data = runoff_dbf.to_dataframe()
+        if "HexID" in runoff_data.columns:
+            runoff_data.rename(columns={"HexID": "BlockID"}, inplace=True)
+        if "BlockID" in runoff_data.columns:
+            runoff_data.set_index('BlockID', inplace=True)
+
+        if "DownID" in runoff_data.columns:
+            runoff_data.rename(columns={"DownID": "downID"}, inplace=True)
+
+        runoff_data.fillna(0, inplace=True)
+        runoff_paths = create_flow_paths(runoff_data, config.grid.direction, topology_data=urban_data)
+        # Ensure all cells are present
+        runoff_paths = runoff_paths.reindex(urban_data.index, fill_value=0)
+    else:
+        runoff_paths = create_flow_paths(urban_data, config.grid.direction)
 
     return (model_params, pd.DataFrame([config.model.reuse]), pd.DataFrame([config.model.demand]),
-            soil_data, et_data, flow_paths)
+            soil_data, et_data, sewerage_paths, runoff_paths)

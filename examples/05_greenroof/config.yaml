@@ -51,12 +51,11 @@ model:
     effective_roof_area: 80        # Connected roof area percentage
     roof_storage: 2               # Maximum roof storage in mm
     greenroof_coverage: 50        # Percentage of total roof area converted to greenroof
-    greenroof_coverage: 50        # Percentage of total roof area converted to greenroof
-    effective_greenroof_area: 50 # Connected greenroof area percentage
-    greenroof_storage: 5          # Maximum greenroof surface storage in mm
-    greenroof_substrate_storage: 30 # Maximum greenroof substrate storage in mm (porosity * depth)
+    effective_greenroof_area: 100 # Connected greenroof area percentage
+    greenroof_storage: 0          # Maximum greenroof storage in mm
+    greenroof_substrate_storage: 0 # Maximum greenroof substrate storage in mm
     greenroof_depth: 100          # Greenroof substrate depth in mm
-    greenroof_conductivity: 50    # Greenroof substrate conductivity in mm/h
+    greenroof_conductivity: 10    # Greenroof conductivity mm/h
     greenroof_crop_factor: 1.0    # Greenroof crop factor
     effective_raintank_area: 80   # Connected raintank area percentage
     effective_impervious_area: 50  # Connected impervious area percentage

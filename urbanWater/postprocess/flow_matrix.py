@@ -4,13 +4,14 @@ import pandas as pd
 from urbanWater.data_structures import UrbanWaterData
 from urbanWater.utils import ureg
 
-def calculate_flow_matrix(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame) -> pd.DataFrame:
+def calculate_flow_matrix(results: Dict[str, pd.DataFrame], sewerage_paths: pd.DataFrame, runoff_paths: pd.DataFrame) -> pd.DataFrame:
     """
     Calculate flow matrix between model components.
 
     Args:
         results: Dictionary containing simulation results for each component
-        nodes: List of node names for the flow matrix
+        sewerage_paths: DataFrame defining sewerage flow paths
+        runoff_paths: DataFrame defining runoff flow paths
 
     Returns:
         pd.DataFrame: Matrix of flows between components
@@ -69,17 +70,23 @@ def calculate_flow_matrix(results: Dict[str, pd.DataFrame], flow_paths: pd.DataF
             flow_matrix.loc['baseflow', 'groundwater'] = abs(float(flow_value))
 
     if 'stormwater' in results:
-        # Only count outflow from terminal cells (those with no downstream)
-        outflow_cells = flow_paths[flow_paths['down'] == 0].index
+        # Count outflow from terminal cells AND cells flowing out of the simulated domain
+        simulated_cells = results['stormwater'].index.get_level_values('cell').unique()
+        is_outflow = (runoff_paths['down'] == 0) | (~runoff_paths['down'].isin(simulated_cells))
+        outflow_cells = runoff_paths[is_outflow].index
+        
         flow_value = sum(results['stormwater']['to_downstream'].xs(cell_id, level='cell').pint.magnitude.sum()
-                        for cell_id in outflow_cells if cell_id in results['stormwater'].index.get_level_values('cell'))
+                        for cell_id in outflow_cells if cell_id in simulated_cells)
         flow_matrix.loc['stormwater', 'runoff'] = float(flow_value)
 
     if 'sewerage' in results:
-        # Same for sewerage outflow
-        outflow_cells = flow_paths[flow_paths['down'] == 0].index
+        # Same for sewerage: terminal cells + domain exits
+        simulated_cells = results['sewerage'].index.get_level_values('cell').unique()
+        is_outflow = (sewerage_paths['down'] == 0) | (~sewerage_paths['down'].isin(simulated_cells))
+        outflow_cells = sewerage_paths[is_outflow].index
+
         flow_value = sum(results['sewerage']['to_downstream'].xs(cell_id, level='cell').pint.magnitude.sum()
-                        for cell_id in outflow_cells if cell_id in results['sewerage'].index.get_level_values('cell'))
+                        for cell_id in outflow_cells if cell_id in simulated_cells)
         flow_matrix.loc['sewerage', 'discharge'] = float(flow_value)
 
     # Flip direction of negative flows

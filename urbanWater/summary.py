@@ -4,20 +4,22 @@ import pandas as pd
 
 from urbanWater.postprocess.flow_matrix import calculate_flow_matrix
 
-def write_summary(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame,
+def write_summary(results: Dict[str, pd.DataFrame], sewerage_paths: pd.DataFrame, runoff_paths: pd.DataFrame,
                   output_file: Path) -> None:
     """
     Generate a summary of total water balance components using results data.
 
     Args:
         results (Dict[str, pd.DataFrame]): Dictionary containing simulation results
+        sewerage_paths (pd.DataFrame): Sewerage flow paths
+        runoff_paths (pd.DataFrame): Runoff flow paths
         output_file (Path): Path to save the summary file
 
     Returns:
         None
     """
 
-    flow_matrix = calculate_flow_matrix(results, flow_paths)
+    flow_matrix = calculate_flow_matrix(results, sewerage_paths, runoff_paths)
 
     # Write summary to file
     with open(output_file, 'w', encoding="utf8") as f:

@@ -50,6 +50,12 @@ model:
     seepage_model: 0
     effective_roof_area: 80        # Connected roof area percentage
     roof_storage: 2               # Maximum roof storage in mm
+    effective_greenroof_area: 100 # Connected greenroof area percentage
+    greenroof_storage: 0          # Maximum greenroof storage in mm
+    greenroof_substrate_storage: 0 # Maximum greenroof substrate storage in mm
+    greenroof_depth: 100          # Greenroof substrate depth in mm
+    greenroof_conductivity: 10    # Greenroof conductivity mm/h
+    greenroof_crop_factor: 1.0    # Greenroof crop factor
     effective_raintank_area: 80   # Connected raintank area percentage
     effective_impervious_area: 50  # Connected impervious area percentage
     impervious_storage: 2         # Maximum impervious storage in mm
