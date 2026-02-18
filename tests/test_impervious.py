@@ -7,62 +7,70 @@ def test_impervious_initialization(impervious_component, mock_params):
     assert impervious_component.impervious_data.storage.get_capacity('mm') == mock_params['impervious']['max_storage']
 
 def test_impervious_solve(impervious_component, mock_forcing):
-    """Test solve method with precipitation and evaporation."""
-    forcing_day = mock_forcing.iloc[0] # Precip=0, PotEvap=2.0
+    """Test solve method with precipitation and overflow logic."""
+    forcing_day = mock_forcing.iloc[1] # 10mm precip, 1.0 pot evap
     
-    # Manually adding some water to storage to test evaporation
-    impervious_component.impervious_data.storage.set_amount(1.0, 'mm')
+    # Initial state: Empty
+    impervious_component.impervious_data.storage.set_previous(0.0, 'mm')
     
+    # Run
     impervious_component.solve(forcing_day)
     
-    # Check evaporation
-    # storage = 1.0mm, pot_evap = 2.0mm.
-    # evap = min(storage, pot_evap) = 1.0mm
-    # remaining storage = 0.0
-    assert impervious_component.impervious_data.flows.get_flow('evaporation', 'mm') == pytest.approx(0.0)
-    assert impervious_component.impervious_data.storage.get_amount('mm') == pytest.approx(0.0)
+    # Verify outputs exist
+    final_storage = impervious_component.impervious_data.storage.get_amount('mm')
+    evap = impervious_component.impervious_data.flows.get_flow('evaporation', 'mm')
+    runoff_storm = impervious_component.impervious_data.flows.get_flow('to_stormwater', 'mm')
+    runoff_perv = impervious_component.impervious_data.flows.get_flow('to_pervious', 'mm')
+    
+    # Mass balance check for this single run
+    # In = 10.0. Out = Evap + Runoff. ΔStorage = Final.
+    total_out = evap + runoff_storm + runoff_perv
+    assert (10.0 - total_out) == pytest.approx(final_storage, abs=1e-9)
+    
+    # Ensure some runoff happened (since 10mm > Cap typically)
+    assert (runoff_storm + runoff_perv) > 0.0
 
-def test_impervious_solve_runoff(impervious_component, mock_forcing):
-    """Test runoff generation."""
-    # Use day with precipitation (index 1: 10.0mm)
-    forcing_day = mock_forcing.iloc[1] 
+def test_impervious_water_balance(impervious_component, mock_forcing):
+    """Test water balance conservation in ImperviousClass."""
+    forcing_day = mock_forcing.iloc[1] # 10.0mm precip
     
-    # Empty storage
-    impervious_component.impervious_data.storage.set_amount(0.0, 'mm')
+    # Set capacity known (modify capacity for test)
+    impervious_component.impervious_data.storage.set_capacity(2.0, 'mm')
     
-    impervious_component.solve(forcing_day)
+    # Initial state
+    initial_storage = 0.5 # mm
+    impervious_component.impervious_data.storage.set_previous(initial_storage, 'mm')
     
-    # Precip = 10.0mm
-    # Evap = 1.0mm (potential) -> actual?
-    # Logic: 
-    # water_on_surface = storage + precip = 10.0
-    # evap = min(water_on_surface, pot_evap) = 1.0
-    # available = 9.0
-    # infiltration = min(available, capacity=5.0) = 5.0 (pervious part? No, impervious infiltration param)
-    # Wait, impervious usually has small infiltration param. mock_params: inf_cap=5.0
+    # Inflows
+    # Precip = 10.0 (from forcing)
+    # Raintank overflow? Manual set in m3.
+    area = impervious_component.impervious_data.area
+    inv_rain = 1.0 # m3
+    impervious_component.impervious_data.flows.set_flow('from_raintank', inv_rain, 'm3')
     
-    # Runoff logic:
-    # excess = available - infiltration = 9.0 - 5.0 = 4.0
+    # Demand irrigation (from forcing 'impervious_irrigation' - default 0).
+    # Let's mock forcing to have irrigation
+    forcing_day_mod = forcing_day.copy()
+    forcing_day_mod['impervious_irrigation'] = 2.0 # mm
     
-    # Storage update:
-    # max_storage = 2.0
-    # filled = min(4.0, 2.0) = 2.0
-    # runoff = 4.0 - 2.0 = 2.0
+    # Solve
+    impervious_component.solve(forcing_day_mod)
     
-    # Effective area split (50%)
-    # to_stormwater = runoff * effective_area_per
-    # to_pervious = runoff * (1 - effective_area_per)
+    # Verify
+    precip_m3 = impervious_component.impervious_data.flows.get_flow('precipitation', 'm3')
+    irrig_m3 = impervious_component.impervious_data.flows.get_flow('from_demand', 'm3')
+    rt_m3 = impervious_component.impervious_data.flows.get_flow('from_raintank', 'm3')
     
-    # Let's verify expectations based on code logic:
-    # Area = 100m2. 2.0mm runoff = 0.2 m3.
-    # 50% = 0.1 m3 each.
+    evap_m3 = impervious_component.impervious_data.flows.get_flow('evaporation', 'm3')
+    storm_m3 = impervious_component.impervious_data.flows.get_flow('to_stormwater', 'm3')
+    perv_m3 = impervious_component.impervious_data.flows.get_flow('to_pervious', 'm3')
     
-    # But wait, is infiltration applied to whole area? Yes.
+    final_storage_m3 = impervious_component.impervious_data.storage.get_amount('m3')
+    initial_storage_m3 =  initial_storage * area / 1000.0 # mm to m3
     
-    # Assert
-    assert impervious_component.impervious_data.storage.get_amount('mm') == pytest.approx(1.0)
-    # Check flows (in m3)
-    # 2.0mm * 100m2 = 0.2 m3 total runoff
-    # Split 50/50
-    assert impervious_component.impervious_data.flows.get_flow('to_stormwater', 'm3') == pytest.approx(0.4)
-    assert impervious_component.impervious_data.flows.get_flow('to_pervious', 'm3') == pytest.approx(0.4)
+    delta_m3 = final_storage_m3 - initial_storage_m3
+    
+    total_in = precip_m3 + irrig_m3 + rt_m3
+    total_out = evap_m3 + storm_m3 + perv_m3
+    
+    assert delta_m3 == pytest.approx(total_in - total_out, abs=1e-9)

@@ -89,7 +89,7 @@ class GroundwaterClass:
                          forcing.get('pervious_irrigation', 0.0)
                          ) * data.leakage_rate / (1 - data.leakage_rate)
 
-        data.flows.set_flow('from_demand', total_leakage, 'L')
+        data.flows.set_flow('from_demand', total_leakage * self.time_step, 'L')
 
         vadose_percolation = data.flows.get_flow('from_vadose', 'm')
         inflow = data.flows.get_flow('from_demand', 'm') + vadose_percolation
@@ -115,9 +115,14 @@ class GroundwaterClass:
         data.surface_water_level.set_amount(min(0, water_level * data.storage_coefficient), 'm')
 
         infiltration = max(0.0, (PIPE_DEPTH - avg_water_level) * data.infiltration_recession * self.time_step)
-        baseflow = (data.storage_coefficient * data.water_level.get_change('m') +
-                    data.surface_water_level.get_change('m') +
-                    inflow - seepage - infiltration) * self.time_step
+
+        # Baseflow is residual of water balance: In - Out = ΔS
+        # In - (Seep + Inf + Base) = ΔS
+        # Base = In - Seep - Inf - ΔS
+        storage_change = (data.storage_coefficient * data.water_level.get_change('m') +
+                          data.surface_water_level.get_change('m'))
+
+        baseflow = inflow - seepage - infiltration - storage_change
         # Update flows
         data.flows.set_flow('seepage', seepage, 'm')
         data.flows.set_flow('baseflow', baseflow, 'm')
