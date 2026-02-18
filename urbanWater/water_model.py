@@ -51,14 +51,15 @@ class UrbanWaterModel:
         - Sewerage
     """
 
-    def __init__(self, params: Dict[str, Dict[str, float]], path: pd.DataFrame, soil_data: pd.DataFrame,
+    def __init__(self, params: Dict[str, Dict[str, float]], sewerage_path: pd.DataFrame, runoff_path: pd.DataFrame, soil_data: pd.DataFrame,
                  et_data: pd.DataFrame, demand_settings: pd.DataFrame, reuse_settings: pd.DataFrame, direction: int):
         """
         Initialize the UrbanWaterModel.
 
         Args:
             params: Dictionary of parameter dictionaries for each grid cell.
-            path: Downstream path DataFrame.
+            sewerage_path: Sewerage flow path DataFrame.
+            runoff_path: Runoff flow path DataFrame.
             soil_data: Soil parameter data.
             et_data: Evapotranspiration parameter data.
             demand_settings: Water demand data.
@@ -66,7 +67,8 @@ class UrbanWaterModel:
             num_timesteps: Number of time steps in the simulation.
             direction: Number of neighbors considered (4, 6, or 8)
         """
-        self.path = path
+        self.sewerage_path = sewerage_path
+        self.runoff_path = runoff_path
         self.params = params
         self.soil_data = soil_data
         self.et_data = et_data
@@ -84,7 +86,11 @@ class UrbanWaterModel:
                                  if i in selected_cells and params[i]['stormwater']['capacity'] > 0]
 
         # Calculate the order of cells, filtering for selected cells
-        self.cell_order = [cell for cell in find_order(self.path, direction) if cell in selected_cells]
+        self.sewerage_order = [cell for cell in find_order(self.sewerage_path, direction) if cell in selected_cells]
+        self.runoff_order = [cell for cell in find_order(self.runoff_path, direction) if cell in selected_cells]
+        
+        # Restore cell_order for general iteration (water_balance.py relies on this)
+        self.cell_order = self.runoff_order
 
 
     def _init_submodels(self) -> Dict[int, Dict[str, Any]]:
@@ -110,16 +116,19 @@ class UrbanWaterModel:
                 'sewerage': sewerage.SewerageClass(cell_params, self.data[cell_id].sewerage)
             }
             self.classes[cell_id] = cell_submodels
-
-        # Connect upstream flows for both stormwater and sewerage
+            
+        # Connect upstream flows for stormwater (runoff path)
         for cell_id in self.params:
-            for up in self.path.loc[cell_id].iloc[1:]:  # Start from u1 onwards
-                if up != 0 and up in self.params:  # Check if upstream cell exists and is in selected cells
-                    # Link stormwater flows
-                    self.data[cell_id].stormwater.flows.from_upstream.add_source(
+            for up in self.runoff_path.loc[cell_id].iloc[1:]:
+                if up != 0 and up in self.params:
+                     self.data[cell_id].stormwater.flows.from_upstream.add_source(
                         self.data[up].stormwater.flows.to_downstream
                     )
-                    # Link sewerage flows
+
+        # Connect upstream flows for sewerage (sewerage path)
+        for cell_id in self.params:
+            for up in self.sewerage_path.loc[cell_id].iloc[1:]:
+                if up != 0 and up in self.params:
                     self.data[cell_id].sewerage.flows.from_upstream.add_source(
                         self.data[up].sewerage.flows.to_downstream
                     )
@@ -132,7 +141,7 @@ class UrbanWaterModel:
 
     def distribute_sewerage(self):
         for w in self.sewerage_cells:
-            available_cells = list(self.cell_order)
+            available_cells = list(self.sewerage_order)
             while self.data[w].sewerage.storage.amount > 0 and available_cells:
                 select = np.random.choice(available_cells)
                 #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select
@@ -162,7 +171,7 @@ class UrbanWaterModel:
 
     def distribute_stormwater(self):
         for s in self.stormwater_cells:
-            available_cells = list(self.cell_order)
+            available_cells = list(self.runoff_order)
             while self.data[s].stormwater.storage.amount > 0 and available_cells:
                 select = np.random.choice(available_cells)
                 #reuse_index = 1 if self.reuse_settings.shape[1] == 1 else select

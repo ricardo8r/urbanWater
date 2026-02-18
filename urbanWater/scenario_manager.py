@@ -256,7 +256,8 @@ def run_scenario(scenario_data):
     distribute_irrigation(modified_params)
     model = UrbanWaterModel(
         params=modified_params,
-        path=model_data['flow_paths'],
+        sewerage_path=model_data['sewerage_paths'],
+        runoff_path=model_data['runoff_paths'],
         soil_data=model_data['soil_data'],
         et_data=model_data['et_data'],
         demand_settings=model_data['demand_data'],

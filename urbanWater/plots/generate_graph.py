@@ -8,7 +8,7 @@ import networkx as nx
 from urbanWater.data_structures import UrbanWaterData
 from urbanWater.postprocess import calculate_flow_matrix
 
-def generate_graph(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, output_dir: Path) -> None:
+def generate_graph(results: Dict[str, pd.DataFrame], sewerage_paths: pd.DataFrame, runoff_paths: pd.DataFrame, output_dir: Path) -> None:
     """Generate a directed graph showing water flows between components."""
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -35,7 +35,7 @@ def generate_graph(results: Dict[str, pd.DataFrame], flow_paths: pd.DataFrame, o
         'discharge': (0.85,0.8),
     }
 
-    flow_matrix = calculate_flow_matrix(results, flow_paths)
+    flow_matrix = calculate_flow_matrix(results, sewerage_paths, runoff_paths)
 
     # Create directed graph
     graph = nx.DiGraph()

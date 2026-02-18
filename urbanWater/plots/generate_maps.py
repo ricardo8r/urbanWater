@@ -16,7 +16,7 @@ from urbanWater.postprocess import extract_local_results
 
 
 def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Path],
-                         geometry_geopackage: Path, flow_paths: pd.DataFrame,
+                         geometry_geopackage: Path, sewerage_paths: pd.DataFrame, runoff_paths: pd.DataFrame,
                          output_dir: Path, config: Dynaconf) -> None:
     """Create maps showing cell IDs, elevation and flow paths with background features."""
     gdf_geometry = gpd.read_file(geometry_geopackage)
@@ -90,69 +90,72 @@ def generate_system_maps(background_shapefile: Path, feature_shapefiles: List[Pa
     plt.savefig(output_dir / 'elevation_map.png', dpi=300, bbox_inches='tight')
     plt.close()
 
-    # Map 3: Flow paths
-    _, ax3 = plt.subplots(figsize=(12, 10))
-    plot_background_map(ax3, gdf_background, feature_shapefiles, gdf_geometry, selected_cells)
+    # Map 3 & 4: Flow paths for Runoff and Sewerage
+    paths_dict = {'Runoff': runoff_paths, 'Sewerage': sewerage_paths}
+    
+    for name, flow_paths in paths_dict.items():
+        _, ax3 = plt.subplots(figsize=(12, 10))
+        plot_background_map(ax3, gdf_background, feature_shapefiles, gdf_geometry, selected_cells)
 
-    if (~selected).any():
-        gdf_geometry[~selected].plot(ax=ax3, color='lightgray', edgecolor='none', alpha=0.2)
-    if selected.any():
-        gdf_geometry[selected].plot(ax=ax3, color='lightblue', edgecolor='none', alpha=0.3)
+        if (~selected).any():
+            gdf_geometry[~selected].plot(ax=ax3, color='lightgray', edgecolor='none', alpha=0.2)
+        if selected.any():
+            gdf_geometry[selected].plot(ax=ax3, color='lightblue', edgecolor='none', alpha=0.3)
 
-    # Draw flow paths using plot_linear approach
-    cell_data = {row[id_col]: row for _, row in gdf_geometry.iterrows()}
+        # Draw flow paths using plot_linear approach
+        cell_data = {row[id_col]: row for _, row in gdf_geometry.iterrows()}
 
-    for cell_id, row in cell_data.items():
-        if selected_cells is None or cell_id in selected_cells:
-            downstream_id = flow_paths.loc[cell_id, 'down']
-            if downstream_id in cell_data and downstream_id != 0:
-                # Get center points
-                start_point = row.geometry.centroid
-                end_point = cell_data[downstream_id].geometry.centroid
-                line = LineString([start_point, end_point])
+        for cell_id, row in cell_data.items():
+            if selected_cells is None or cell_id in selected_cells:
+                downstream_id = flow_paths.loc[cell_id, 'down']
+                if downstream_id in cell_data and downstream_id != 0:
+                    # Get center points
+                    start_point = row.geometry.centroid
+                    end_point = cell_data[downstream_id].geometry.centroid
+                    line = LineString([start_point, end_point])
 
-                # Draw line with arrow
-                line_coords = line.xy
-                ax3.plot(line_coords[0], line_coords[1],
-                        color='red', linewidth=1.5, alpha=0.6)
+                    # Draw line with arrow
+                    line_coords = line.xy
+                    ax3.plot(line_coords[0], line_coords[1],
+                            color='red', linewidth=1.5, alpha=0.6)
 
-                # Add arrow
-                arrow_pos = 0.5  # Position along the line (0-1)
-                arrow_x = line_coords[0][0] + (line_coords[0][1] - line_coords[0][0]) * arrow_pos
-                arrow_y = line_coords[1][0] + (line_coords[1][1] - line_coords[1][0]) * arrow_pos
-                dx = line_coords[0][1] - line_coords[0][0]
-                dy = line_coords[1][1] - line_coords[1][0]
-                ax3.arrow(arrow_x, arrow_y, dx*0.1, dy*0.1,
-                         head_width=50, head_length=50,
-                         fc='red', ec='red', alpha=0.6)
+                    # Add arrow
+                    arrow_pos = 0.5  # Position along the line (0-1)
+                    arrow_x = line_coords[0][0] + (line_coords[0][1] - line_coords[0][0]) * arrow_pos
+                    arrow_y = line_coords[1][0] + (line_coords[1][1] - line_coords[1][0]) * arrow_pos
+                    dx = line_coords[0][1] - line_coords[0][0]
+                    dy = line_coords[1][1] - line_coords[1][0]
+                    ax3.arrow(arrow_x, arrow_y, dx*0.1, dy*0.1,
+                             head_width=50, head_length=50,
+                             fc='red', ec='red', alpha=0.6)
 
-    # Mark outflow cells
-    outflow_cells = flow_paths[flow_paths['down'] == 0].index
-    for cell_id in outflow_cells:
-        if cell_id in cell_data:
-            cell = cell_data[cell_id]
-            centroid = cell.geometry.centroid
-            ax3.plot(centroid.x, centroid.y, 'r*', markersize=15,
-                    label='Outflow point' if cell_id == outflow_cells[0] else "")
+        # Mark outflow cells
+        outflow_cells = flow_paths[flow_paths['down'] == 0].index
+        for cell_id in outflow_cells:
+            if cell_id in cell_data:
+                cell = cell_data[cell_id]
+                centroid = cell.geometry.centroid
+                ax3.plot(centroid.x, centroid.y, 'r*', markersize=15,
+                        label='Outflow point' if cell_id == outflow_cells[0] else "")
 
-    if len(outflow_cells) > 0:
-        ax3.legend(loc='upper right', bbox_to_anchor=(1.1, 1))
+        if len(outflow_cells) > 0:
+            ax3.legend(loc='upper right', bbox_to_anchor=(1.1, 1))
 
-    ax3.set_title('Flow Paths')
-    ax3.axis('off')
-    plt.savefig(output_dir / 'flow_paths_map.png', dpi=300, bbox_inches='tight')
-    plt.close()
+        ax3.set_title(f'{name} Flow Paths')
+        ax3.axis('off')
+        plt.savefig(output_dir / f'flow_paths_{name.lower()}.png', dpi=300, bbox_inches='tight')
+        plt.close()
 
 def generate_maps(background_shapefile: Path, feature_shapefiles: List[Path],
                   geometry_geopackage: Path, results: Dict[str, pd.DataFrame],
-                  output_dir: Path, flow_paths: pd.DataFrame) -> None:
+                  output_dir: Path, sewerage_paths: pd.DataFrame, runoff_paths: pd.DataFrame) -> None:
     variables_to_plot = {
         'evapotranspiration': ('Greens', None),
         'imported_water': ('YlOrRd', None),
         'baseflow': ('Blues', None),
         'deep_seepage': ('PuBuGn', None),
-        'stormwater_runoff': ('BuPu', flow_paths),
-        'sewerage_discharge': ('PuRd', flow_paths),
+        'stormwater_runoff': ('BuPu', runoff_paths),
+        'sewerage_discharge': ('PuRd', sewerage_paths),
         'groundwater': ('YlOrBr', None),
         'vadose_moisture': ('YlGnBu', None)
     }

@@ -49,7 +49,7 @@ def main() -> None:
 
     # Load base config and data
     base_config = load_config(args.config, args.env, "config.yaml")
-    model_params, reuse_settings, demand_data, soil_data, et_data, flow_paths = read_data(base_config)
+    model_params, reuse_settings, demand_data, soil_data, et_data, sewerage_paths, runoff_paths = read_data(base_config)
     forcing_data = read_forcing(base_config)
     logger.info("Number of grid cells: %d", len(model_params))
     logger.info("Simulation period: %s to %s",
@@ -59,13 +59,15 @@ def main() -> None:
     # Filter selected cells if specified
     selected_cells = getattr(base_config.grid, 'selected_cells', None)
     if selected_cells is not None:
-        model_params, flow_paths = select_cells(model_params, flow_paths, selected_cells)
+        model_params, sewerage_paths = select_cells(model_params, sewerage_paths, selected_cells)
+        _, runoff_paths = select_cells(model_params, runoff_paths, selected_cells)
         logger.info("Filtered to %d selected cells", len(model_params))
 
     if args.initialize:
         model = UrbanWaterModel(
             params=model_params,
-            path=flow_paths,
+            sewerage_path=sewerage_paths,
+            runoff_path=runoff_paths,
             soil_data=soil_data,
             et_data=et_data,
             demand_settings=demand_data,
@@ -84,7 +86,8 @@ def main() -> None:
 
         # Create shared data dict
         model_data = {
-            'flow_paths': flow_paths,
+            'sewerage_paths': sewerage_paths,
+            'runoff_paths': runoff_paths,
             'soil_data': soil_data,
             'et_data': et_data,
             'demand_data': demand_data,
@@ -105,7 +108,8 @@ def main() -> None:
             delayed(process_outputs)(
                 results,
                 tracker,
-                flow_paths,
+                sewerage_paths,
+                runoff_paths,
                 Path(base_config.output.directory) / case_name,
                 base_config,
                 args
@@ -120,7 +124,8 @@ def main() -> None:
     else:
         # Single base case
         scenario_data = (args.env, model_params, forcing_data, {
-            'flow_paths': flow_paths,
+            'sewerage_paths': sewerage_paths,
+            'runoff_paths': runoff_paths,
             'soil_data': soil_data,
             'et_data': et_data,
             'demand_data': demand_data,
@@ -130,12 +135,12 @@ def main() -> None:
         _, results = run_scenario(scenario_data)
 
         out_base = Path(base_config.output.directory) / args.env
-        process_outputs(results, tracker, flow_paths, out_base, base_config, args)
+        process_outputs(results, tracker, sewerage_paths, runoff_paths, out_base, base_config, args)
 
     logger.info("Simulation completed")
 
 
-def process_outputs(results, tracker, flow_paths, output_dir, config, args):
+def process_outputs(results, tracker, sewerage_paths, runoff_paths, output_dir, config, args):
     """Process and save outputs based on arguments"""
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -160,8 +165,9 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
             background_shapefile = background_shapefile,
             feature_shapefiles = feature_shapefiles,
             geometry_geopackage = geo_file,
+            sewerage_paths = sewerage_paths,
+            runoff_paths = runoff_paths,
             output_dir = map_dir,
-            flow_paths = flow_paths,
             config = config
             )
         generate_maps(
@@ -170,25 +176,30 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
             geometry_geopackage = geo_file,
             results = results,
             output_dir = map_dir,
-            flow_paths = flow_paths
+            sewerage_paths = sewerage_paths,
+            runoff_paths = runoff_paths
         )
 
         # Generate flow diagrams
         generate_chord(
             results = results,
-            flow_paths = flow_paths,
+            sewerage_paths = sewerage_paths,
+            runoff_paths = runoff_paths,
             output_dir=flow_dir
         )
         generate_graph(
             results = results,
-            flow_paths = flow_paths,
+            sewerage_paths = sewerage_paths,
+            runoff_paths = runoff_paths,
             output_dir=flow_dir
         )
         generate_alluvial_total(
             results = results,
-            flow_paths = flow_paths,
+            sewerage_paths = sewerage_paths,
+            runoff_paths = runoff_paths,
             output_dir=flow_dir
         )
+
         generate_alluvial_reuse(
             results = results,
             output_dir=flow_dir
@@ -248,7 +259,7 @@ def process_outputs(results, tracker, flow_paths, output_dir, config, args):
         logger.info("Results and forcing data saved to %s", save_dir)
 
     summary_dir = output_dir / 'summary.txt'
-    write_summary(results, flow_paths, summary_dir)
+    write_summary(results, sewerage_paths, runoff_paths, summary_dir)
 
 if __name__ == "__main__":
     main()
