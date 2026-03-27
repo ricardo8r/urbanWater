@@ -1,4 +1,4 @@
-dynaconf==3.2.6
+dynaconf==3.2.13
 geopandas==0.14.2
 matplotlib==3.9.2
 numpy==2.1.1
